@@ -1,0 +1,50 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AzurePrOps.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="AzurePrOps.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="AzurePrOps">
+
+    <Design.DataContext>
+        <!-- This only sets the DataContext for the previewer in an IDE,
+             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <StackPanel Margin="10" Spacing="8">
+        <Button Content="Refresh PRs" Command="{Binding RefreshCommand}" Width="120"/>
+        <ListBox ItemsSource="{Binding PullRequests}" SelectedItem="{Binding SelectedPullRequest}">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Margin="0 0 0 4">
+                        <TextBlock Text="{Binding Title}" FontWeight="Bold"/>
+                        <TextBlock Text="{Binding Creator}" FontStyle="Italic"/>
+                        <TextBlock Text="{Binding Status}"/>
+                        <TextBlock Text="{Binding ReviewersText}" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <Button Content="Load Comments" Command="{Binding LoadCommentsCommand}" Width="120"/>
+        <Button Content="Approve" Command="{Binding ApproveCommand}" Width="120"/>
+        <StackPanel Orientation="Horizontal" Spacing="4">
+            <TextBox Width="300" Text="{Binding NewCommentText}"/>
+            <Button Content="Post" Command="{Binding PostCommentCommand}"/>
+        </StackPanel>
+        <ListBox ItemsSource="{Binding Comments}">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Margin="0 0 0 4">
+                        <TextBlock Text="{Binding Author}" FontWeight="Bold"/>
+                        <TextBlock Text="{Binding Content}" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </StackPanel>
+
+</Window>
