@@ -15,6 +15,36 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <TextBlock Text="{Binding Greeting}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    <StackPanel Margin="10" Spacing="8">
+        <Button Content="Refresh PRs" Command="{Binding RefreshCommand}" Width="120"/>
+        <ListBox ItemsSource="{Binding PullRequests}" SelectedItem="{Binding SelectedPullRequest}">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Margin="0 0 0 4">
+                        <TextBlock Text="{Binding Title}" FontWeight="Bold"/>
+                        <TextBlock Text="{Binding Creator}" FontStyle="Italic"/>
+                        <TextBlock Text="{Binding Status}"/>
+                        <TextBlock Text="{Binding ReviewersText}" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <Button Content="Load Comments" Command="{Binding LoadCommentsCommand}" Width="120"/>
+        <Button Content="Approve" Command="{Binding ApproveCommand}" Width="120"/>
+        <StackPanel Orientation="Horizontal" Spacing="4">
+            <TextBox Width="300" Text="{Binding NewCommentText}"/>
+            <Button Content="Post" Command="{Binding PostCommentCommand}"/>
+        </StackPanel>
+        <ListBox ItemsSource="{Binding Comments}">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Margin="0 0 0 4">
+                        <TextBlock Text="{Binding Author}" FontWeight="Bold"/>
+                        <TextBlock Text="{Binding Content}" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </StackPanel>
 
 </Window>

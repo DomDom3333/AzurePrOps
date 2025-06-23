@@ -8,10 +8,18 @@
         <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     </PropertyGroup>
 
-    <ItemGroup>
+  <ItemGroup>
         <Folder Include="Models\"/>
         <AvaloniaResource Include="Assets\**"/>
-    </ItemGroup>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="AzurePrOps.AzureConnection\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="AzurePrOps.AzureConnection/AzurePrOps.AzureConnection.csproj" />
+  </ItemGroup>
 
     <ItemGroup>
         <PackageReference Include="Avalonia" Version="11.2.7"/>
