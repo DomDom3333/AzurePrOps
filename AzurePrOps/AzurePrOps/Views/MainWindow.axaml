@@ -55,7 +55,10 @@
             <ListBox Grid.Row="3" ItemsSource="{Binding PullRequests}" SelectedItem="{Binding SelectedPullRequest}">
             <ListBox.ItemTemplate>
                 <DataTemplate>
-                    <Border Padding="4" BorderBrush="#DDDDDD" BorderThickness="0,0,0,1">
+                    <Border Padding="4"
+                           Background="{DynamicResource CardBackgroundBrush}"
+                           BorderBrush="{DynamicResource BorderBrush}"
+                           BorderThickness="0,0,0,1">
                         <StackPanel Spacing="2">
                             <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding Status, Converter={StaticResource StatusToIcon}}"

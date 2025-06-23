@@ -59,7 +59,10 @@
             </ListBox>
 
             <TextBlock Text="Changes" FontWeight="Bold" Margin="0,10,0,0"/>
-            <Border Height="200" Background="#FFF5F5F5" BorderBrush="#FFCCCCCC" BorderThickness="1">
+            <Border Height="200"
+                    Background="{DynamicResource CardBackgroundBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="1">
                 <TextBlock Text="Code diff will appear here" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="Gray"/>
             </Border>
 

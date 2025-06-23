@@ -1,7 +1,15 @@
 <Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Styles.Resources>
-        <SolidColorBrush x:Key="BackgroundBrush" Color="#F9F9F9" />
-        <SolidColorBrush x:Key="PrimaryBrush" Color="#333333" />
+        <!-- GitKraken-inspired dark theme colors -->
+        <Color x:Key="AccentColor">#31A8FF</Color>
+        <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}" />
+
+        <SolidColorBrush x:Key="BackgroundBrush" Color="#1E2227" />
+        <SolidColorBrush x:Key="PrimaryBrush" Color="#E3E3E3" />
+
+        <SolidColorBrush x:Key="CardBackgroundBrush" Color="#2B3137" />
+        <SolidColorBrush x:Key="BorderBrush" Color="#3C444C" />
+        <SolidColorBrush x:Key="ErrorBrush" Color="#FF5555" />
     </Styles.Resources>
 
     <Style Selector="Window">
@@ -9,6 +17,11 @@
     </Style>
 
     <Style Selector="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+    </Style>
+
+    <Style Selector="Button">
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
     </Style>
 

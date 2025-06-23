@@ -2,8 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:AzurePrOps"
              xmlns:converters="using:AzurePrOps.Converters"
-             x:Class="AzurePrOps.App"
-             RequestedThemeVariant="Default">
+            x:Class="AzurePrOps.App"
+            RequestedThemeVariant="Dark">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
     <Application.DataTemplates>
