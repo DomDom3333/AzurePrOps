@@ -24,6 +24,11 @@ public class MainWindowViewModel : ViewModelBase
 
     public ObservableCollection<FilterView> FilterViews { get; } = new();
 
+    public ObservableCollection<string> TitleOptions { get; } = new();
+    public ObservableCollection<string> CreatorOptions { get; } = new();
+    public ObservableCollection<string> SourceBranchOptions { get; } = new();
+    public ObservableCollection<string> TargetBranchOptions { get; } = new();
+
     private FilterView? _selectedFilterView;
     public FilterView? SelectedFilterView
     {
@@ -172,6 +177,7 @@ public class MainWindowViewModel : ViewModelBase
                 {
                     _allPullRequests.Add(pr);
                 }
+                UpdateFilterOptions();
                 ApplyFilters();
             }
             catch (Exception ex)
@@ -290,6 +296,26 @@ public class MainWindowViewModel : ViewModelBase
         foreach (var pr in filtered)
         {
             PullRequests.Add(pr);
+        }
+    }
+
+    private void UpdateFilterOptions()
+    {
+        TitleOptions.Clear();
+        CreatorOptions.Clear();
+        SourceBranchOptions.Clear();
+        TargetBranchOptions.Clear();
+
+        foreach (var pr in _allPullRequests)
+        {
+            if (!TitleOptions.Contains(pr.Title))
+                TitleOptions.Add(pr.Title);
+            if (!CreatorOptions.Contains(pr.Creator))
+                CreatorOptions.Add(pr.Creator);
+            if (!SourceBranchOptions.Contains(pr.SourceBranch))
+                SourceBranchOptions.Add(pr.SourceBranch);
+            if (!TargetBranchOptions.Contains(pr.TargetBranch))
+                TargetBranchOptions.Add(pr.TargetBranch);
         }
     }
 }
