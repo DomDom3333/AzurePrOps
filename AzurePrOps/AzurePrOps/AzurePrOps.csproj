@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="AzurePrOps.AzureConnection/AzurePrOps.AzureConnection.csproj" />
+    <ProjectReference Include="..\AzurePrOps.AzureConnection\AzurePrOps.AzureConnection.csproj" />
   </ItemGroup>
 
     <ItemGroup>

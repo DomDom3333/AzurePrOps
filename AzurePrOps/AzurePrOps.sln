@@ -1,8 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AzurePrOps", "AzurePrOps.csproj", "{2BFF372E-3DB4-4F0E-9015-57C4FB019F1A}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AzurePrOps.AzureConnection", "AzurePrOps.AzureConnection\AzurePrOps.AzureConnection.csproj", "{9BE5282B-BB47-4EF3-8E12-F73E367402E3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AzurePrOps", "AzurePrOps\AzurePrOps.csproj", "{7DE18E50-89FA-4E1B-BBD2-2DD51A27754E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -10,13 +10,13 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{2BFF372E-3DB4-4F0E-9015-57C4FB019F1A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{2BFF372E-3DB4-4F0E-9015-57C4FB019F1A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{2BFF372E-3DB4-4F0E-9015-57C4FB019F1A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{2BFF372E-3DB4-4F0E-9015-57C4FB019F1A}.Release|Any CPU.Build.0 = Release|Any CPU
 		{9BE5282B-BB47-4EF3-8E12-F73E367402E3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{9BE5282B-BB47-4EF3-8E12-F73E367402E3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9BE5282B-BB47-4EF3-8E12-F73E367402E3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9BE5282B-BB47-4EF3-8E12-F73E367402E3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7DE18E50-89FA-4E1B-BBD2-2DD51A27754E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7DE18E50-89FA-4E1B-BBD2-2DD51A27754E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7DE18E50-89FA-4E1B-BBD2-2DD51A27754E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7DE18E50-89FA-4E1B-BBD2-2DD51A27754E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
