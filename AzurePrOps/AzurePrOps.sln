@@ -4,6 +4,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AzurePrOps.AzureConnection"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AzurePrOps", "AzurePrOps\AzurePrOps.csproj", "{7DE18E50-89FA-4E1B-BBD2-2DD51A27754E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AzurePrOps.ReviewLogic", "AzurePrOps.ReviewLogic\AzurePrOps.ReviewLogic.csproj", "{EE4F6FEC-72EE-43F4-A791-BBB9F46933D4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +20,9 @@ Global
 		{7DE18E50-89FA-4E1B-BBD2-2DD51A27754E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7DE18E50-89FA-4E1B-BBD2-2DD51A27754E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7DE18E50-89FA-4E1B-BBD2-2DD51A27754E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EE4F6FEC-72EE-43F4-A791-BBB9F46933D4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EE4F6FEC-72EE-43F4-A791-BBB9F46933D4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EE4F6FEC-72EE-43F4-A791-BBB9F46933D4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EE4F6FEC-72EE-43F4-A791-BBB9F46933D4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
