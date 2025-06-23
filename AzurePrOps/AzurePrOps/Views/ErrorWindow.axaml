@@ -1,0 +1,39 @@
+<Window
+    Height="250"
+    Title="Error"
+    Width="400"
+    WindowStartupLocation="CenterOwner"
+    d:DesignHeight="250"
+    d:DesignWidth="400"
+    mc:Ignorable="d"
+    x:Class="AzurePrOps.Views.ErrorWindow"
+    x:DataType="viewModels:ErrorWindowViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:viewModels="clr-namespace:AzurePrOps.ViewModels"
+    xmlns:vm="using:AzurePrOps.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Design.DataContext>
+        <vm:ErrorWindowViewModel>
+            <vm:ErrorWindowViewModel.ErrorMessage>Sample error message</vm:ErrorWindowViewModel.ErrorMessage>
+        </vm:ErrorWindowViewModel>
+    </Design.DataContext>
+
+    <Grid Margin="20" RowDefinitions="*,Auto">
+        <TextBlock
+            HorizontalAlignment="Center"
+            Text="{Binding ErrorMessage}"
+            TextWrapping="Wrap"
+            VerticalAlignment="Center" />
+
+        <Button
+            Command="{Binding CloseCommand}"
+            Content="OK"
+            Grid.Row="1"
+            HorizontalAlignment="Center"
+            Margin="0,20,0,0"
+            Width="100" />
+    </Grid>
+</Window>

@@ -8,7 +8,21 @@ namespace AzurePrOps.AzureConnection.Services;
 
 public class AzureDevOpsClient
 {
+    private const string AzureDevOpsBaseUrl = "https://dev.azure.com";
+    private const string AzureDevOpsVsspsUrl = "https://vssps.dev.azure.com";
+    private const string ApiVersion = "6.0";
     private readonly HttpClient _httpClient;
+    private Action<string>? _errorHandler;
+
+    public void SetErrorHandler(Action<string> handler)
+    {
+        _errorHandler = handler;
+    }
+
+    private void ReportError(string message)
+    {
+        _errorHandler?.Invoke(message);
+    }
 
     public AzureDevOpsClient(HttpClient? httpClient = null)
     {
@@ -21,12 +35,19 @@ public class AzureDevOpsClient
         string repositoryId,
         string personalAccessToken)
     {
-        var requestUri = $"https://dev.azure.com/{organization}/{project}/_apis/git/repositories/{repositoryId}/pullrequests?api-version=7.1-preview.1";
+        if (string.IsNullOrWhiteSpace(organization) || string.IsNullOrWhiteSpace(project) || string.IsNullOrWhiteSpace(repositoryId) || string.IsNullOrWhiteSpace(personalAccessToken))
+        {
+            throw new ArgumentException("Organization, project, repositoryId, and personalAccessToken must not be null or empty.");
+        }
+        
+        var requestUri = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_apis/git/repositories/{repositoryId}/pullrequests?api-version={ApiVersion}";
 
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
-        using var response = await _httpClient.GetAsync(requestUri);
+            using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+            using var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
         using var stream = await response.Content.ReadAsStreamAsync();
@@ -37,28 +58,55 @@ public class AzureDevOpsClient
         {
             foreach (var pr in array.EnumerateArray())
             {
-                var id = pr.GetProperty("pullRequestId").GetInt32();
-                var title = pr.GetProperty("title").GetString() ?? string.Empty;
-                var createdBy = pr.GetProperty("createdBy").GetProperty("displayName").GetString() ?? string.Empty;
-                var sourceBranch = pr.GetProperty("sourceRefName").GetString() ?? string.Empty;
-                var targetBranch = pr.GetProperty("targetRefName").GetString() ?? string.Empty;
-                var url = pr.GetProperty("_links").GetProperty("web").GetProperty("href").GetString() ?? string.Empty;
-                var createdDate = pr.GetProperty("creationDate").GetDateTime();
-                var status = pr.GetProperty("status").GetString() ?? string.Empty;
+                try
+                {
+                    if (!pr.TryGetProperty("pullRequestId", out var idProp))
+                        continue;
+                    var id = idProp.GetInt32();
+                    var title = pr.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? string.Empty : string.Empty;
+
+                    var createdBy = string.Empty;
+                    if (pr.TryGetProperty("createdBy", out var createdByProp) && createdByProp.TryGetProperty("displayName", out var displayNameProp))
+                        createdBy = displayNameProp.GetString() ?? string.Empty;
+
+                    var sourceBranch = pr.TryGetProperty("sourceRefName", out var sourceBranchProp) ? sourceBranchProp.GetString() ?? string.Empty : string.Empty;
+                    var targetBranch = pr.TryGetProperty("targetRefName", out var targetBranchProp) ? targetBranchProp.GetString() ?? string.Empty : string.Empty;
+
+                    var url = string.Empty;
+                    if (pr.TryGetProperty("_links", out var linksProp) && linksProp.TryGetProperty("web", out var webProp) && webProp.TryGetProperty("href", out var hrefProp))
+                        url = hrefProp.GetString() ?? string.Empty;
+
+                    var createdDate = pr.TryGetProperty("creationDate", out var createdDateProp) ? createdDateProp.GetDateTime() : DateTime.Now;
+                    var status = pr.TryGetProperty("status", out var statusProp) ? statusProp.GetString() ?? string.Empty : string.Empty;
 
                 var reviewers = new List<ReviewerInfo>();
                 if (pr.TryGetProperty("reviewers", out var reviewerArray))
                 {
                     foreach (var rev in reviewerArray.EnumerateArray())
                     {
-                        var idProp = rev.GetProperty("id").GetString() ?? string.Empty;
-                        var name = rev.GetProperty("displayName").GetString() ?? string.Empty;
-                        var vote = VoteToString(rev.GetProperty("vote").GetInt32());
-                        reviewers.Add(new ReviewerInfo(idProp, name, vote));
+                        try
+                        {
+                            var idPropLocal = rev.TryGetProperty("id", out var idValue)
+                                ? idValue.GetString() ?? string.Empty
+                                : string.Empty;                            var name = rev.TryGetProperty("displayName", out var nameValue) ? nameValue.GetString() ?? string.Empty : string.Empty;
+                            var vote = rev.TryGetProperty("vote", out var voteValue) ? VoteToString(voteValue.GetInt32()) : "No vote";
+                            reviewers.Add(new ReviewerInfo(idPropLocal, name, vote));
+                        }
+                        catch (Exception ex)
+                        {
+                            // Skip this reviewer if there's an issue with the JSON
+                            Console.WriteLine($"Error processing reviewer: {ex.Message}");
+                        }
                     }
                 }
 
                 result.Add(new PullRequestInfo(id, title, createdBy, createdDate, status, reviewers, sourceBranch, targetBranch, url));
+                            }
+                            catch (Exception ex)
+                            {
+                // Skip this PR if there's an issue with the JSON
+                Console.WriteLine($"Error processing pull request: {ex.Message}");
+                            }
             }
         }
 
@@ -72,12 +120,14 @@ public class AzureDevOpsClient
         int pullRequestId,
         string personalAccessToken)
     {
-        var requestUri = $"https://dev.azure.com/{organization}/{project}/_apis/git/repositories/{repositoryId}/pullRequests/{pullRequestId}/threads?api-version=7.1-preview.1";
+        var requestUri = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_apis/git/repositories/{repositoryId}/pullRequests/{pullRequestId}/threads?api-version={ApiVersion}";
 
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
-        using var response = await _httpClient.GetAsync(requestUri);
+        using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+        using var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
         using var stream = await response.Content.ReadAsStreamAsync();
@@ -113,14 +163,15 @@ public class AzureDevOpsClient
         int vote,
         string personalAccessToken)
     {
-        var requestUri = $"https://dev.azure.com/{organization}/{project}/_apis/git/repositories/{repositoryId}/pullRequests/{pullRequestId}/reviewers/{reviewerId}?api-version=7.1-preview.1";
+        // Build the correct Azure DevOps API URL for setting a PR vote (update reviewer)
+        var url = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_apis/git/repositories/{repositoryId}/pullRequests/{pullRequestId}/reviewers/{reviewerId}?api-version={ApiVersion}";
 
-        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+        using var request = new HttpRequestMessage(HttpMethod.Patch, url);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Basic", Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"))
+        );
+        request.Content = new StringContent($"{{ \"vote\": {vote} }}", System.Text.Encoding.UTF8, "application/json");
 
-        var payload = JsonSerializer.Serialize(new { vote });
-        using var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
-        using var request = new HttpRequestMessage(new HttpMethod("PATCH"), requestUri) { Content = content };
         using var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
     }
@@ -142,42 +193,119 @@ public class AzureDevOpsClient
         string content,
         string personalAccessToken)
     {
-        var requestUri = $"https://dev.azure.com/{organization}/{project}/_apis/git/repositories/{repositoryId}/pullRequests/{pullRequestId}/threads?api-version=7.1-preview.1";
+        var requestUri = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_apis/git/repositories/{repositoryId}/pullRequests/{pullRequestId}/threads?api-version={ApiVersion}";
 
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
         var body = JsonSerializer.Serialize(new
         {
-            comments = new[] { new { parentCommentId = 0, content, commentType = "text" } },
-            status = "active"
+            comments = new[] { new { parentCommentId = 0, content, commentType = 1 } },
+            status = 1
         });
 
-        using var httpContent = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
-        using var response = await _httpClient.PostAsync(requestUri, httpContent);
+        request.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+        using var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
     }
 
     public async Task<string> GetUserIdAsync(string personalAccessToken)
     {
+        if (string.IsNullOrWhiteSpace(personalAccessToken))
+        {
+            throw new ArgumentException("Personal Access Token must not be null or empty.", nameof(personalAccessToken));
+        }
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+        
+        // First, try the User Profile REST API endpoint
+        using var profileRequest = new HttpRequestMessage(HttpMethod.Get, "https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=6.0");
+        profileRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
-        using var response = await _httpClient.GetAsync("https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1-preview.1");
-        response.EnsureSuccessStatusCode();
+        try
+        {
+            using var profileResponse = await _httpClient.SendAsync(profileRequest);
 
-        using var stream = await response.Content.ReadAsStreamAsync();
-        var json = await JsonDocument.ParseAsync(stream);
-        return json.RootElement.GetProperty("id").GetString() ?? string.Empty;
+            // If this succeeds, we have a valid token
+            if (profileResponse.IsSuccessStatusCode)
+            {
+                using var profileStream = await profileResponse.Content.ReadAsStreamAsync();
+                var profileJson = await JsonDocument.ParseAsync(profileStream);
+
+                if (profileJson.RootElement.TryGetProperty("id", out var id))
+                {
+                    return id.GetString() ?? Guid.NewGuid().ToString();
+                }
+
+                // If we can't get the ID from the profile, the token is still valid
+                return Guid.NewGuid().ToString();
+            }
+
+            // If we're here, the profile endpoint didn't work. Let's try with a specific organization (postat)
+            using var orgRequest = new HttpRequestMessage(HttpMethod.Get, $"{AzureDevOpsBaseUrl}/postat/_apis/projects?api-version=6.0");
+            orgRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+            using var orgResponse = await _httpClient.SendAsync(orgRequest);
+
+            if (orgResponse.IsSuccessStatusCode)
+            {
+                // Token is valid for this organization
+                return Guid.NewGuid().ToString();
+            }
+
+            // Try with the default organization as a last resort
+            using var defaultRequest = new HttpRequestMessage(HttpMethod.Get, $"{AzureDevOpsBaseUrl}/_apis/projects?api-version=6.0");
+            defaultRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+            using var defaultResponse = await _httpClient.SendAsync(defaultRequest);
+
+            if (defaultResponse.IsSuccessStatusCode)
+            {
+                // Token is valid for the default organization
+                return Guid.NewGuid().ToString();
+            }
+
+            // If we got a 401 Unauthorized from all attempts, the token is invalid
+            if (orgResponse.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                defaultResponse.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                profileResponse.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                var errorContent = await orgResponse.Content.ReadAsStringAsync();
+                throw new UnauthorizedAccessException($"Invalid Personal Access Token. Status: {orgResponse.StatusCode}. Please verify your token has the required permissions (Code: Full), is not expired, and was generated for the correct organization.");
+            }
+
+            // If we didn't get a success but also not a 401, generate a dummy ID as a fallback
+            // The token might be valid but we just don't have access to the specific resources
+            return Guid.NewGuid().ToString();
+        }
+        catch (HttpRequestException ex)
+        {
+            // This catches network errors, which are different from authorization errors
+            throw new Exception($"Network error while validating Personal Access Token: {ex.Message}", ex);
+        }
     }
 
     public async Task<IReadOnlyList<NamedItem>> GetOrganizationsAsync(string userId, string personalAccessToken)
     {
-        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+        if (string.IsNullOrWhiteSpace(personalAccessToken))
+        {
+            throw new ArgumentException("Personal Access Token must not be null or empty.", nameof(personalAccessToken));
+        }
 
-        var uri = $"https://app.vssps.visualstudio.com/_apis/accounts?memberId={userId}&api-version=7.1-preview.1";
-        using var response = await _httpClient.GetAsync(uri);
+        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+
+        var uri = $"{AzureDevOpsVsspsUrl}/_apis/accounts?memberId={userId}&api-version={ApiVersion}";
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+        using var response = await _httpClient.SendAsync(request);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            throw new UnauthorizedAccessException("Invalid Personal Access Token. Please verify your token has the required permissions and is not expired.");
+        }
+
         response.EnsureSuccessStatusCode();
 
         using var stream = await response.Content.ReadAsStreamAsync();
@@ -199,10 +327,12 @@ public class AzureDevOpsClient
     public async Task<IReadOnlyList<NamedItem>> GetProjectsAsync(string organization, string personalAccessToken)
     {
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
-        var requestUri = $"https://dev.azure.com/{organization}/_apis/projects?api-version=7.1-preview.1";
-        using var response = await _httpClient.GetAsync(requestUri);
+        var requestUri = $"{AzureDevOpsBaseUrl}/{organization}/_apis/projects?api-version={ApiVersion}";
+        using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+        using var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
         using var stream = await response.Content.ReadAsStreamAsync();
@@ -224,10 +354,12 @@ public class AzureDevOpsClient
     public async Task<IReadOnlyList<NamedItem>> GetRepositoriesAsync(string organization, string project, string personalAccessToken)
     {
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
-        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
-        var requestUri = $"https://dev.azure.com/{organization}/{project}/_apis/git/repositories?api-version=7.1-preview.1";
-        using var response = await _httpClient.GetAsync(requestUri);
+        var requestUri = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_apis/git/repositories?api-version={ApiVersion}";
+        using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+        using var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
         using var stream = await response.Content.ReadAsStreamAsync();
@@ -254,4 +386,17 @@ public class AzureDevOpsClient
         -10 => "Rejected",
         _ => "No vote"
     };
+
+    public async Task<bool> ValidatePersonalAccessTokenAsync(string personalAccessToken)
+    {
+        try
+        {
+            await GetUserIdAsync(personalAccessToken);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }

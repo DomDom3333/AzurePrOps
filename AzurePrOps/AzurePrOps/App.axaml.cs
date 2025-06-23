@@ -1,8 +1,10 @@
-using Avalonia;
 using System;
+using System.Reactive;
+using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
-using System.Reactive.Linq;
 using Avalonia.Markup.Xaml;
+using AzurePrOps.Models;
+using ReactiveUI;
 using AzurePrOps.ViewModels;
 using AzurePrOps.Views;
 
@@ -17,34 +19,47 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // Set up ReactiveUI global error handler
+        RxApp.DefaultExceptionHandler = Observer.Create<Exception>(ex =>
+        {
+            // Log the exception
+            Console.WriteLine($"Unhandled ReactiveUI exception: {ex}");
+
+            // Show error dialog
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                var errorWindow = new ErrorWindow
+                {
+                    DataContext = new ErrorWindowViewModel
+                    {
+                        ErrorMessage = $"An error occurred: {ex.Message}\n\nPlease check your connection settings and try again."
+                    }
+                };
+
+                errorWindow.ShowDialog(desktop.MainWindow);
+            }
+        });
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var loginVm = new LoginWindowViewModel();
-            var loginWindow = new LoginWindow { DataContext = loginVm };
-
-            loginVm.LoginCommand.Subscribe(async info =>
+            if (ConnectionSettingsStorage.TryLoad(out var loaded))
             {
-                var selectVm = new ProjectSelectionWindowViewModel(info.PersonalAccessToken, info.ReviewerId);
-                await selectVm.LoadAsync();
-                var selectWindow = new ProjectSelectionWindow { DataContext = selectVm };
-
-                selectVm.ConnectCommand.Subscribe(settings =>
+                desktop.MainWindow = new MainWindow
                 {
-                    var mainWindow = new MainWindow
-                    {
-                        DataContext = new MainWindowViewModel(settings),
-                    };
-                    desktop.MainWindow = mainWindow;
-                    mainWindow.Show();
-                    selectWindow.Close();
-                });
-
-                desktop.MainWindow = selectWindow;
-                selectWindow.Show();
-                loginWindow.Close();
-            });
-
-            desktop.MainWindow = loginWindow;
+                    DataContext = new MainWindowViewModel(loaded)
+                };
+            }
+            else
+            {
+                desktop.MainWindow = new LoginWindow
+                {
+                    DataContext = new LoginWindowViewModel(loginInfo => 
+                        // We'll use the connection settings saved by the project selection window
+                        ConnectionSettingsStorage.TryLoad(out var settings) 
+                            ? new MainWindowViewModel(settings!)
+                            : null)
+                };
+            }
         }
 
         base.OnFrameworkInitializationCompleted();

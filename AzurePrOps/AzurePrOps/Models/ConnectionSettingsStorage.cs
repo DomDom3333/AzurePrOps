@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace AzurePrOps.Models;
 
@@ -38,5 +39,15 @@ public static class ConnectionSettingsStorage
 
         var json = JsonSerializer.Serialize(settings);
         File.WriteAllText(FilePath, json);
+    }
+
+    public static async Task SaveAsync(ConnectionSettings connectionSettings)
+    {
+        var dir = Path.GetDirectoryName(FilePath);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            Directory.CreateDirectory(dir);
+
+        var json = JsonSerializer.Serialize(connectionSettings);
+        await File.WriteAllTextAsync(FilePath, json);
     }
 }

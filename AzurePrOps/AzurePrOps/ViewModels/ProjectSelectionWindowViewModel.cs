@@ -1,3 +1,4 @@
+using System;
 using ReactiveUI;
 using System.Collections.ObjectModel;
 using AzurePrOps.AzureConnection.Models;
@@ -5,6 +6,7 @@ using AzurePrOps.AzureConnection.Services;
 using AzurePrOps.Models;
 using System.Reactive;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
 
 namespace AzurePrOps.ViewModels;
@@ -48,6 +50,13 @@ public class ProjectSelectionWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _selectedRepository, value);
     }
 
+    private ConnectionSettings? _connectionSettings;
+    public ConnectionSettings? ConnectionSettings
+    {
+        get => _connectionSettings;
+        private set => this.RaiseAndSetIfChanged(ref _connectionSettings, value);
+    }
+
     public ReactiveCommand<Unit, ConnectionSettings> ConnectCommand { get; }
 
     public ProjectSelectionWindowViewModel(string personalAccessToken, string reviewerId)
@@ -64,42 +73,136 @@ public class ProjectSelectionWindowViewModel : ViewModelBase
                 _personalAccessToken,
                 _reviewerId);
             ConnectionSettingsStorage.Save(settings);
+            ConnectionSettings = settings;
+
+            // Close the window
+            if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                desktop.MainWindow?.Close();
+            }
+
             return settings;
         });
     }
 
+    private bool _isLoadingOrganizations;
+    public bool IsLoadingOrganizations
+    {
+        get => _isLoadingOrganizations;
+        set => this.RaiseAndSetIfChanged(ref _isLoadingOrganizations, value);
+    }
+
     public async Task LoadAsync()
     {
-        Organizations.Clear();
-        var userId = _reviewerId;
-        var orgs = await _client.GetOrganizationsAsync(userId, _personalAccessToken);
-        foreach (var o in orgs)
-            Organizations.Add(o);
-        SelectedOrganization = Organizations.FirstOrDefault();
+        try
+        {
+            IsLoadingOrganizations = true;
+            ErrorMessage = string.Empty;
+
+            Organizations.Clear();
+            var userId = _reviewerId;
+            var orgs = await _client.GetOrganizationsAsync(userId, _personalAccessToken);
+            foreach (var o in orgs)
+                Organizations.Add(o);
+            SelectedOrganization = Organizations.FirstOrDefault();
+
+            if (Organizations.Count == 0)
+            {
+                ErrorMessage = "No organizations found. Please check your Azure DevOps account and permissions.";
+            }
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            ErrorMessage = "Unable to connect to Azure DevOps: Invalid credentials. Please check your Personal Access Token.";
+            throw new InvalidOperationException(ErrorMessage, ex);
+        }
+        catch (HttpRequestException ex)
+        {
+            ErrorMessage = $"Unable to connect to Azure DevOps: {ex.Message}";
+            throw new InvalidOperationException(ErrorMessage, ex);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"An unexpected error occurred: {ex.Message}";
+            throw new InvalidOperationException(ErrorMessage, ex);
+        }
+        finally
+        {
+            IsLoadingOrganizations = false;
+        }
+    }
+
+    private bool _isLoadingProjects;
+    public bool IsLoadingProjects
+    {
+        get => _isLoadingProjects;
+        set => this.RaiseAndSetIfChanged(ref _isLoadingProjects, value);
+    }
+
+    private bool _isLoadingRepositories;
+    public bool IsLoadingRepositories
+    {
+        get => _isLoadingRepositories;
+        set => this.RaiseAndSetIfChanged(ref _isLoadingRepositories, value);
+    }
+
+    private string _errorMessage = string.Empty;
+    public string ErrorMessage
+    {
+        get => _errorMessage;
+        set => this.RaiseAndSetIfChanged(ref _errorMessage, value);
     }
 
     private async Task LoadProjectsAsync()
     {
-        Projects.Clear();
-        Repositories.Clear();
-        if (SelectedOrganization == null)
-            return;
+        try
+        {
+            IsLoadingProjects = true;
+            ErrorMessage = string.Empty;
 
-        var projects = await _client.GetProjectsAsync(SelectedOrganization.Name, _personalAccessToken);
-        foreach (var p in projects)
-            Projects.Add(p);
-        SelectedProject = Projects.FirstOrDefault();
+            Projects.Clear();
+            Repositories.Clear();
+            if (SelectedOrganization == null)
+                return;
+
+            var projects = await _client.GetProjectsAsync(SelectedOrganization.Name, _personalAccessToken);
+            foreach (var p in projects)
+                Projects.Add(p);
+            SelectedProject = Projects.FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load projects: {ex.Message}";
+        }
+        finally
+        {
+            IsLoadingProjects = false;
+        }
     }
 
     private async Task LoadRepositoriesAsync()
     {
-        Repositories.Clear();
-        if (SelectedOrganization == null || SelectedProject == null)
-            return;
+        try
+        {
+            IsLoadingRepositories = true;
+            ErrorMessage = string.Empty;
 
-        var repos = await _client.GetRepositoriesAsync(SelectedOrganization.Name, SelectedProject.Name, _personalAccessToken);
-        foreach (var r in repos)
-            Repositories.Add(r);
-        SelectedRepository = Repositories.FirstOrDefault();
+            Repositories.Clear();
+            if (SelectedOrganization == null || SelectedProject == null)
+                return;
+
+            var repos = await _client.GetRepositoriesAsync(SelectedOrganization.Name, SelectedProject.Name, _personalAccessToken);
+            foreach (var r in repos)
+                Repositories.Add(r);
+            SelectedRepository = Repositories.FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to load repositories: {ex.Message}";
+        }
+        finally
+        {
+            IsLoadingRepositories = false;
+        }
     }
 }

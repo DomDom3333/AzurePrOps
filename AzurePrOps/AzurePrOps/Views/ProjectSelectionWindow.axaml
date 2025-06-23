@@ -1,28 +1,144 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:vm="using:AzurePrOps.ViewModels"
-        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="300"
-        x:Class="AzurePrOps.Views.ProjectSelectionWindow"
-        x:DataType="vm:ProjectSelectionWindowViewModel"
-        Title="Select Project">
-    <StackPanel Margin="10" Spacing="6">
-        <ComboBox ItemsSource="{Binding Organizations}" SelectedItem="{Binding SelectedOrganization}">
-            <ComboBox.ItemTemplate>
-                <DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate>
-            </ComboBox.ItemTemplate>
-        </ComboBox>
-        <ComboBox ItemsSource="{Binding Projects}" SelectedItem="{Binding SelectedProject}">
-            <ComboBox.ItemTemplate>
-                <DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate>
-            </ComboBox.ItemTemplate>
-        </ComboBox>
-        <ComboBox ItemsSource="{Binding Repositories}" SelectedItem="{Binding SelectedRepository}">
-            <ComboBox.ItemTemplate>
-                <DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate>
-            </ComboBox.ItemTemplate>
-        </ComboBox>
-        <Button Content="Continue" Command="{Binding ConnectCommand}" Width="100" HorizontalAlignment="Right"/>
-    </StackPanel>
+<Window
+    Height="350"
+    Title="Select Project"
+    Width="500"
+    d:DesignHeight="350"
+    d:DesignWidth="500"
+    mc:Ignorable="d"
+    x:Class="AzurePrOps.Views.ProjectSelectionWindow"
+    x:DataType="vm:ProjectSelectionWindowViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:AzurePrOps.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="20" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto">
+        <TextBlock
+            FontSize="18"
+            FontWeight="Bold"
+            Grid.Row="0"
+            Margin="0,0,0,10"
+            Text="Select Azure DevOps Project" />
+
+        <StackPanel Grid.Row="1" Margin="0,0,0,10">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock
+                    FontWeight="SemiBold"
+                    Grid.Column="0"
+                    Margin="0,0,0,5"
+                    Text="Organization" />
+                <ProgressBar
+                    Grid.Column="1"
+                    Height="20"
+                    IsIndeterminate="True"
+                    IsVisible="{Binding IsLoadingOrganizations}"
+                    Margin="0,0,10,0"
+                    Width="20" />
+            </Grid>
+            <ComboBox
+                HorizontalAlignment="Stretch"
+                IsEnabled="{Binding !IsLoadingOrganizations}"
+                IsTextSearchEnabled="True"
+                ItemsSource="{Binding Organizations}"
+                Margin="0,0,0,10"
+                PlaceholderText="Select Organization"
+                SelectedItem="{Binding SelectedOrganization}"
+                Width="460">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Name}" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Margin="0,0,0,10">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock
+                    FontWeight="SemiBold"
+                    Grid.Column="0"
+                    Margin="0,0,0,5"
+                    Text="Project" />
+                <ProgressBar
+                    Grid.Column="1"
+                    Height="20"
+                    IsIndeterminate="True"
+                    IsVisible="{Binding IsLoadingProjects}"
+                    Margin="0,0,10,0"
+                    Width="20" />
+            </Grid>
+            <ComboBox
+                HorizontalAlignment="Stretch"
+                IsEnabled="{Binding !IsLoadingProjects}"
+                IsTextSearchEnabled="True"
+                ItemsSource="{Binding Projects}"
+                Margin="0,0,0,10"
+                PlaceholderText="Select Project"
+                SelectedItem="{Binding SelectedProject}"
+                Width="460">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Name}" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+        </StackPanel>
+
+        <StackPanel Grid.Row="3" Margin="0,0,0,10">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock
+                    FontWeight="SemiBold"
+                    Grid.Column="0"
+                    Margin="0,0,0,5"
+                    Text="Repository" />
+                <ProgressBar
+                    Grid.Column="1"
+                    Height="20"
+                    IsIndeterminate="True"
+                    IsVisible="{Binding IsLoadingRepositories}"
+                    Margin="0,0,10,0"
+                    Width="20" />
+            </Grid>
+            <ComboBox
+                HorizontalAlignment="Stretch"
+                IsEnabled="{Binding !IsLoadingRepositories}"
+                IsTextSearchEnabled="True"
+                ItemsSource="{Binding Repositories}"
+                Margin="0,0,0,10"
+                PlaceholderText="Select Repository"
+                SelectedItem="{Binding SelectedRepository}"
+                Width="460">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Name}" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+        </StackPanel>
+
+        <Border
+            Background="#FFF5F5F5"
+            BorderBrush="#FFCCCCCC"
+            BorderThickness="1"
+            Grid.Row="4"
+            IsVisible="{Binding !!ErrorMessage}"
+            Margin="0,0,0,10"
+            Padding="10">
+            <TextBlock
+                Foreground="#CC0000"
+                Text="{Binding ErrorMessage}"
+                TextWrapping="Wrap" />
+        </Border>
+
+        <Button
+            Command="{Binding ConnectCommand}"
+            Content="Connect"
+            Grid.Row="6"
+            Height="35"
+            HorizontalAlignment="Right"
+            HorizontalContentAlignment="Center"
+            IsEnabled="{Binding !!SelectedRepository}"
+            VerticalContentAlignment="Center"
+            Width="120" />
+    </Grid>
 </Window>
