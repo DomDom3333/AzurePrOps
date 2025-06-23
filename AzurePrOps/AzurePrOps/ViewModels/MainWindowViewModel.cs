@@ -5,6 +5,7 @@ using AzurePrOps.Models;
 using ReactiveUI;
 using System.Collections.ObjectModel;
 using System.Reactive;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -18,7 +19,92 @@ public class MainWindowViewModel : ViewModelBase
     private readonly Models.ConnectionSettings _settings;
 
     public ObservableCollection<PullRequestInfo> PullRequests { get; } = new();
+    private readonly ObservableCollection<PullRequestInfo> _allPullRequests = new();
     public ObservableCollection<PullRequestComment> Comments { get; } = new();
+
+    public ObservableCollection<FilterView> FilterViews { get; } = new();
+
+    private FilterView? _selectedFilterView;
+    public FilterView? SelectedFilterView
+    {
+        get => _selectedFilterView;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedFilterView, value);
+            if (value != null)
+            {
+                TitleFilter = value.Title;
+                CreatorFilter = value.Creator;
+                SourceBranchFilter = value.SourceBranch;
+                TargetBranchFilter = value.TargetBranch;
+                StatusFilter = string.IsNullOrWhiteSpace(value.Status) ? "All" : value.Status;
+            }
+        }
+    }
+
+    private string _newViewName = string.Empty;
+    public string NewViewName
+    {
+        get => _newViewName;
+        set => this.RaiseAndSetIfChanged(ref _newViewName, value);
+    }
+
+    private string _titleFilter = string.Empty;
+    public string TitleFilter
+    {
+        get => _titleFilter;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _titleFilter, value);
+            ApplyFilters();
+        }
+    }
+
+    private string _creatorFilter = string.Empty;
+    public string CreatorFilter
+    {
+        get => _creatorFilter;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _creatorFilter, value);
+            ApplyFilters();
+        }
+    }
+
+    private string _sourceBranchFilter = string.Empty;
+    public string SourceBranchFilter
+    {
+        get => _sourceBranchFilter;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _sourceBranchFilter, value);
+            ApplyFilters();
+        }
+    }
+
+    private string _targetBranchFilter = string.Empty;
+    public string TargetBranchFilter
+    {
+        get => _targetBranchFilter;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _targetBranchFilter, value);
+            ApplyFilters();
+        }
+    }
+
+    private string _statusFilter = "All";
+    public string StatusFilter
+    {
+        get => _statusFilter;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _statusFilter, value);
+            ApplyFilters();
+        }
+    }
+
+    public string[] StatusOptions { get; } = new[] { "All", "active", "completed", "abandoned" };
 
     private string _newCommentText = string.Empty;
     public string NewCommentText
@@ -38,6 +124,8 @@ public class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> LoadCommentsCommand { get; }
     public ReactiveCommand<Unit, Unit> ApproveCommand { get; }
     public ReactiveCommand<Unit, Unit> PostCommentCommand { get; }
+    public ReactiveCommand<Unit, Unit> ViewDetailsCommand { get; }
+    public ReactiveCommand<Unit, Unit> SaveViewCommand { get; }
 
     private async Task ShowErrorMessage(string message)
     {
@@ -63,6 +151,9 @@ public class MainWindowViewModel : ViewModelBase
     {
         _settings = settings;
 
+        foreach (var v in FilterViewStorage.Load())
+            FilterViews.Add(v);
+
         // Add error handling mechanism
         _client.SetErrorHandler((message) => ShowErrorMessage(message).GetAwaiter().GetResult());
 
@@ -76,11 +167,12 @@ public class MainWindowViewModel : ViewModelBase
                     _settings.Repository,
                     _settings.PersonalAccessToken);
 
-                PullRequests.Clear();
+                _allPullRequests.Clear();
                 foreach (var pr in prs.OrderByDescending(p => p.Created))
                 {
-                    PullRequests.Add(pr);
+                    _allPullRequests.Add(pr);
                 }
+                ApplyFilters();
             }
             catch (Exception ex)
             {
@@ -137,5 +229,67 @@ public class MainWindowViewModel : ViewModelBase
                 _settings.PersonalAccessToken);
             NewCommentText = string.Empty;
         });
+
+        ViewDetailsCommand = ReactiveCommand.Create(() =>
+        {
+            if (SelectedPullRequest == null)
+                return;
+
+            Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var vm = new PullRequestDetailsWindowViewModel(SelectedPullRequest);
+                var window = new PullRequestDetailsWindow { DataContext = vm };
+                window.Show();
+            });
+        });
+
+        SaveViewCommand = ReactiveCommand.Create(() =>
+        {
+            if (string.IsNullOrWhiteSpace(NewViewName))
+                return;
+
+            var view = new FilterView(
+                NewViewName,
+                TitleFilter,
+                CreatorFilter,
+                SourceBranchFilter,
+                TargetBranchFilter,
+                StatusFilter == "All" ? string.Empty : StatusFilter);
+
+            var existing = FilterViews.FirstOrDefault(v => v.Name == view.Name);
+            if (existing != null)
+                FilterViews.Remove(existing);
+
+            FilterViews.Add(view);
+            FilterViewStorage.Save(FilterViews);
+            NewViewName = string.Empty;
+            SelectedFilterView = view;
+        });
+    }
+
+    private void ApplyFilters()
+    {
+        PullRequests.Clear();
+        var filtered = _allPullRequests.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(TitleFilter))
+            filtered = filtered.Where(pr => pr.Title.Contains(TitleFilter, StringComparison.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrWhiteSpace(CreatorFilter))
+            filtered = filtered.Where(pr => pr.Creator.Contains(CreatorFilter, StringComparison.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrWhiteSpace(SourceBranchFilter))
+            filtered = filtered.Where(pr => pr.SourceBranch.Contains(SourceBranchFilter, StringComparison.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrWhiteSpace(TargetBranchFilter))
+            filtered = filtered.Where(pr => pr.TargetBranch.Contains(TargetBranchFilter, StringComparison.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrWhiteSpace(StatusFilter) && StatusFilter != "All")
+            filtered = filtered.Where(pr => pr.Status.Equals(StatusFilter, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var pr in filtered)
+        {
+            PullRequests.Add(pr);
+        }
     }
 }

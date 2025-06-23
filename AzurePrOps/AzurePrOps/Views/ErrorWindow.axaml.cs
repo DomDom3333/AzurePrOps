@@ -12,8 +12,6 @@ public partial class ErrorWindow : Window
     public ErrorWindow()
     {
         InitializeComponent();
-
-        this.AttachDevTools();
     }
 
     protected override void OnDataContextChanged(EventArgs e)

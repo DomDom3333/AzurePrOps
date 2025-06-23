@@ -17,6 +17,28 @@
 
     <StackPanel Margin="10" Spacing="8">
         <Button Content="Refresh PRs" Command="{Binding RefreshCommand}" Width="120"/>
+        <StackPanel Orientation="Horizontal" Spacing="4">
+            <TextBox Width="150" Watermark="Title" Text="{Binding TitleFilter}"/>
+            <TextBox Width="120" Watermark="Creator" Text="{Binding CreatorFilter}"/>
+            <TextBox Width="120" Watermark="Source" Text="{Binding SourceBranchFilter}"/>
+            <TextBox Width="120" Watermark="Target" Text="{Binding TargetBranchFilter}"/>
+            <ComboBox Width="120"
+                      ItemsSource="{Binding StatusOptions}"
+                      SelectedItem="{Binding StatusFilter}"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="4">
+            <ComboBox Width="150"
+                      ItemsSource="{Binding FilterViews}"
+                      SelectedItem="{Binding SelectedFilterView}">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Name}" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBox Width="120" Watermark="View Name" Text="{Binding NewViewName}"/>
+            <Button Content="Save" Command="{Binding SaveViewCommand}" Width="60"/>
+        </StackPanel>
         <ListBox ItemsSource="{Binding PullRequests}" SelectedItem="{Binding SelectedPullRequest}">
             <ListBox.ItemTemplate>
                 <DataTemplate>
@@ -31,6 +53,7 @@
         </ListBox>
         <Button Content="Load Comments" Command="{Binding LoadCommentsCommand}" Width="120"/>
         <Button Content="Approve" Command="{Binding ApproveCommand}" Width="120"/>
+        <Button Content="View Details" Command="{Binding ViewDetailsCommand}" Width="120"/>
         <StackPanel Orientation="Horizontal" Spacing="4">
             <TextBox Width="300" Text="{Binding NewCommentText}"/>
             <Button Content="Post" Command="{Binding PostCommentCommand}"/>
