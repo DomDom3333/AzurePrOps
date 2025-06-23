@@ -243,7 +243,7 @@ public class MainWindowViewModel : ViewModelBase
 
             Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var vm = new PullRequestDetailsWindowViewModel(SelectedPullRequest);
+                var vm = new PullRequestDetailsWindowViewModel(SelectedPullRequest, Comments);
                 var window = new PullRequestDetailsWindow { DataContext = vm };
                 window.Show();
             });
