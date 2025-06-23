@@ -1,5 +1,7 @@
 using Avalonia;
+using System;
 using Avalonia.Controls.ApplicationLifetimes;
+using System.Reactive.Linq;
 using Avalonia.Markup.Xaml;
 using AzurePrOps.ViewModels;
 using AzurePrOps.Views;
@@ -17,10 +19,21 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow
+            var loginVm = new LoginWindowViewModel();
+            var loginWindow = new LoginWindow { DataContext = loginVm };
+
+            loginVm.ConnectCommand.Subscribe(settings =>
             {
-                DataContext = new MainWindowViewModel(),
-            };
+                var mainWindow = new MainWindow
+                {
+                    DataContext = new MainWindowViewModel(settings),
+                };
+                desktop.MainWindow = mainWindow;
+                mainWindow.Show();
+                loginWindow.Close();
+            });
+
+            desktop.MainWindow = loginWindow;
         }
 
         base.OnFrameworkInitializationCompleted();

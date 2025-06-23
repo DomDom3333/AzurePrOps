@@ -1,0 +1,18 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:AzurePrOps.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="300"
+        x:Class="AzurePrOps.Views.LoginWindow"
+        x:DataType="vm:LoginWindowViewModel"
+        Title="Connect">
+    <StackPanel Margin="10" Spacing="6">
+        <TextBox Watermark="Organization" Text="{Binding Organization}"/>
+        <TextBox Watermark="Project" Text="{Binding Project}"/>
+        <TextBox Watermark="Repository" Text="{Binding Repository}"/>
+        <TextBox Watermark="Reviewer ID" Text="{Binding ReviewerId}"/>
+        <TextBox Watermark="PAT" Text="{Binding PersonalAccessToken}"/>
+        <Button Content="Connect" Command="{Binding ConnectCommand}" Width="100" HorizontalAlignment="Right"/>
+    </StackPanel>
+</Window>

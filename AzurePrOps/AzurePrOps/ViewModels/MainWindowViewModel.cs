@@ -1,5 +1,6 @@
 using AzurePrOps.AzureConnection.Models;
 using AzurePrOps.AzureConnection.Services;
+using AzurePrOps.Models;
 using ReactiveUI;
 using System.Collections.ObjectModel;
 using System.Reactive;
@@ -10,6 +11,7 @@ namespace AzurePrOps.ViewModels;
 public class MainWindowViewModel : ViewModelBase
 {
     private readonly AzureDevOpsClient _client = new();
+    private readonly Models.ConnectionSettings _settings;
 
     public ObservableCollection<PullRequestInfo> PullRequests { get; } = new();
     public ObservableCollection<PullRequestComment> Comments { get; } = new();
@@ -33,17 +35,17 @@ public class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> ApproveCommand { get; }
     public ReactiveCommand<Unit, Unit> PostCommentCommand { get; }
 
-    public MainWindowViewModel()
+    public MainWindowViewModel(Models.ConnectionSettings settings)
     {
+        _settings = settings;
+
         RefreshCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            // TODO: replace placeholders with real values or configuration
-            const string org = "your-org";
-            const string project = "your-project";
-            const string repo = "your-repo";
-            const string pat = "your-pat";
-
-            var prs = await _client.GetPullRequestsAsync(org, project, repo, pat);
+            var prs = await _client.GetPullRequestsAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                _settings.PersonalAccessToken);
 
             PullRequests.Clear();
             foreach (var pr in prs.OrderByDescending(p => p.Created))
@@ -57,12 +59,12 @@ public class MainWindowViewModel : ViewModelBase
             if (SelectedPullRequest == null)
                 return;
 
-            const string org = "your-org";
-            const string project = "your-project";
-            const string repo = "your-repo";
-            const string pat = "your-pat";
-
-            var comments = await _client.GetPullRequestCommentsAsync(org, project, repo, SelectedPullRequest.Id, pat);
+            var comments = await _client.GetPullRequestCommentsAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                SelectedPullRequest.Id,
+                _settings.PersonalAccessToken);
 
             Comments.Clear();
             foreach (var c in comments)
@@ -76,13 +78,13 @@ public class MainWindowViewModel : ViewModelBase
             if (SelectedPullRequest == null)
                 return;
 
-            const string org = "your-org";
-            const string project = "your-project";
-            const string repo = "your-repo";
-            const string pat = "your-pat";
-            const string reviewerId = "your-reviewer-id";
-
-            await _client.ApprovePullRequestAsync(org, project, repo, SelectedPullRequest.Id, reviewerId, pat);
+            await _client.ApprovePullRequestAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                SelectedPullRequest.Id,
+                _settings.ReviewerId,
+                _settings.PersonalAccessToken);
         });
 
         PostCommentCommand = ReactiveCommand.CreateFromTask(async () =>
@@ -90,12 +92,13 @@ public class MainWindowViewModel : ViewModelBase
             if (SelectedPullRequest == null || string.IsNullOrWhiteSpace(NewCommentText))
                 return;
 
-            const string org = "your-org";
-            const string project = "your-project";
-            const string repo = "your-repo";
-            const string pat = "your-pat";
-
-            await _client.PostPullRequestCommentAsync(org, project, repo, SelectedPullRequest.Id, NewCommentText, pat);
+            await _client.PostPullRequestCommentAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                SelectedPullRequest.Id,
+                NewCommentText,
+                _settings.PersonalAccessToken);
             NewCommentText = string.Empty;
         });
     }
