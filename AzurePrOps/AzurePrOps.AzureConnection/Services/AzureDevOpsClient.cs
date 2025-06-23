@@ -158,6 +158,94 @@ public class AzureDevOpsClient
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task<string> GetUserIdAsync(string personalAccessToken)
+    {
+        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+        using var response = await _httpClient.GetAsync("https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=7.1-preview.1");
+        response.EnsureSuccessStatusCode();
+
+        using var stream = await response.Content.ReadAsStreamAsync();
+        var json = await JsonDocument.ParseAsync(stream);
+        return json.RootElement.GetProperty("id").GetString() ?? string.Empty;
+    }
+
+    public async Task<IReadOnlyList<NamedItem>> GetOrganizationsAsync(string userId, string personalAccessToken)
+    {
+        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+        var uri = $"https://app.vssps.visualstudio.com/_apis/accounts?memberId={userId}&api-version=7.1-preview.1";
+        using var response = await _httpClient.GetAsync(uri);
+        response.EnsureSuccessStatusCode();
+
+        using var stream = await response.Content.ReadAsStreamAsync();
+        var json = await JsonDocument.ParseAsync(stream);
+
+        var list = new List<NamedItem>();
+        if (json.RootElement.TryGetProperty("value", out var items))
+        {
+            foreach (var i in items.EnumerateArray())
+            {
+                var id = i.GetProperty("accountId").GetString() ?? string.Empty;
+                var name = i.GetProperty("accountName").GetString() ?? string.Empty;
+                list.Add(new NamedItem(id, name));
+            }
+        }
+        return list;
+    }
+
+    public async Task<IReadOnlyList<NamedItem>> GetProjectsAsync(string organization, string personalAccessToken)
+    {
+        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+        var requestUri = $"https://dev.azure.com/{organization}/_apis/projects?api-version=7.1-preview.1";
+        using var response = await _httpClient.GetAsync(requestUri);
+        response.EnsureSuccessStatusCode();
+
+        using var stream = await response.Content.ReadAsStreamAsync();
+        var json = await JsonDocument.ParseAsync(stream);
+
+        var list = new List<NamedItem>();
+        if (json.RootElement.TryGetProperty("value", out var items))
+        {
+            foreach (var p in items.EnumerateArray())
+            {
+                var id = p.GetProperty("id").GetString() ?? string.Empty;
+                var name = p.GetProperty("name").GetString() ?? string.Empty;
+                list.Add(new NamedItem(id, name));
+            }
+        }
+        return list;
+    }
+
+    public async Task<IReadOnlyList<NamedItem>> GetRepositoriesAsync(string organization, string project, string personalAccessToken)
+    {
+        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+        var requestUri = $"https://dev.azure.com/{organization}/{project}/_apis/git/repositories?api-version=7.1-preview.1";
+        using var response = await _httpClient.GetAsync(requestUri);
+        response.EnsureSuccessStatusCode();
+
+        using var stream = await response.Content.ReadAsStreamAsync();
+        var json = await JsonDocument.ParseAsync(stream);
+
+        var list = new List<NamedItem>();
+        if (json.RootElement.TryGetProperty("value", out var items))
+        {
+            foreach (var r in items.EnumerateArray())
+            {
+                var id = r.GetProperty("id").GetString() ?? string.Empty;
+                var name = r.GetProperty("name").GetString() ?? string.Empty;
+                list.Add(new NamedItem(id, name));
+            }
+        }
+        return list;
+    }
+
     private static string VoteToString(int vote) => vote switch
     {
         10 => "Approved",

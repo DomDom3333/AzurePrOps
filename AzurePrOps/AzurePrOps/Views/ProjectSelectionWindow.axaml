@@ -1,0 +1,28 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="using:AzurePrOps.ViewModels"
+        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="300"
+        x:Class="AzurePrOps.Views.ProjectSelectionWindow"
+        x:DataType="vm:ProjectSelectionWindowViewModel"
+        Title="Select Project">
+    <StackPanel Margin="10" Spacing="6">
+        <ComboBox ItemsSource="{Binding Organizations}" SelectedItem="{Binding SelectedOrganization}">
+            <ComboBox.ItemTemplate>
+                <DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
+        <ComboBox ItemsSource="{Binding Projects}" SelectedItem="{Binding SelectedProject}">
+            <ComboBox.ItemTemplate>
+                <DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
+        <ComboBox ItemsSource="{Binding Repositories}" SelectedItem="{Binding SelectedRepository}">
+            <ComboBox.ItemTemplate>
+                <DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
+        <Button Content="Continue" Command="{Binding ConnectCommand}" Width="100" HorizontalAlignment="Right"/>
+    </StackPanel>
+</Window>
