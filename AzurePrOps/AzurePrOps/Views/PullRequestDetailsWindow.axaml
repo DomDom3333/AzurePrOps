@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:AzurePrOps.ViewModels"
+        xmlns:model="using:AzurePrOps.AzureConnection.Models"
         x:Class="AzurePrOps.Views.PullRequestDetailsWindow"
         x:DataType="vm:PullRequestDetailsWindowViewModel"
         Title="Pull Request Details"
@@ -36,7 +37,7 @@
             <TextBlock Text="Participants" FontWeight="Bold" Margin="0,10,0,0"/>
             <ListBox ItemsSource="{Binding PullRequest.Reviewers}">
                 <ListBox.ItemTemplate>
-                    <DataTemplate>
+                    <DataTemplate x:DataType="model:ReviewerInfo">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                             <TextBlock Text="{Binding DisplayName}" FontWeight="Bold"/>
                             <TextBlock Text="({Binding Vote})" Foreground="Gray"/>
@@ -48,7 +49,7 @@
             <TextBlock Text="Comments" FontWeight="Bold" Margin="0,10,0,0"/>
             <ListBox ItemsSource="{Binding Comments}">
                 <ListBox.ItemTemplate>
-                    <DataTemplate>
+                    <DataTemplate x:DataType="model:PullRequestComment">
                         <StackPanel Margin="0,0,0,4">
                             <TextBlock Text="{Binding Author}" FontWeight="Bold"/>
                             <TextBlock Text="{Binding PostedDate}" FontStyle="Italic" FontSize="10"/>
