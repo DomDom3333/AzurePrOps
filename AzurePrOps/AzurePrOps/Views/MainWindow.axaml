@@ -55,12 +55,21 @@
             <ListBox Grid.Row="3" ItemsSource="{Binding PullRequests}" SelectedItem="{Binding SelectedPullRequest}">
             <ListBox.ItemTemplate>
                 <DataTemplate>
-                    <StackPanel Margin="0 0 0 4">
-                        <TextBlock Text="{Binding Title}" FontWeight="Bold"/>
-                        <TextBlock Text="{Binding Creator}" FontStyle="Italic"/>
-                        <TextBlock Text="{Binding Status}"/>
-                        <TextBlock Text="{Binding ReviewersText}" TextWrapping="Wrap"/>
-                    </StackPanel>
+                    <Border Padding="4" BorderBrush="#DDDDDD" BorderThickness="0,0,0,1">
+                        <StackPanel Spacing="2">
+                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Status, Converter={StaticResource StatusToIcon}}"
+                                           Foreground="{Binding Status, Converter={StaticResource StatusToBrush}}"
+                                           FontSize="16"/>
+                                <TextBlock Text="{Binding Title}" FontWeight="Bold"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock Text="👤"/>
+                                <TextBlock Text="{Binding Creator}" FontStyle="Italic"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding ReviewersText}" TextWrapping="Wrap" FontSize="11"/>
+                        </StackPanel>
+                    </Border>
                 </DataTemplate>
             </ListBox.ItemTemplate>
             </ListBox>

@@ -188,24 +188,7 @@ public class MainWindowViewModel : ViewModelBase
             }
         });
 
-        LoadCommentsCommand = ReactiveCommand.CreateFromTask(async () =>
-        {
-            if (SelectedPullRequest == null)
-                return;
-
-            var comments = await _client.GetPullRequestCommentsAsync(
-                _settings.Organization,
-                _settings.Project,
-                _settings.Repository,
-                SelectedPullRequest.Id,
-                _settings.PersonalAccessToken);
-
-            Comments.Clear();
-            foreach (var c in comments)
-            {
-                Comments.Add(c);
-            }
-        });
+        LoadCommentsCommand = ReactiveCommand.CreateFromTask(async () => await LoadCommentsAsync());
 
         ApproveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -236,10 +219,12 @@ public class MainWindowViewModel : ViewModelBase
             NewCommentText = string.Empty;
         });
 
-        ViewDetailsCommand = ReactiveCommand.Create(() =>
+        ViewDetailsCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             if (SelectedPullRequest == null)
                 return;
+
+            await LoadCommentsAsync();
 
             Dispatcher.UIThread.InvokeAsync(() =>
             {
@@ -316,6 +301,25 @@ public class MainWindowViewModel : ViewModelBase
                 SourceBranchOptions.Add(pr.SourceBranch);
             if (!TargetBranchOptions.Contains(pr.TargetBranch))
                 TargetBranchOptions.Add(pr.TargetBranch);
+        }
+    }
+
+    private async Task LoadCommentsAsync()
+    {
+        if (SelectedPullRequest == null)
+            return;
+
+        var comments = await _client.GetPullRequestCommentsAsync(
+            _settings.Organization,
+            _settings.Project,
+            _settings.Repository,
+            SelectedPullRequest.Id,
+            _settings.PersonalAccessToken);
+
+        Comments.Clear();
+        foreach (var c in comments)
+        {
+            Comments.Add(c);
         }
     }
 }

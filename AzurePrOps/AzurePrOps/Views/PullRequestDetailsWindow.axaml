@@ -9,11 +9,29 @@
     <ScrollViewer Margin="10" VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="6">
             <TextBlock Text="{Binding PullRequest.Title}" FontWeight="Bold" FontSize="16"/>
-            <TextBlock Text="{Binding PullRequest.Creator}" FontStyle="Italic"/>
-            <TextBlock Text="{Binding PullRequest.Created}"/>
-            <TextBlock Text="{Binding PullRequest.Status}"/>
-            <TextBlock Text="Source: {Binding PullRequest.SourceBranch}" TextWrapping="Wrap"/>
-            <TextBlock Text="Target: {Binding PullRequest.TargetBranch}" TextWrapping="Wrap"/>
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="👤"/>
+                <TextBlock Text="{Binding PullRequest.Creator}" FontStyle="Italic"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="📅"/>
+                <TextBlock Text="{Binding PullRequest.Created}"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <TextBlock Text="{Binding PullRequest.Status, Converter={StaticResource StatusToIcon}}"
+                           Foreground="{Binding PullRequest.Status, Converter={StaticResource StatusToBrush}}"
+                           FontSize="16"/>
+                <TextBlock Text="{Binding PullRequest.Status}"
+                           Foreground="{Binding PullRequest.Status, Converter={StaticResource StatusToBrush}}"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="🔀"/>
+                <TextBlock Text="{Binding PullRequest.SourceBranch, StringFormat='Source: {0}'}" TextWrapping="Wrap"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="➡"/>
+                <TextBlock Text="{Binding PullRequest.TargetBranch, StringFormat='Target: {0}'}" TextWrapping="Wrap"/>
+            </StackPanel>
 
             <TextBlock Text="Participants" FontWeight="Bold" Margin="0,10,0,0"/>
             <ListBox ItemsSource="{Binding PullRequest.Reviewers}">
