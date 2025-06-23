@@ -3,7 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="using:AzurePrOps.ViewModels"
-        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="200"
+        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="250"
         x:Class="AzurePrOps.Views.LoginWindow"
         x:DataType="vm:LoginWindowViewModel"
         Title="Login">
@@ -11,5 +11,9 @@
         <TextBox Watermark="Email" Text="{Binding Email}"/>
         <TextBox Watermark="PAT" Text="{Binding PersonalAccessToken}"/>
         <Button Content="Login" Command="{Binding LoginCommand}" Width="100" HorizontalAlignment="Right"/>
+        <TextBlock Text="{Binding ErrorMessage}" 
+                   Foreground="Red" 
+                   TextWrapping="Wrap"
+                   IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
     </StackPanel>
 </Window>
