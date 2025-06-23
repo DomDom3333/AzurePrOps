@@ -1,15 +1,22 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="AzurePrOps.App"
              xmlns:local="using:AzurePrOps"
+             xmlns:converters="using:AzurePrOps.Converters"
+             x:Class="AzurePrOps.App"
              RequestedThemeVariant="Default">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
     <Application.DataTemplates>
         <local:ViewLocator/>
     </Application.DataTemplates>
+
+    <Application.Resources>
+        <converters:StatusToBrushConverter x:Key="StatusToBrush" />
+        <converters:StatusToIconConverter x:Key="StatusToIcon" />
+    </Application.Resources>
   
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="avares://AzurePrOps/Styles/Styles.xaml" />
     </Application.Styles>
 </Application>

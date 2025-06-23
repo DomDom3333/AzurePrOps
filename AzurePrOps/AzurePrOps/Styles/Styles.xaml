@@ -1,0 +1,18 @@
+<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Styles.Resources>
+        <SolidColorBrush x:Key="BackgroundBrush" Color="#F9F9F9" />
+        <SolidColorBrush x:Key="PrimaryBrush" Color="#333333" />
+    </Styles.Resources>
+
+    <Style Selector="Window">
+        <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+    </Style>
+
+    <Style Selector="Button, TextBox, ComboBox, AutoCompleteBox">
+        <Setter Property="Margin" Value="2" />
+    </Style>
+</Styles>
