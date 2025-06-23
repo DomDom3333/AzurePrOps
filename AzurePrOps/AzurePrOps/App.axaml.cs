@@ -22,14 +22,25 @@ public partial class App : Application
             var loginVm = new LoginWindowViewModel();
             var loginWindow = new LoginWindow { DataContext = loginVm };
 
-            loginVm.ConnectCommand.Subscribe(settings =>
+            loginVm.LoginCommand.Subscribe(async info =>
             {
-                var mainWindow = new MainWindow
+                var selectVm = new ProjectSelectionWindowViewModel(info.PersonalAccessToken, info.ReviewerId);
+                await selectVm.LoadAsync();
+                var selectWindow = new ProjectSelectionWindow { DataContext = selectVm };
+
+                selectVm.ConnectCommand.Subscribe(settings =>
                 {
-                    DataContext = new MainWindowViewModel(settings),
-                };
-                desktop.MainWindow = mainWindow;
-                mainWindow.Show();
+                    var mainWindow = new MainWindow
+                    {
+                        DataContext = new MainWindowViewModel(settings),
+                    };
+                    desktop.MainWindow = mainWindow;
+                    mainWindow.Show();
+                    selectWindow.Close();
+                });
+
+                desktop.MainWindow = selectWindow;
+                selectWindow.Show();
                 loginWindow.Close();
             });
 
