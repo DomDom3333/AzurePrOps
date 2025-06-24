@@ -117,7 +117,13 @@ namespace AzurePrOps.Controls
         public string NewText { get => GetValue(NewTextProperty); set => SetValue(NewTextProperty, value); }
         public DiffViewMode ViewMode { get => GetValue(ViewModeProperty); set => SetValue(ViewModeProperty, value); }
 
-        public DiffViewer() { InitializeComponent(); }
+        public DiffViewer()
+        {
+            InitializeComponent();
+            // Ensure initial rendering in case bound properties were set
+            // before InitializeComponent assigned the visual elements.
+            Render();
+        }
 
         private void InitializeComponent()
         {
