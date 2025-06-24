@@ -77,6 +77,20 @@ namespace AzurePrOps.Controls
 
         public DiffViewer()
         {
+            // Provide simple default implementations so the control works
+            CommentProvider    = new InMemoryCommentProvider();
+            PullRequestService = PullRequestServiceFactory.Create(PullRequestServiceType.AzureDevOps);
+            LintingService     = new RoslynLintingService();
+            BlameService       = new GitBlameService(Environment.CurrentDirectory);
+            AuditService       = new FileAuditTrailService();
+            NotificationService= new AvaloniaNotificationService();
+            MetricsService     = new SimpleMetricsService();
+            SuggestionService  = new SimpleSuggestionService();
+            PatchService       = new FilePatchService();
+            FoldingService     = new IndentationFoldingService();
+            SearchService      = new SimpleSearchService();
+            IDEService         = new IDEIntegrationService();
+
             InitializeComponent();
             Loaded += (_, __) => SetupEditors();
         }
