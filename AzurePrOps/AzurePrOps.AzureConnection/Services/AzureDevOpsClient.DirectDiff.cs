@@ -139,12 +139,27 @@ public partial class AzureDevOpsClient
                     ? oldIdProp.GetString()
                     : null;
 
-                // Fetch the content of both versions and create a diff
+                // Fetch the content of both versions
                 var (oldContent, newContent) = await GetFileContents(
                     encodedOrg, encodedProject, encodedRepoId, filePath, oldObjectId, newObjectId, changeType, authToken);
 
-                // Create a unified diff
-                var diffText = GenerateUnifiedDiff(filePath, changeType, oldContent, newContent, oldObjectId, newObjectId);
+                string diffText;
+
+                // If the API provides a patch text, prefer using that
+                if (change.TryGetProperty("patch", out var patchProp))
+                {
+                    diffText = patchProp.GetString() ?? string.Empty;
+
+                    // When content retrieval failed, attempt to derive it from the patch
+                    if (string.IsNullOrEmpty(oldContent) && string.IsNullOrEmpty(newContent) && !string.IsNullOrEmpty(diffText))
+                    {
+                        (oldContent, newContent) = ParsePatchToContent(diffText);
+                    }
+                }
+                else
+                {
+                    diffText = GenerateUnifiedDiff(filePath, changeType, oldContent, newContent, oldObjectId, newObjectId);
+                }
 
                 fileDiffs.Add(new FileDiff(filePath, diffText, oldContent, newContent));
             }
@@ -326,6 +341,35 @@ public partial class AzureDevOpsClient
             return 0;
 
         return text.Split('\n').Length;
+    }
+
+    private (string oldContent, string newContent) ParsePatchToContent(string patch)
+    {
+        var oldLines = new List<string>();
+        var newLines = new List<string>();
+
+        foreach (var line in patch.Split('\n'))
+        {
+            if (line.StartsWith("+++ ") || line.StartsWith("--- ") || line.StartsWith("diff ") || line.StartsWith("@@"))
+                continue;
+
+            if (line.StartsWith("+"))
+            {
+                newLines.Add(line.Substring(1));
+            }
+            else if (line.StartsWith("-"))
+            {
+                oldLines.Add(line.Substring(1));
+            }
+            else if (line.StartsWith(" "))
+            {
+                var text = line.Substring(1);
+                oldLines.Add(text);
+                newLines.Add(text);
+            }
+        }
+
+        return (string.Join('\n', oldLines), string.Join('\n', newLines));
     }
 
     private async Task<IReadOnlyList<FileDiff>> GetItemsAndComputeDiff(
