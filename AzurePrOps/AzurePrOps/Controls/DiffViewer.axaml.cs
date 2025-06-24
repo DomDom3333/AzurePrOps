@@ -16,10 +16,6 @@ using AzurePrOps.ReviewLogic.Services;
 using DiffPlex;
 using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
-// Removed conflicting Notification using directive
-
-// ===== Extension Interfaces & Models for Code Review Features =====
-// (Same as before; omitted here for brevity)
 
 namespace AzurePrOps.Controls
 {
@@ -66,9 +62,18 @@ namespace AzurePrOps.Controls
 
         static DiffViewer()
         {
-            ViewModeProperty.Changed.AddClassHandler<DiffViewer>((x, _) => x.Render());
-            OldTextProperty.Changed.AddClassHandler<DiffViewer>((x, _) => x.Render());
-            NewTextProperty.Changed.AddClassHandler<DiffViewer>((x, _) => x.Render());
+            ViewModeProperty.Changed.AddClassHandler<DiffViewer>((x, e) => {
+                Console.WriteLine($"DiffViewer ViewMode changed: {e.OldValue} -> {e.NewValue}");
+                x.Render();
+            });
+            OldTextProperty.Changed.AddClassHandler<DiffViewer>((x, e) => {
+                Console.WriteLine($"DiffViewer OldText changed: Length = {(e.NewValue as string)?.Length ?? 0}");
+                x.Render();
+            });
+            NewTextProperty.Changed.AddClassHandler<DiffViewer>((x, e) => {
+                Console.WriteLine($"DiffViewer NewText changed: Length = {(e.NewValue as string)?.Length ?? 0}");
+                x.Render();
+            });
         }
 
         public string OldText { get => GetValue(OldTextProperty); set => SetValue(OldTextProperty, value); }
@@ -171,6 +176,8 @@ namespace AzurePrOps.Controls
             if (_oldEditor is null || _newEditor is null)
                 return;
 
+            Console.WriteLine("Setting up DiffViewer editors");
+
             // Use AvaloniaEdit's built-in C# highlighting (no TextMate)
             var highlightDef = HighlightingManager.Instance.GetDefinitionByExtension(".cs");
             _oldEditor.SyntaxHighlighting = highlightDef;
@@ -181,40 +188,274 @@ namespace AzurePrOps.Controls
             _oldEditor.ShowLineNumbers = true;
             _newEditor.ShowLineNumbers = true;
 
+            // Set explicit height for better visibility
+            _oldEditor.MinHeight = 250;
+            _newEditor.MinHeight = 250;
+
             // Render initial diff
             Render();
         }
 
-        private void Render()
+        public void Render()
         {
+            Console.WriteLine($"DiffViewer.Render() called");
             if (_oldEditor is null || _newEditor is null)
+            {
+                Console.WriteLine($"DiffViewer.Render(): editors are null, aborting render");
                 return;
+            }
 
             // Load texts
-            _oldEditor.Text = OldText ?? "";
-            _newEditor.Text = NewText ?? "";
+            Console.WriteLine($"DiffViewer.Render(): OldText length={OldText?.Length ?? 0}, NewText length={NewText?.Length ?? 0}");
+
+            // Make sure we explicitly set the Document's text, not just the editor's Text property
+            string oldTextValue = OldText ?? "";
+            string newTextValue = NewText ?? "";
+
+            // Force text display by setting document text directly
+            _oldEditor.Document = new AvaloniaEdit.Document.TextDocument(oldTextValue);
+            _newEditor.Document = new AvaloniaEdit.Document.TextDocument(newTextValue);
+
+            // Also set the Text property for consistency
+            _oldEditor.Text = oldTextValue;
+            _newEditor.Text = newTextValue;
+
+            Console.WriteLine($"Set document text - Old: {oldTextValue.Length} bytes, New: {newTextValue.Length} bytes");
 
             // Clear previous transformers
             _oldEditor.TextArea.TextView.LineTransformers.Clear();
             _newEditor.TextArea.TextView.LineTransformers.Clear();
 
+            // Clear previous background renderers
+            _oldEditor.TextArea.TextView.BackgroundRenderers.Clear();
+            _newEditor.TextArea.TextView.BackgroundRenderers.Clear();
+
             // Compute unified diff
+            Console.WriteLine($"Building diff model with OldText ({OldText?.Length ?? 0} bytes) and NewText ({NewText?.Length ?? 0} bytes)");
+
+            // Add explicit handling for empty string cases
+            string oldTextForDiff = OldText ?? "";
+            string newTextForDiff = NewText ?? "";
+
+            // Handle special case for new files (empty old text)
+            if (string.IsNullOrEmpty(oldTextForDiff) && !string.IsNullOrEmpty(newTextForDiff))
+            {
+                Console.WriteLine("Special case: New file detected (empty old text)");
+                // For a new file, all lines should be marked as added
+                var newLines = newTextForDiff.Split('\n');
+                _lineTypes = newLines
+                    .Select((_, i) => (Line: i + 1, Type: DiffLineType.Added))
+                    .ToDictionary(t => t.Line, t => t.Type);
+
+                Console.WriteLine($"Created manual _lineTypes with {_lineTypes.Count} lines, all marked as added");
+
+                // Track changed lines for navigation
+                _changedLines = _lineTypes.Keys.OrderBy(k => k).ToList();
+
+                // Update stats
+                int addedLinesRender = newLines.Length;
+                int removedLinesRender = 0;
+                int modifiedLinesRender = 0;
+
+                if (_addedLinesText != null)
+                    _addedLinesText.Text = $"{addedLinesRender} added";
+                if (_removedLinesText != null)
+                    _removedLinesText.Text = $"{removedLinesRender} removed";
+                if (_modifiedLinesText != null)
+                    _modifiedLinesText.Text = $"{modifiedLinesRender} modified";
+
+    // Check for file markers and handle special cases
+    bool isDeletedFile = oldTextForDiff.Contains("[FILE DELETED]");
+    bool isNewFile = oldTextForDiff.Contains("[FILE ADDED]");
+
+    if (isDeletedFile || isNewFile)
+    {
+        // Strip markers before diff processing
+        oldTextForDiff = oldTextForDiff.Replace("[FILE DELETED]\n", "").Replace("[FILE ADDED]\n", "");
+        Console.WriteLine($"Detected special file marker. IsDeleted={isDeletedFile}, IsNew={isNewFile}");
+    }
+
+                // Apply coloring to the editors
+                if (_newEditor != null)
+                {
+                    var transformernewEditor = new DiffLineBackgroundTransformer(_lineTypes);
+                    _newEditor.TextArea.TextView.LineTransformers.Add(transformernewEditor);
+
+                    // Add gutter markers
+                    var marginRendererNewEditor = new LineStatusMarginRenderer(_lineTypes);
+                    _newEditor.TextArea.TextView.BackgroundRenderers.Add(marginRendererNewEditor);
+                }
+
+                // Continue rendering with our manual line types
+                return;
+            }
+
+            // Handle special case for deleted files (empty new text)
+            if (!string.IsNullOrEmpty(oldTextForDiff) && string.IsNullOrEmpty(newTextForDiff))
+            {
+                Console.WriteLine("Special case: Deleted file detected (empty new text)");
+                // For a deleted file, all lines should be marked as removed
+                var oldLines = oldTextForDiff.Split('\n');
+                _lineTypes = oldLines
+                    .Select((_, i) => (Line: i + 1, Type: DiffLineType.Removed))
+                    .ToDictionary(t => t.Line, t => t.Type);
+
+                Console.WriteLine($"Created manual _lineTypes with {_lineTypes.Count} lines, all marked as removed");
+
+                // Track changed lines for navigation
+                _changedLines = _lineTypes.Keys.OrderBy(k => k).ToList();
+
+                // Update stats
+                int addedLinesUpdates = 0;
+                int removedLinesUpdates = oldLines.Length;
+                int modifiedLinesUpdates = 0;
+
+                if (_addedLinesText != null)
+                    _addedLinesText.Text = $"{addedLinesUpdates} added";
+                if (_removedLinesText != null)
+                    _removedLinesText.Text = $"{removedLinesUpdates} removed";
+                if (_modifiedLinesText != null)
+                    _modifiedLinesText.Text = $"{modifiedLinesUpdates} modified";
+
+                // Apply coloring to the editors
+                if (_oldEditor != null)
+                {
+                    var transformerOldEditor = new DiffLineBackgroundTransformer(_lineTypes);
+                    _oldEditor.TextArea.TextView.LineTransformers.Add(transformerOldEditor);
+
+                    // Add gutter markers
+                    var marginRendererOldEditor = new LineStatusMarginRenderer(_lineTypes);
+                    _oldEditor.TextArea.TextView.BackgroundRenderers.Add(marginRendererOldEditor);
+                }
+
+                // Continue rendering with our manual line types
+                return;
+            }
+            
+            // Normal case: Build diff model
             var model = new InlineDiffBuilder(new Differ())
-                            .BuildDiffModel(OldText ?? "", NewText ?? "");
+                            .BuildDiffModel(oldTextForDiff, newTextForDiff);
+
+            // Check if texts are identical - compare actual content instead of just length
+            bool textsAreIdentical = string.Equals(oldTextForDiff, newTextForDiff, StringComparison.Ordinal);
+            if (!textsAreIdentical && oldTextForDiff.Length == newTextForDiff.Length)
+            {
+                Console.WriteLine("Equal length texts with different content detected!");
+            }
 
             // Map line numbers to change types
             var lineMap = model.Lines
                 .Select((l, i) => (Line: i + 1, Type: Map(l.Type)))
                 .ToDictionary(t => t.Line, t => t.Type);
 
+            // Handle edge cases:
+            // 1. Empty diff model but with non-empty content
+            // 2. Same length but different content
+            if ((lineMap.Count == 0 && (oldTextForDiff.Length > 0 || newTextForDiff.Length > 0)) ||
+                (lineMap.Count > 0 && !lineMap.Any(kv => kv.Value != DiffLineType.Unchanged) && !string.Equals(oldTextForDiff, newTextForDiff, StringComparison.Ordinal)))
+            {
+                Console.WriteLine("Edge case: Empty diff model with non-empty content, creating manual mapping");
+                _lineTypes = new Dictionary<int, DiffLineType>();
+
+                var oldLines = oldTextForDiff.Split('\n').Length;
+                var newLines = newTextForDiff.Split('\n').Length;
+
+                if (oldLines > 0 && newLines == 0)
+                {
+                    // Deleted file case
+                    for (int i = 1; i <= oldLines; i++)
+                    {
+                        _lineTypes[i] = DiffLineType.Removed;
+                    }
+                }
+                else if (oldLines == 0 && newLines > 0)
+                {
+                    // New file case
+                    for (int i = 1; i <= newLines; i++)
+                    {
+                        _lineTypes[i] = DiffLineType.Added;
+                    }
+                }
+                else
+                {
+                    // Check for equal length texts but different content
+                    bool equalLengthButDifferent = oldLines == newLines && !string.Equals(oldTextForDiff, newTextForDiff, StringComparison.Ordinal);
+
+                    if (equalLengthButDifferent)
+                    {
+                        Console.WriteLine("Equal length but different content detected - creating manual diff");
+
+                        // Mark all lines as modified when we have equal length but different content
+                        for (int i = 1; i <= oldLines; i++)
+                        {
+                            _lineTypes[i] = DiffLineType.Modified;
+                        }
+                    }
+                    else
+                    {
+                        // Modified file with no changes detected
+                        for (int i = 1; i <= Math.Max(oldLines, newLines); i++)
+                        {
+                            _lineTypes[i] = DiffLineType.Unchanged;
+                        }
+                    }
+                }
+
+                Console.WriteLine($"Created manual lineTypes with {_lineTypes.Count} lines");
+                return;
+            }
+
+            Console.WriteLine($"Built diff model with {model.Lines.Count} lines and {lineMap.Count(kv => kv.Value != DiffLineType.Unchanged)} changes");
+
             // Highlight backgrounds
             var transformer = new DiffLineBackgroundTransformer(lineMap);
             _oldEditor.TextArea.TextView.LineTransformers.Add(transformer);
             _newEditor.TextArea.TextView.LineTransformers.Add(transformer);
 
-            // TODO: gutter icons (comments, lint, blame, suggestions)
-            // TODO: code folding marks
-            // TODO: search highlights
+            // Track changed lines for navigation
+            _changedLines = lineMap
+                .Where(kv => kv.Value != DiffLineType.Unchanged)
+                .Select(kv => kv.Key)
+                .OrderBy(line => line)
+                .ToList();
+
+            // Update stats
+            int addedLines = lineMap.Count(kv => kv.Value == DiffLineType.Added);
+            int removedLines = lineMap.Count(kv => kv.Value == DiffLineType.Removed);
+            int modifiedLines = lineMap.Count(kv => kv.Value == DiffLineType.Modified);
+
+            // Special case for new files (if there's only new content)
+            if (string.IsNullOrWhiteSpace(OldText) && !string.IsNullOrWhiteSpace(NewText))
+            {
+                Console.WriteLine("Special case for stats: New file detected");
+                addedLines = NewText.Split('\n').Length;
+                removedLines = 0;
+                modifiedLines = 0;
+            }
+
+            // Special case for deleted files (if there's only old content)
+            if (!string.IsNullOrWhiteSpace(OldText) && string.IsNullOrWhiteSpace(NewText))
+            {
+                Console.WriteLine("Special case for stats: Deleted file detected");
+                addedLines = 0;
+                removedLines = OldText.Split('\n').Length;
+                modifiedLines = 0;
+            }
+
+            // Log line counts for debugging
+            Console.WriteLine($"DiffViewer stats: {addedLines} added, {removedLines} removed, {modifiedLines} modified");
+
+            if (_addedLinesText != null)
+                _addedLinesText.Text = $"{addedLines} added";
+            if (_removedLinesText != null)
+                _removedLinesText.Text = $"{removedLines} removed";
+            if (_modifiedLinesText != null)
+                _modifiedLinesText.Text = $"{modifiedLines} modified";
+
+            // Add gutter markers
+            var marginRenderer = new LineStatusMarginRenderer(lineMap);
+            _oldEditor.TextArea.TextView.BackgroundRenderers.Add(marginRenderer);
+            _newEditor.TextArea.TextView.BackgroundRenderers.Add(marginRenderer);
 
             // Metrics panel
             _metricsPanel?.Children.Clear();
@@ -223,12 +464,12 @@ namespace AzurePrOps.Controls
                 _metricsPanel?.Children.Add(new TextBlock { Text = $"{m.Name}: {m.Value}" });
             }
 
-            NotificationService?.Notify("render", new Notification
-            {
-                Title = "Render Complete",
-                Message = $"Diff rendered at {DateTime.Now:T}",
-                Type = NotificationType.Info
-            });
+            // NotificationService?.Notify("render", new Notification
+            // {
+            //     Title = "Render Complete",
+            //     Message = $"Diff rendered at {DateTime.Now:T}",
+            //     Type = NotificationType.Info
+            // });
             AuditService?.RecordAction(new AuditRecord
             {
                 Timestamp = DateTime.Now,
@@ -303,6 +544,19 @@ namespace AzurePrOps.Controls
         private void ToggleCodeFolding()
         {
             _codeFoldingEnabled = !_codeFoldingEnabled;
+
+    // Make sure we set the documents directly
+    if (!string.IsNullOrEmpty(OldText))
+    {
+        _oldEditor.Text = OldText;
+        _oldEditor.Document.Text = OldText;
+    }
+
+    if (!string.IsNullOrEmpty(NewText))
+    {
+        _newEditor.Text = NewText;
+        _newEditor.Document.Text = NewText;
+    }
 
             if (_oldEditor != null && _newEditor != null)
             {

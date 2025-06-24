@@ -23,27 +23,138 @@ public class GitPullRequestService : IPullRequestService
 
     public (string oldText, string newText) LoadDiff(string repositoryPath, int pullRequestId)
     {
-        using Repository repo = new Repository(repositoryPath);
-        // convention: PR branch named "pr/{id}"
-        Branch? prBranch = repo.Branches.FirstOrDefault(b => b.FriendlyName.EndsWith($"/pr/{pullRequestId}", StringComparison.OrdinalIgnoreCase));
-        if (prBranch == null)
-            throw new ArgumentException($"PR branch pr/{pullRequestId} not found.");
+        Console.WriteLine($"LoadDiff called for repo {repositoryPath}, PR {pullRequestId}");
 
-        Commit? headCommit   = repo.Head.Tip;
-        Commit? prCommit     = prBranch.Tip;
-        TreeChanges? changes      = repo.Diff.Compare<TreeChanges>(headCommit.Tree, prCommit.Tree);
-        TreeEntryChanges? firstChange  = changes.FirstOrDefault();
-        if (firstChange == null)
-            return (string.Empty, string.Empty);
+        try
+        {
+            using Repository repo = new Repository(repositoryPath);
+            // convention: PR branch named "pr/{id}"
+            Branch? prBranch = repo.Branches.FirstOrDefault(b => b.FriendlyName.EndsWith($"/pr/{pullRequestId}", StringComparison.OrdinalIgnoreCase));
+            if (prBranch == null)
+            {
+                Console.WriteLine($"PR branch pr/{pullRequestId} not found - looking for alternate formats");
+                // Try alternate branch naming formats
+                prBranch = repo.Branches.FirstOrDefault(b => 
+                    b.FriendlyName.Contains($"PR-{pullRequestId}", StringComparison.OrdinalIgnoreCase) ||
+                    b.FriendlyName.Contains($"PR{pullRequestId}", StringComparison.OrdinalIgnoreCase) ||
+                    b.FriendlyName.Contains($"pull/{pullRequestId}", StringComparison.OrdinalIgnoreCase));
 
-        Commit parent = prCommit.Parents.FirstOrDefault() ?? headCommit;
-        Blob? oldBlob = repo.Lookup<Blob>(parent[firstChange.Path]?.Target.Id);
-        Blob? newBlob = repo.Lookup<Blob>(prCommit[firstChange.Path]?.Target.Id);
+                if (prBranch == null)
+                    throw new ArgumentException($"Could not find any branch for PR {pullRequestId}");
+            }
 
-        string oldText = oldBlob?.GetContentText() ?? string.Empty;
-        string newText = newBlob?.GetContentText() ?? string.Empty;
+            Console.WriteLine($"Found PR branch: {prBranch.FriendlyName}");
 
-        return (oldText, newText);
+            Commit? headCommit = repo.Head.Tip;
+            Commit? prCommit = prBranch.Tip;
+            Console.WriteLine($"Head commit: {headCommit.Sha}, PR commit: {prCommit.Sha}");
+
+            TreeChanges? changes = repo.Diff.Compare<TreeChanges>(headCommit.Tree, prCommit.Tree);
+            Console.WriteLine($"Found {changes.Count()} changed files");
+            Commit parent;
+            if (changes.Count() == 0)
+            {
+                // Try comparing with the PR branch's parent instead
+                parent = prCommit.Parents.FirstOrDefault();
+                if (parent != null)
+                {
+                    Console.WriteLine($"No changes found with head, trying PR parent: {parent.Sha}");
+                    changes = repo.Diff.Compare<TreeChanges>(parent.Tree, prCommit.Tree);
+                    Console.WriteLine($"Found {changes.Count()} changed files with parent");
+                }
+            }
+
+            TreeEntryChanges? firstChange = changes.FirstOrDefault();
+            if (firstChange == null)
+            {
+                Console.WriteLine("No changes found in the PR");
+                return ("[No changes found in this PR]\n", "[No changes found in this PR]\n");
+            }
+
+            Console.WriteLine($"First changed file: {firstChange.Path}, status: {firstChange.Status}");
+
+            // Get the correct versions based on change type
+            string oldText = "[Could not retrieve original content]\n";
+            string newText = "[Could not retrieve modified content]\n";
+
+            parent = prCommit.Parents.FirstOrDefault() ?? headCommit;
+
+            // For deleted files
+            if (firstChange.Status == ChangeKind.Deleted)
+            {
+                Console.WriteLine("File was deleted");
+                try
+                {
+                    // Get content from parent commit
+                    var parentEntry = parent[firstChange.Path];
+                    if (parentEntry != null && parentEntry.TargetType == TreeEntryTargetType.Blob)
+                    {
+                        Blob? oldBlob = repo.Lookup<Blob>(parentEntry.Target.Id);
+                        oldText = oldBlob?.GetContentText() ?? "[Could not read file content]\n";
+                        newText = "[FILE DELETED]\n";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error retrieving deleted file: {ex.Message}");
+                }
+            }
+            // For new files
+            else if (firstChange.Status == ChangeKind.Added)
+            {
+                Console.WriteLine("File was added");
+                try
+                {
+                    // Get content from PR commit
+                    var newEntry = prCommit[firstChange.Path];
+                    if (newEntry != null && newEntry.TargetType == TreeEntryTargetType.Blob)
+                    {
+                        Blob? newBlob = repo.Lookup<Blob>(newEntry.Target.Id);
+                        oldText = "[FILE ADDED]\n";
+                        newText = newBlob?.GetContentText() ?? "[Could not read file content]\n";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error retrieving added file: {ex.Message}");
+                }
+            }
+            // For modified files
+            else
+            {
+                Console.WriteLine("File was modified");
+                try
+                {
+                    // Get old content from parent commit
+                    var parentEntry = parent[firstChange.Path];
+                    if (parentEntry != null && parentEntry.TargetType == TreeEntryTargetType.Blob)
+                    {
+                        Blob? oldBlob = repo.Lookup<Blob>(parentEntry.Target.Id);
+                        oldText = oldBlob?.GetContentText() ?? "[Could not read original file content]\n";
+                    }
+
+                    // Get new content from PR commit
+                    var newEntry = prCommit[firstChange.Path];
+                    if (newEntry != null && newEntry.TargetType == TreeEntryTargetType.Blob)
+                    {
+                        Blob? newBlob = repo.Lookup<Blob>(newEntry.Target.Id);
+                        newText = newBlob?.GetContentText() ?? "[Could not read modified file content]\n";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error retrieving modified file: {ex.Message}");
+                }
+            }
+
+            Console.WriteLine($"Retrieved content - Old: {oldText.Length} bytes, New: {newText.Length} bytes");
+            return (oldText, newText);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error in LoadDiff: {ex.Message}");
+            return ("[Error retrieving diff: " + ex.Message + "]\n", "[Error retrieving diff: " + ex.Message + "]\n");
+        }
     }
 
     public Task<IReadOnlyList<FileDiff>> GetPullRequestDiffAsync(

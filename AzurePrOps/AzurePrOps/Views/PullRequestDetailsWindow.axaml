@@ -83,22 +83,28 @@
                 Margin="0,10,0,0"
                 Text="Changes" />
             <ListBox
+                HorizontalAlignment="Stretch"
                 ItemsSource="{Binding FileDiffs}"
-                HorizontalAlignment="Stretch">
+                x:Name="DiffsList">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="review:FileDiff">
                         <Expander
                             Header="{Binding FilePath}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
                             IsExpanded="True"
                             Margin="0,0,0,4">
                             <!--  Display the diff in a side by side layout  -->
-                            <Grid>
+                            <Grid HorizontalAlignment="Stretch" MinHeight="300">
                                 <controls:DiffViewer
                                     HorizontalAlignment="Stretch"
+                                    Loaded="DiffViewer_Loaded"
+                                    MinHeight="300"
+                                    NewText="{Binding NewText}"
+                                    OldText="{Binding OldText}"
                                     VerticalAlignment="Stretch"
-                                    NewText="{Binding NewText, Mode=TwoWay}"
-                                    OldText="{Binding OldText, Mode=TwoWay}"
-                                    ViewMode="SideBySide" />
+                                    ViewMode="SideBySide"
+                                    x:Name="Diff" />
                                 <TextBlock
                                     FontSize="10"
                                     HorizontalAlignment="Right"

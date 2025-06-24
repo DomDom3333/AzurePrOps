@@ -234,8 +234,60 @@ namespace AzurePrOps.ReviewLogic.Services
                     var (oldContent, newContent) = await GetFileContents(
                         encodedOrg, encodedProject, encodedRepoId, filePath, oldObjectId, newObjectId, changeType, authToken);
 
+                    // Ensure we have valid content
+                    if (string.IsNullOrEmpty(oldContent) && string.IsNullOrEmpty(newContent))
+                    {
+                        // Log this case for debugging
+                        ReportError($"No content retrieved for {filePath} - attempting to parse content from raw diff");
+
+                        // For empty content, try to get at least the unified diff
+                        var unifiedDiff = GenerateUnifiedDiff(filePath, changeType, oldContent, newContent);
+
+                        // For new files, provide at least a minimal placeholder
+                        if (changeType.ToLowerInvariant() == "add")
+                        {
+                            oldContent = "[This is a new file]\n";
+                            // Try to extract content from the diff
+                            var newLines = new List<string>();
+                            foreach (var line in unifiedDiff.Split('\n'))
+                            {
+                                if (line.StartsWith("+") && !line.StartsWith("+++ "))
+                                    newLines.Add(line.Substring(1));
+                            }
+                            newContent = string.Join("\n", newLines);
+                            if (string.IsNullOrWhiteSpace(newContent))
+                                newContent = "[Content could not be retrieved for this new file]\n";
+                        }
+                        // For deleted files, provide at least a minimal placeholder
+                        else if (changeType.ToLowerInvariant() == "delete")
+                        {
+                            newContent = "[This file was deleted]\n";
+                            // Try to extract content from the diff
+                            var oldLines = new List<string>();
+                            foreach (var line in unifiedDiff.Split('\n'))
+                            {
+                                if (line.StartsWith("-") && !line.StartsWith("--- "))
+                                    oldLines.Add(line.Substring(1));
+                            }
+                            oldContent = string.Join("\n", oldLines);
+                            if (string.IsNullOrWhiteSpace(oldContent))
+                                oldContent = "[Content could not be retrieved for this deleted file]\n";
+                        }
+                        else
+                        {
+                            // For modified files, show the raw diff in both views for debugging
+                            oldContent = $"[Could not retrieve original content for {filePath}]\n\n{unifiedDiff}";
+                            newContent = $"[Could not retrieve modified content for {filePath}]\n\n{unifiedDiff}";
+                        }
+                    }
+
                     // Add to our collection
-                    fileDiffs.Add(new FileDiff(filePath, GenerateUnifiedDiff(filePath, changeType, oldContent, newContent), oldContent, newContent));
+                    string diffText = GenerateUnifiedDiff(filePath, changeType, oldContent, newContent);
+                    // Ensure we have non-empty strings for display
+                    oldContent = string.IsNullOrEmpty(oldContent) ? "[No content available]\n" : oldContent;
+                    newContent = string.IsNullOrEmpty(newContent) ? "[No content available]\n" : newContent;
+
+                    fileDiffs.Add(new FileDiff(filePath, diffText, oldContent, newContent));
                 }
                 catch (Exception ex)
                 {

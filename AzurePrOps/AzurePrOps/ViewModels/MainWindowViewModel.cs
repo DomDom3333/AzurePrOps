@@ -253,10 +253,18 @@ public class MainWindowViewModel : ViewModelBase
                     SelectedPullRequest.Id,
                     _settings.PersonalAccessToken);
 
+                // Log information about the diffs
+                Console.WriteLine($"Retrieved {diffs.Count} diffs for PR #{SelectedPullRequest.Id}");
+                foreach (var diff in diffs)
+                {
+                    Console.WriteLine($"  - {diff.FilePath}: OldText={diff.OldText?.Length ?? 0} bytes, NewText={diff.NewText?.Length ?? 0} bytes, Diff={diff.Diff?.Length ?? 0} bytes");
+                }
+
                 // Always show the window, even if we couldn't get diffs
                 Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     var vm = new PullRequestDetailsWindowViewModel(SelectedPullRequest, Comments, diffs);
+                    Console.WriteLine($"Created ViewModel with {vm.FileDiffs.Count} FileDiffs");
                     var window = new PullRequestDetailsWindow { DataContext = vm };
                     window.Show();
                 });
