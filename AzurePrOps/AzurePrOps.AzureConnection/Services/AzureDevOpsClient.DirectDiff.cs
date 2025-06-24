@@ -135,9 +135,9 @@ public partial class AzureDevOpsClient
                 var newObjectId = item.TryGetProperty("objectId", out var newIdProp) ? 
                     newIdProp.GetString() : null;
 
-                var oldObjectId = change.TryGetProperty("originalPath", out var _) ?
-                    (item.TryGetProperty("originalObjectId", out var oldIdProp) ? 
-                        oldIdProp.GetString() : null) : null;
+                var oldObjectId = change.TryGetProperty("originalObjectId", out var oldIdProp)
+                    ? oldIdProp.GetString()
+                    : null;
 
                 // Fetch the content of both versions and create a diff
                 var (oldContent, newContent) = await GetFileContents(

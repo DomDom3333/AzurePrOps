@@ -270,9 +270,9 @@ namespace AzurePrOps.ReviewLogic.Services
                     var newObjectId = item.TryGetProperty("objectId", out var newIdProp) ? 
                         newIdProp.GetString() : null;
 
-                    var oldObjectId = change.TryGetProperty("originalPath", out var _) ?
-                        (item.TryGetProperty("originalObjectId", out var oldIdProp) ? 
-                            oldIdProp.GetString() : null) : null;
+                    var oldObjectId = change.TryGetProperty("originalObjectId", out var oldIdProp)
+                        ? oldIdProp.GetString()
+                        : null;
 
                     // Fetch the content of both versions
                     var (oldContent, newContent) = await GetFileContents(
