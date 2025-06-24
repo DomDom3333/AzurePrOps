@@ -18,7 +18,9 @@ public static class UnifiedDiffParser
             {
                 if (currentFile != null)
                 {
-                    result.Add(new FileDiff(currentFile, sb.ToString()));
+                    var patch = sb.ToString();
+                    var (oldText, newText) = ParseOldNew(patch);
+                    result.Add(new FileDiff(currentFile, patch, oldText, newText));
                     sb.Clear();
                 }
                 var parts = line.Split(' ');
@@ -33,7 +35,37 @@ public static class UnifiedDiffParser
             }
         }
         if (currentFile != null)
-            result.Add(new FileDiff(currentFile, sb.ToString()));
+        {
+            var patch = sb.ToString();
+            var (oldText, newText) = ParseOldNew(patch);
+            result.Add(new FileDiff(currentFile, patch, oldText, newText));
+        }
         return result;
+    }
+
+    private static (string oldText, string newText) ParseOldNew(string patch)
+    {
+        var oldLines = new List<string>();
+        var newLines = new List<string>();
+        foreach (var ln in patch.Split('\n'))
+        {
+            if (ln.StartsWith("+++") || ln.StartsWith("---") || ln.StartsWith("diff ") || ln.StartsWith("@@"))
+                continue;
+            if (ln.StartsWith("+"))
+            {
+                newLines.Add(ln[1..]);
+            }
+            else if (ln.StartsWith("-"))
+            {
+                oldLines.Add(ln[1..]);
+            }
+            else
+            {
+                var text = ln.StartsWith(" ") ? ln[1..] : ln;
+                oldLines.Add(text);
+                newLines.Add(text);
+            }
+        }
+        return (string.Join('\n', oldLines), string.Join('\n', newLines));
     }
 }

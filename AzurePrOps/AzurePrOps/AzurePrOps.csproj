@@ -33,5 +33,6 @@
             <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
         </PackageReference>
         <PackageReference Include="Avalonia.ReactiveUI" Version="11.2.7"/>
+        <PackageReference Include="DiffPlex" Version="1.8.0"/>
     </ItemGroup>
 </Project>
