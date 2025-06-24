@@ -200,6 +200,8 @@ public class GitPullRequestService : IPullRequestService
             {
                 string oldContent = string.Empty;
                 string newContent = string.Empty;
+                string? oldId = null;
+                string? newId = null;
 
                 if (change.Status != ChangeKind.Added)
                 {
@@ -207,6 +209,7 @@ public class GitPullRequestService : IPullRequestService
                     if (parentEntry != null && parentEntry.TargetType == TreeEntryTargetType.Blob)
                     {
                         var blob = repo.Lookup<Blob>(parentEntry.Target.Id);
+                        oldId = parentEntry.Target.Id.Sha;
                         oldContent = blob?.GetContentText() ?? string.Empty;
                     }
                 }
@@ -217,11 +220,12 @@ public class GitPullRequestService : IPullRequestService
                     if (newEntry != null && newEntry.TargetType == TreeEntryTargetType.Blob)
                     {
                         var blob = repo.Lookup<Blob>(newEntry.Target.Id);
+                        newId = newEntry.Target.Id.Sha;
                         newContent = blob?.GetContentText() ?? string.Empty;
                     }
                 }
 
-                var diffText = GenerateUnifiedDiff(change.Path, change.Status.ToString().ToLowerInvariant(), oldContent, newContent);
+                var diffText = GenerateUnifiedDiff(change.Path, change.Status.ToString().ToLowerInvariant(), oldContent, newContent, oldId, newId);
                 diffs.Add(new FileDiff(change.Path, diffText, oldContent, newContent));
             }
         }
@@ -233,44 +237,48 @@ public class GitPullRequestService : IPullRequestService
         return Task.FromResult<IReadOnlyList<FileDiff>>(diffs);
     }
 
-    private string GenerateUnifiedDiff(string filePath, string changeType, string oldContent, string newContent)
+    private string GenerateUnifiedDiff(string filePath, string changeType, string oldContent, string newContent, string? oldId = null, string? newId = null)
     {
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"diff --git a/{filePath} b/{filePath}");
+        var sanitizedPath = filePath.TrimStart('/');
+        sb.AppendLine($"diff --git a/{sanitizedPath} b/{sanitizedPath}");
 
         switch (changeType.ToLowerInvariant())
         {
             case "add":
                 sb.AppendLine("new file mode 100644");
-                sb.AppendLine("index 0000000..1234567");
+                sb.AppendLine($"index 0000000..{(newId ?? "0000000").Substring(0, Math.Min(7, (newId ?? "0000000").Length))}");
                 sb.AppendLine("--- /dev/null");
-                sb.AppendLine($"+++ b/{filePath}");
+                sb.AppendLine($"+++ b/{sanitizedPath}");
                 sb.AppendLine("@@ -0,0 +1," + CountLines(newContent) + " @@");
                 foreach (var line in newContent.Split('\n'))
                     sb.AppendLine("+" + line);
                 break;
             case "delete":
                 sb.AppendLine("deleted file mode 100644");
-                sb.AppendLine("index 1234567..0000000");
-                sb.AppendLine($"--- a/{filePath}");
+                sb.AppendLine($"index {(oldId ?? "1234567").Substring(0, Math.Min(7, (oldId ?? "1234567").Length))}..0000000");
+                sb.AppendLine($"--- a/{sanitizedPath}");
                 sb.AppendLine("+++ /dev/null");
                 sb.AppendLine("@@ -1," + CountLines(oldContent) + " +0,0 @@");
                 foreach (var line in oldContent.Split('\n'))
                     sb.AppendLine("-" + line);
                 break;
             default:
-                GenerateSimpleDiff(sb, oldContent, newContent);
+                GenerateSimpleDiff(sb, sanitizedPath, oldContent, newContent, oldId, newId);
                 break;
         }
 
         return sb.ToString();
     }
 
-    private void GenerateSimpleDiff(System.Text.StringBuilder sb, string oldContent, string newContent)
+    private void GenerateSimpleDiff(System.Text.StringBuilder sb, string filePath, string oldContent, string newContent, string? oldId, string? newId)
     {
-        sb.AppendLine("index 1234567..abcdefg 100644");
-        sb.AppendLine("--- a/file");
-        sb.AppendLine("+++ b/file");
+        var oldIndex = string.IsNullOrEmpty(oldId) ? "0000000" : oldId.Substring(0, Math.Min(7, oldId.Length));
+        var newIndex = string.IsNullOrEmpty(newId) ? "0000000" : newId.Substring(0, Math.Min(7, newId.Length));
+
+        sb.AppendLine($"index {oldIndex}..{newIndex} 100644");
+        sb.AppendLine($"--- a/{filePath}");
+        sb.AppendLine($"+++ b/{filePath}");
 
         var oldLines = oldContent.Split('\n');
         var newLines = newContent.Split('\n');
