@@ -225,10 +225,16 @@ public class MainWindowViewModel : ViewModelBase
                 return;
 
             await LoadCommentsAsync();
+            var diffs = await _client.GetPullRequestDiffAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                SelectedPullRequest.Id,
+                _settings.PersonalAccessToken);
 
             Dispatcher.UIThread.InvokeAsync(() =>
             {
-                var vm = new PullRequestDetailsWindowViewModel(SelectedPullRequest, Comments);
+                var vm = new PullRequestDetailsWindowViewModel(SelectedPullRequest, Comments, diffs);
                 var window = new PullRequestDetailsWindow { DataContext = vm };
                 window.Show();
             });

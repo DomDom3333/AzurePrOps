@@ -378,6 +378,42 @@ public class AzureDevOpsClient
         return list;
     }
 
+    public async Task<IReadOnlyList<FileDiff>> GetPullRequestDiffAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        string personalAccessToken)
+    {
+        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+
+        var prUri = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_apis/git/repositories/{repositoryId}/pullRequests/{pullRequestId}?api-version={ApiVersion}";
+        using var prRequest = new HttpRequestMessage(HttpMethod.Get, prUri);
+        prRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+        using var prResponse = await _httpClient.SendAsync(prRequest);
+        prResponse.EnsureSuccessStatusCode();
+        using var prStream = await prResponse.Content.ReadAsStreamAsync();
+        var prJson = await JsonDocument.ParseAsync(prStream);
+
+        var baseCommit = prJson.RootElement
+            .GetProperty("lastMergeTargetCommit")
+            .GetProperty("commitId")
+            .GetString() ?? string.Empty;
+        var targetCommit = prJson.RootElement
+            .GetProperty("lastMergeSourceCommit")
+            .GetProperty("commitId")
+            .GetString() ?? string.Empty;
+
+        var diffUri = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_apis/git/repositories/{repositoryId}/diffs/commits?baseVersion={baseCommit}&targetVersion={targetCommit}&api-version={ApiVersion}&$format=diff";
+        using var diffRequest = new HttpRequestMessage(HttpMethod.Get, diffUri);
+        diffRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+        using var diffResponse = await _httpClient.SendAsync(diffRequest);
+        diffResponse.EnsureSuccessStatusCode();
+        var diffText = await diffResponse.Content.ReadAsStringAsync();
+
+        return UnifiedDiffParser.Parse(diffText);
+    }
+
     private static string VoteToString(int vote) => vote switch
     {
         10 => "Approved",
