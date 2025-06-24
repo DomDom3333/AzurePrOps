@@ -2,6 +2,8 @@ using System;
 using AzurePrOps.AzureConnection.Models;
 using AzurePrOps.AzureConnection.Services;
 using AzurePrOps.Models;
+using AzurePrOps.ReviewLogic.Services;
+using ReviewModels = AzurePrOps.ReviewLogic.Models;
 using ReactiveUI;
 using System.Collections.ObjectModel;
 using System.Reactive;
@@ -16,6 +18,7 @@ namespace AzurePrOps.ViewModels;
 public class MainWindowViewModel : ViewModelBase
 {
     private readonly AzureDevOpsClient _client = new();
+    private readonly IPullRequestService _pullRequestService;
     private readonly Models.ConnectionSettings _settings;
 
     public ObservableCollection<PullRequestInfo> PullRequests { get; } = new();
@@ -156,6 +159,11 @@ public class MainWindowViewModel : ViewModelBase
     {
         _settings = settings;
 
+        _pullRequestService = PullRequestServiceFactory.Create(
+            PullRequestServiceType.AzureDevOps);
+        _pullRequestService.SetErrorHandler(message =>
+            _ = ShowErrorMessage(message));
+
         foreach (var v in FilterViewStorage.Load())
             FilterViews.Add(v);
 
@@ -238,7 +246,7 @@ public class MainWindowViewModel : ViewModelBase
                 }
 
                 // Try to get diffs
-                var diffs = await _client.GetPullRequestDiffAsync(
+                var diffs = await _pullRequestService.GetPullRequestDiffAsync(
                     _settings.Organization,
                     _settings.Project,
                     _settings.Repository,

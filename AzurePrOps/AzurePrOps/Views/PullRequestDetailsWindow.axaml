@@ -7,6 +7,7 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:controls="using:AzurePrOps.Controls"
     xmlns:model="using:AzurePrOps.AzureConnection.Models"
+    xmlns:review="using:AzurePrOps.ReviewLogic.Models"
     xmlns:vm="using:AzurePrOps.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <ScrollViewer Margin="10" VerticalScrollBarVisibility="Auto">
@@ -86,7 +87,7 @@
                 MaxHeight="400"
                 MinHeight="200">
                 <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="model:FileDiff">
+                    <DataTemplate x:DataType="review:FileDiff">
                         <Expander
                             Header="{Binding FilePath}"
                             IsExpanded="True"

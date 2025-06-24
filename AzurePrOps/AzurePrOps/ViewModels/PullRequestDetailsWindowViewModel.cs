@@ -3,7 +3,8 @@ using System.Diagnostics;
 using System.Reactive;
 using Avalonia.Threading;
 using ReactiveUI;
-using AzurePrOps.AzureConnection.Models;
+using ConnectionModels = AzurePrOps.AzureConnection.Models;
+using ReviewModels = AzurePrOps.ReviewLogic.Models;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
@@ -11,22 +12,22 @@ namespace AzurePrOps.ViewModels;
 
 public class PullRequestDetailsWindowViewModel : ViewModelBase
 {
-    public PullRequestInfo PullRequest { get; }
+    public ConnectionModels.PullRequestInfo PullRequest { get; }
 
-    public ObservableCollection<PullRequestComment> Comments { get; }
+    public ObservableCollection<ConnectionModels.PullRequestComment> Comments { get; }
 
     public ReactiveCommand<Unit, Unit> OpenInBrowserCommand { get; }
 
-    public ObservableCollection<FileDiff> FileDiffs { get; } = new();
+    public ObservableCollection<ReviewModels.FileDiff> FileDiffs { get; } = new();
 
-    public PullRequestDetailsWindowViewModel(PullRequestInfo pullRequest,
-        IEnumerable<PullRequestComment>? comments = null,
-        IEnumerable<FileDiff>? diffs = null)
+    public PullRequestDetailsWindowViewModel(ConnectionModels.PullRequestInfo pullRequest,
+        IEnumerable<ConnectionModels.PullRequestComment>? comments = null,
+        IEnumerable<ReviewModels.FileDiff>? diffs = null)
     {
         PullRequest = pullRequest;
         Comments = comments != null
-            ? new ObservableCollection<PullRequestComment>(comments)
-            : new ObservableCollection<PullRequestComment>();
+            ? new ObservableCollection<ConnectionModels.PullRequestComment>(comments)
+            : new ObservableCollection<ConnectionModels.PullRequestComment>();
         if (diffs != null)
         {
             foreach (var d in diffs)
@@ -38,7 +39,7 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
                 if (string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText) && !string.IsNullOrEmpty(fileDiff.Diff))
                 {
                     // Create a simple representation of the diff as text
-                    fileDiff = new FileDiff(
+                    fileDiff = new ReviewModels.FileDiff(
                         fileDiff.FilePath,
                         fileDiff.Diff,
                         "[Original content not available]",
