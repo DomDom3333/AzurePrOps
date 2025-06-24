@@ -30,7 +30,24 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
         if (diffs != null)
         {
             foreach (var d in diffs)
-                FileDiffs.Add(d);
+            {
+                // Ensure there's at least some content for the diff viewer to display
+                var fileDiff = d;
+
+                // If both texts are empty but we have a diff string, create placeholder content
+                if (string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText) && !string.IsNullOrEmpty(fileDiff.Diff))
+                {
+                    // Create a simple representation of the diff as text
+                    fileDiff = new FileDiff(
+                        fileDiff.FilePath,
+                        fileDiff.Diff,
+                        "[Original content not available]",
+                        fileDiff.Diff // Use the diff as the new text to at least show something
+                    );
+                }
+
+                FileDiffs.Add(fileDiff);
+            }
         }
 
         OpenInBrowserCommand = ReactiveCommand.Create(() =>

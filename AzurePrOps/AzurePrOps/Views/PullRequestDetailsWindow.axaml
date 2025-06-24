@@ -1,84 +1,124 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:AzurePrOps.ViewModels"
-        xmlns:model="using:AzurePrOps.AzureConnection.Models"
-        xmlns:controls="using:AzurePrOps.Controls"
-        x:Class="AzurePrOps.Views.PullRequestDetailsWindow"
-        x:DataType="vm:PullRequestDetailsWindowViewModel"
-        Title="Pull Request Details"
-        Width="600"
-        Height="650">
+<Window
+    Height="650"
+    Title="Pull Request Details"
+    Width="600"
+    x:Class="AzurePrOps.Views.PullRequestDetailsWindow"
+    x:DataType="vm:PullRequestDetailsWindowViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:controls="using:AzurePrOps.Controls"
+    xmlns:model="using:AzurePrOps.AzureConnection.Models"
+    xmlns:vm="using:AzurePrOps.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <ScrollViewer Margin="10" VerticalScrollBarVisibility="Auto">
         <StackPanel Spacing="6">
-            <TextBlock Text="{Binding PullRequest.Title}" FontWeight="Bold" FontSize="16"/>
+            <TextBlock
+                FontSize="16"
+                FontWeight="Bold"
+                Text="{Binding PullRequest.Title}" />
             <StackPanel Orientation="Horizontal" Spacing="4">
-                <TextBlock Text="👤"/>
-                <TextBlock Text="{Binding PullRequest.Creator}" FontStyle="Italic"/>
+                <TextBlock Text="👤" />
+                <TextBlock FontStyle="Italic" Text="{Binding PullRequest.Creator}" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="4">
-                <TextBlock Text="📅"/>
-                <TextBlock Text="{Binding PullRequest.Created}"/>
+                <TextBlock Text="📅" />
+                <TextBlock Text="{Binding PullRequest.Created}" />
             </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                <TextBlock Text="{Binding PullRequest.Status, Converter={StaticResource StatusToIcon}}"
-                           Foreground="{Binding PullRequest.Status, Converter={StaticResource StatusToBrush}}"
-                           FontSize="16"/>
-                <TextBlock Text="{Binding PullRequest.Status}"
-                           Foreground="{Binding PullRequest.Status, Converter={StaticResource StatusToBrush}}"/>
+            <StackPanel
+                Orientation="Horizontal"
+                Spacing="4"
+                VerticalAlignment="Center">
+                <TextBlock
+                    FontSize="16"
+                    Foreground="{Binding PullRequest.Status, Converter={StaticResource StatusToBrush}}"
+                    Text="{Binding PullRequest.Status, Converter={StaticResource StatusToIcon}}" />
+                <TextBlock Foreground="{Binding PullRequest.Status, Converter={StaticResource StatusToBrush}}" Text="{Binding PullRequest.Status}" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="4">
-                <TextBlock Text="🔀"/>
-                <TextBlock Text="{Binding PullRequest.SourceBranch, StringFormat='Source: {0}'}" TextWrapping="Wrap"/>
+                <TextBlock Text="🔀" />
+                <TextBlock Text="{Binding PullRequest.SourceBranch, StringFormat='Source: {0}'}" TextWrapping="Wrap" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" Spacing="4">
-                <TextBlock Text="➡"/>
-                <TextBlock Text="{Binding PullRequest.TargetBranch, StringFormat='Target: {0}'}" TextWrapping="Wrap"/>
+                <TextBlock Text="➡" />
+                <TextBlock Text="{Binding PullRequest.TargetBranch, StringFormat='Target: {0}'}" TextWrapping="Wrap" />
             </StackPanel>
 
-            <TextBlock Text="Participants" FontWeight="Bold" Margin="0,10,0,0"/>
+            <TextBlock
+                FontWeight="Bold"
+                Margin="0,10,0,0"
+                Text="Participants" />
             <ListBox ItemsSource="{Binding PullRequest.Reviewers}">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="model:ReviewerInfo">
                         <StackPanel Orientation="Horizontal" Spacing="4">
-                            <TextBlock Text="{Binding Vote, Converter={StaticResource VoteToIcon}}"/>
-                            <TextBlock Text="{Binding DisplayName}" FontWeight="Bold"/>
-                            <TextBlock Text="({Binding Vote})" Foreground="Gray"/>
+                            <TextBlock Text="{Binding Vote, Converter={StaticResource VoteToIcon}}" />
+                            <TextBlock FontWeight="Bold" Text="{Binding DisplayName}" />
+                            <TextBlock Foreground="Gray" Text="({Binding Vote})" />
                         </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
 
-            <TextBlock Text="Comments" FontWeight="Bold" Margin="0,10,0,0"/>
+            <TextBlock
+                FontWeight="Bold"
+                Margin="0,10,0,0"
+                Text="Comments" />
             <ListBox ItemsSource="{Binding Comments}">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="model:PullRequestComment">
                         <StackPanel Margin="0,0,0,4">
-                            <TextBlock Text="{Binding Author}" FontWeight="Bold"/>
-                            <TextBlock Text="{Binding PostedDate}" FontStyle="Italic" FontSize="10"/>
-                            <TextBlock Text="{Binding Content}" TextWrapping="Wrap"/>
+                            <TextBlock FontWeight="Bold" Text="{Binding Author}" />
+                            <TextBlock
+                                FontSize="10"
+                                FontStyle="Italic"
+                                Text="{Binding PostedDate}" />
+                            <TextBlock Text="{Binding Content}" TextWrapping="Wrap" />
                         </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
 
-            <TextBlock Text="Changes" FontWeight="Bold" Margin="0,10,0,0"/>
-            <ListBox ItemsSource="{Binding FileDiffs}" Height="200">
+            <TextBlock
+                FontWeight="Bold"
+                Margin="0,10,0,0"
+                Text="Changes" />
+            <ListBox
+                ItemsSource="{Binding FileDiffs}"
+                MaxHeight="400"
+                MinHeight="200">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="model:FileDiff">
-                        <Expander Header="{Binding FilePath}" IsExpanded="False" Margin="0,0,0,4">
-                            <!-- Display the diff in a side by side layout -->
-                            <controls:DiffViewer OldText="{Binding OldText}" NewText="{Binding NewText}" ViewMode="SideBySide" />
+                        <Expander
+                            Header="{Binding FilePath}"
+                            IsExpanded="True"
+                            Margin="0,0,0,4">
+                            <!--  Display the diff in a side by side layout  -->
+                            <Grid>
+                                <controls:DiffViewer
+                                    MaxHeight="400"
+                                    MinHeight="100"
+                                    NewText="{Binding NewText, Mode=TwoWay}"
+                                    OldText="{Binding OldText, Mode=TwoWay}"
+                                    ViewMode="SideBySide" />
+                                <TextBlock
+                                    FontSize="10"
+                                    HorizontalAlignment="Right"
+                                    IsVisible="{Binding Diff, Converter={StaticResource StringNotEmptyConverter}}"
+                                    Margin="0,5,10,0"
+                                    Text="{Binding FilePath, StringFormat='Viewing diff for: {0}'}"
+                                    VerticalAlignment="Top" />
+                            </Grid>
                         </Expander>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
 
-            <Button Content="Open in Browser"
-                    Command="{Binding OpenInBrowserCommand}"
-                    HorizontalAlignment="Right"
-                    Width="150"
-                    Margin="0,10,0,0"
-                    IsEnabled="{Binding PullRequest.WebUrl, Converter={StaticResource StringNotEmptyConverter}}"/>
+            <Button
+                Command="{Binding OpenInBrowserCommand}"
+                Content="Open in Browser"
+                HorizontalAlignment="Right"
+                IsEnabled="{Binding PullRequest.WebUrl, Converter={StaticResource StringNotEmptyConverter}}"
+                Margin="0,10,0,0"
+                Width="150" />
         </StackPanel>
     </ScrollViewer>
 </Window>

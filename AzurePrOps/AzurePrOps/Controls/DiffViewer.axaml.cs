@@ -105,6 +105,8 @@ namespace AzurePrOps.Controls
         private Panel? _contentPanel;
         private TextBox? _searchBox;
         private StackPanel? _metricsPanel;
+        private TextBlock? _debugOldText;
+        private TextBlock? _debugNewText;
 
         static DiffViewer()
         {
@@ -120,9 +122,8 @@ namespace AzurePrOps.Controls
         public DiffViewer()
         {
             InitializeComponent();
-            // Ensure initial rendering in case bound properties were set
-            // before InitializeComponent assigned the visual elements.
-            Render();
+            // Delay render until after the control is loaded to ensure all elements are initialized
+            this.Loaded += (s, e) => Render();
         }
 
         private void InitializeComponent()
@@ -131,21 +132,29 @@ namespace AzurePrOps.Controls
             _contentPanel = this.Find<Panel>("PART_ContentPanel");
             _searchBox = this.Find<TextBox>("PART_SearchBox");
             _metricsPanel = this.Find<StackPanel>("PART_MetricsPanel");
+            _debugOldText = this.Find<TextBlock>("PART_DebugOldText");
+            _debugNewText = this.Find<TextBlock>("PART_DebugNewText");
+
             if (_searchBox != null)
+            {
                 _searchBox.KeyUp += (s, e) => Render();
+                _searchBox.PropertyChanged += (s, e) => {
+                    if (e.Property.Name == nameof(TextBox.Text))
+                        Render();
+                };
+            }
+
+            // Update debug info
+            UpdateDebugInfo();
         }
 
-        /// <summary>
-        /// Loads a pull request diff via IPullRequestService and triggers render.
-        /// </summary>
-        public void LoadPullRequest(string repository, int pullRequestId)
+        private void UpdateDebugInfo()
         {
-            if (PullRequestService != null)
-            {
-                var diff = PullRequestService.LoadDiff(repository, pullRequestId);
-                OldText = diff.oldText;
-                NewText = diff.newText;
-            }
+            if (_debugOldText != null)
+                _debugOldText.Text = $"Old Text: {(string.IsNullOrEmpty(OldText) ? "Empty" : $"{OldText.Length} chars")}";
+
+            if (_debugNewText != null)
+                _debugNewText.Text = $"New Text: {(string.IsNullOrEmpty(NewText) ? "Empty" : $"{NewText.Length} chars")}";
         }
 
         private void Render()
@@ -155,6 +164,24 @@ namespace AzurePrOps.Controls
 
             _contentPanel.Children.Clear();
             _metricsPanel?.Children.Clear();
+
+            // Update debug displays
+            UpdateDebugInfo();
+
+            // Log the OldText and NewText values to diagnose binding issues
+            Console.WriteLine($"DiffViewer Rendering - OldText Length: {OldText?.Length ?? 0}, NewText Length: {NewText?.Length ?? 0}");
+
+            // Show placeholder if both texts are empty
+            if (string.IsNullOrEmpty(OldText) && string.IsNullOrEmpty(NewText))
+            {
+                _contentPanel.Children.Add(new Avalonia.Controls.TextBlock
+                {
+                    Text = "No diff content available. The file might be binary or empty.",
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                    Margin = new Avalonia.Thickness(0, 20, 0, 0)
+                });
+                return;
+            }
 
             // Prepare diff and annotations
             var lines = ViewMode == DiffViewMode.Unified
