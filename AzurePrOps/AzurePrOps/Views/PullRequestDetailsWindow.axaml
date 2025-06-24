@@ -1,7 +1,7 @@
 <Window
-    Height="650"
+    Height="800"
     Title="Pull Request Details"
-    Width="600"
+    Width="1000"
     x:Class="AzurePrOps.Views.PullRequestDetailsWindow"
     x:DataType="vm:PullRequestDetailsWindowViewModel"
     xmlns="https://github.com/avaloniaui"
@@ -84,8 +84,7 @@
                 Text="Changes" />
             <ListBox
                 ItemsSource="{Binding FileDiffs}"
-                MaxHeight="400"
-                MinHeight="200">
+                HorizontalAlignment="Stretch">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="review:FileDiff">
                         <Expander
@@ -95,8 +94,8 @@
                             <!--  Display the diff in a side by side layout  -->
                             <Grid>
                                 <controls:DiffViewer
-                                    MaxHeight="400"
-                                    MinHeight="100"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch"
                                     NewText="{Binding NewText, Mode=TwoWay}"
                                     OldText="{Binding OldText, Mode=TwoWay}"
                                     ViewMode="SideBySide" />
