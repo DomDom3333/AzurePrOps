@@ -285,7 +285,7 @@ namespace AzurePrOps.ReviewLogic.Services
                         ReportError($"No content retrieved for {filePath} - attempting to parse content from raw diff");
 
                         // For empty content, try to get at least the unified diff
-                        var unifiedDiff = GenerateUnifiedDiff(filePath, changeType, oldContent, newContent);
+                        var unifiedDiff = GenerateUnifiedDiff(filePath, changeType, oldContent, newContent, oldObjectId, newObjectId);
 
                         // For new files, provide at least a minimal placeholder
                         if (changeType.ToLowerInvariant() == "add")
@@ -326,7 +326,7 @@ namespace AzurePrOps.ReviewLogic.Services
                     }
 
                     // Add to our collection
-                    string diffText = GenerateUnifiedDiff(filePath, changeType, oldContent, newContent);
+                    string diffText = GenerateUnifiedDiff(filePath, changeType, oldContent, newContent, oldObjectId, newObjectId);
                     // Ensure we have non-empty strings for display
                     oldContent = string.IsNullOrEmpty(oldContent) ? "[No content available]\n" : oldContent;
                     newContent = string.IsNullOrEmpty(newContent) ? "[No content available]\n" : newContent;
@@ -410,20 +410,21 @@ namespace AzurePrOps.ReviewLogic.Services
             return (oldContent, newContent);
         }
 
-        private string GenerateUnifiedDiff(string filePath, string changeType, string oldContent, string newContent)
+        private string GenerateUnifiedDiff(string filePath, string changeType, string oldContent, string newContent, string? oldId = null, string? newId = null)
         {
             var sb = new System.Text.StringBuilder();
 
             // Add the diff header
-            sb.AppendLine($"diff --git a/{filePath} b/{filePath}");
+            var sanitizedPath = filePath.TrimStart('/');
+            sb.AppendLine($"diff --git a/{sanitizedPath} b/{sanitizedPath}");
 
             switch (changeType.ToLowerInvariant())
             {
                 case "add":
                     sb.AppendLine("new file mode 100644");
-                    sb.AppendLine("index 0000000..1234567");
+                    sb.AppendLine($"index 0000000..{(newId ?? "0000000").Substring(0, Math.Min(7, (newId ?? "0000000").Length))}");
                     sb.AppendLine("--- /dev/null");
-                    sb.AppendLine($"+++ b/{filePath}");
+                    sb.AppendLine($"+++ b/{sanitizedPath}");
                     sb.AppendLine("@@ -0,0 +1," + CountLines(newContent) + " @@");
 
                     // Add all new content as added lines
@@ -435,8 +436,8 @@ namespace AzurePrOps.ReviewLogic.Services
 
                 case "delete":
                     sb.AppendLine("deleted file mode 100644");
-                    sb.AppendLine("index 1234567..0000000");
-                    sb.AppendLine($"--- a/{filePath}");
+                    sb.AppendLine($"index {(oldId ?? "1234567").Substring(0, Math.Min(7, (oldId ?? "1234567").Length))}..0000000");
+                    sb.AppendLine($"--- a/{sanitizedPath}");
                     sb.AppendLine("+++ /dev/null");
                     sb.AppendLine("@@ -1," + CountLines(oldContent) + " +0,0 @@");
 
@@ -448,18 +449,21 @@ namespace AzurePrOps.ReviewLogic.Services
                     break;
 
                 default: // edit/modify
-                    GenerateSimpleDiff(sb, oldContent, newContent);
+                    GenerateSimpleDiff(sb, sanitizedPath, oldContent, newContent, oldId, newId);
                     break;
             }
 
             return sb.ToString();
         }
 
-        private void GenerateSimpleDiff(System.Text.StringBuilder sb, string oldContent, string newContent)
+        private void GenerateSimpleDiff(System.Text.StringBuilder sb, string filePath, string oldContent, string newContent, string? oldId, string? newId)
         {
-            sb.AppendLine("index 1234567..abcdefg 100644");
-            sb.AppendLine("--- a/file");
-            sb.AppendLine("+++ b/file");
+            var oldIndex = string.IsNullOrEmpty(oldId) ? "0000000" : oldId.Substring(0, Math.Min(7, oldId.Length));
+            var newIndex = string.IsNullOrEmpty(newId) ? "0000000" : newId.Substring(0, Math.Min(7, newId.Length));
+
+            sb.AppendLine($"index {oldIndex}..{newIndex} 100644");
+            sb.AppendLine($"--- a/{filePath}");
+            sb.AppendLine($"+++ b/{filePath}");
 
             // Generate a simple diff by comparing lines
             var oldLines = oldContent.Split('\n');
