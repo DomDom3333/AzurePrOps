@@ -117,15 +117,15 @@
         </StackPanel>
 
         <Border
-            Background="#FFF5F5F5"
-            BorderBrush="#FFCCCCCC"
+            Background="{DynamicResource CardBackgroundBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="1"
             Grid.Row="4"
             IsVisible="{Binding !!ErrorMessage}"
             Margin="0,0,0,10"
             Padding="10">
             <TextBlock
-                Foreground="#CC0000"
+                Foreground="{DynamicResource ErrorBrush}"
                 Text="{Binding ErrorMessage}"
                 TextWrapping="Wrap" />
         </Border>

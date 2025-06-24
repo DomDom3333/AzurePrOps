@@ -19,5 +19,15 @@ public record PullRequestInfo(
     string TargetBranch,
     string Url)
 {
-    public string ReviewersText => string.Join(", ", Reviewers.Select(r => $"{r.DisplayName} ({r.Vote})"));
+    public string ReviewersText => string.Join(", ",
+        Reviewers.Select(r => $"{VoteToIcon(r.Vote)} {r.DisplayName} ({r.Vote})"));
+
+    private static string VoteToIcon(string vote) => vote.ToLowerInvariant() switch
+    {
+        "approved" => "✅",
+        "approved with suggestions" => "📝",
+        "waiting for author" => "⏳",
+        "rejected" => "❌",
+        _ => "❔"
+    };
 }
