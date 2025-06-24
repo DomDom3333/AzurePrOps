@@ -17,12 +17,21 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
 
     public ReactiveCommand<Unit, Unit> OpenInBrowserCommand { get; }
 
-    public PullRequestDetailsWindowViewModel(PullRequestInfo pullRequest, IEnumerable<PullRequestComment>? comments = null)
+    public ObservableCollection<FileDiff> FileDiffs { get; } = new();
+
+    public PullRequestDetailsWindowViewModel(PullRequestInfo pullRequest,
+        IEnumerable<PullRequestComment>? comments = null,
+        IEnumerable<FileDiff>? diffs = null)
     {
         PullRequest = pullRequest;
         Comments = comments != null
             ? new ObservableCollection<PullRequestComment>(comments)
             : new ObservableCollection<PullRequestComment>();
+        if (diffs != null)
+        {
+            foreach (var d in diffs)
+                FileDiffs.Add(d);
+        }
 
         OpenInBrowserCommand = ReactiveCommand.Create(() =>
         {
