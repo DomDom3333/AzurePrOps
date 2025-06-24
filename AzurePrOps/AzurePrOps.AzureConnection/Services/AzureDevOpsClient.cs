@@ -405,12 +405,12 @@ public partial class AzureDevOpsClient
         return list;
     }
 
-public async Task<IReadOnlyList<FileDiff>> GetPullRequestDiffAsync(
-    string organization,
-    string project,
-    string repositoryId,
-    int pullRequestId,
-    string personalAccessToken)
+    public async Task<IReadOnlyList<FileDiff>> GetPullRequestDiffAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        string personalAccessToken)
 {
     var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
 
@@ -470,6 +470,50 @@ public async Task<IReadOnlyList<FileDiff>> GetPullRequestDiffAsync(
     catch (Exception ex)
     {
         ReportError($"Failed to get pull request diff: {ex.Message}");
+        return new List<FileDiff>();
+    }
+}
+
+public async Task<IReadOnlyList<FileDiff>> GetPullRequestDiffByFilesAsync(
+    string organization,
+    string project,
+    string repositoryId,
+    int pullRequestId,
+    string personalAccessToken)
+{
+    var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+
+    try
+    {
+        var encodedOrg = Uri.EscapeDataString(organization);
+        var encodedProject = Uri.EscapeDataString(project);
+        var encodedRepoId = Uri.EscapeDataString(repositoryId);
+
+        var prUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}?api-version={ApiVersion}";
+        using var prRequest = new HttpRequestMessage(HttpMethod.Get, prUri);
+        prRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+        using var prResponse = await _httpClient.SendAsync(prRequest);
+        prResponse.EnsureSuccessStatusCode();
+
+        using var prStream = await prResponse.Content.ReadAsStreamAsync();
+        var prJson = await JsonDocument.ParseAsync(prStream);
+
+        string baseCommit = prJson.RootElement
+            .TryGetProperty("lastMergeTargetCommit", out var targetCommitProp) &&
+            targetCommitProp.TryGetProperty("commitId", out var targetCommitIdProp) ?
+            targetCommitIdProp.GetString() ?? string.Empty : string.Empty;
+
+        string sourceCommit = prJson.RootElement
+            .TryGetProperty("lastMergeSourceCommit", out var sourceCommitProp) &&
+            sourceCommitProp.TryGetProperty("commitId", out var sourceCommitIdProp) ?
+            sourceCommitIdProp.GetString() ?? string.Empty : string.Empty;
+
+        return await GetItemsAndComputeDiff(encodedOrg, encodedProject, encodedRepoId, sourceCommit, baseCommit, authToken);
+    }
+    catch (Exception ex)
+    {
+        ReportError($"Failed to compute diff manually: {ex.Message}");
         return new List<FileDiff>();
     }
 }
