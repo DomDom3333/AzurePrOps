@@ -13,6 +13,7 @@
     <Application.Resources>
         <converters:StatusToBrushConverter x:Key="StatusToBrush" />
         <converters:StatusToIconConverter x:Key="StatusToIcon" />
+        <converters:VoteToIconConverter x:Key="VoteToIcon" />
     </Application.Resources>
   
     <Application.Styles>
