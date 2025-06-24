@@ -63,6 +63,19 @@ public partial class PullRequestDetailsWindow : Window
                             Console.WriteLine($"  Generated OldText: {oldText.Length} chars, NewText: {newText.Length} chars");
                         }
                     }
+
+                    // If parsing still yields empty results, show the raw diff so the viewer isn't blank
+                    if (string.IsNullOrEmpty(oldText) && string.IsNullOrEmpty(newText))
+                    {
+                        Console.WriteLine("  Could not parse diff content - falling back to raw diff display");
+                        oldText = "[Unable to parse diff]\n";
+                        newText = fileDiff.Diff;
+                    }
+                    else if (string.Equals(oldText, newText, StringComparison.Ordinal) && !string.IsNullOrEmpty(fileDiff.Diff))
+                    {
+                        Console.WriteLine("  Parsed diff identical - appending raw diff to new text");
+                        newText += "\n\n[DIFF]\n" + fileDiff.Diff;
+                    }
                 }
 
                 // For new files, ensure we show the changes properly
