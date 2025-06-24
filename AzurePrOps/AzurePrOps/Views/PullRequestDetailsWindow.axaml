@@ -76,7 +76,8 @@
                     Command="{Binding OpenInBrowserCommand}"
                     HorizontalAlignment="Right"
                     Width="150"
-                    Margin="0,10,0,0"/>
+                    Margin="0,10,0,0"
+                    IsEnabled="{Binding PullRequest.WebUrl, Converter={StaticResource StringNotEmptyConverter}}"/>
         </StackPanel>
     </ScrollViewer>
 </Window>

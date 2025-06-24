@@ -35,13 +35,21 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
 
         OpenInBrowserCommand = ReactiveCommand.Create(() =>
         {
-            if (string.IsNullOrWhiteSpace(PullRequest.Url))
+            if (string.IsNullOrWhiteSpace(PullRequest.WebUrl))
                 return;
             try
             {
+                // Use the validated WebUrl property instead of the raw Url
+                string sanitizedUrl = PullRequest.WebUrl.Trim();
+                if (!Uri.IsWellFormedUriString(sanitizedUrl, UriKind.Absolute))
+                {
+                    Console.WriteLine($"Invalid URL format: {sanitizedUrl}");
+                    return;
+                }
+
                 var psi = new ProcessStartInfo
                 {
-                    FileName = PullRequest.Url,
+                    FileName = sanitizedUrl,
                     UseShellExecute = true
                 };
                 Process.Start(psi);

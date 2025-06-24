@@ -1,21 +1,24 @@
-<Application xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="using:AzurePrOps"
-             xmlns:converters="using:AzurePrOps.Converters"
-            x:Class="AzurePrOps.App"
-            RequestedThemeVariant="Dark">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+<Application
+    RequestedThemeVariant="Dark"
+    x:Class="AzurePrOps.App"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:converters="using:AzurePrOps.Converters"
+    xmlns:internal="clr-namespace:Avalonia.Dialogs.Internal;assembly=Avalonia.Dialogs"
+    xmlns:local="using:AzurePrOps"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--  "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options.  -->
 
     <Application.DataTemplates>
-        <local:ViewLocator/>
+        <local:ViewLocator />
     </Application.DataTemplates>
 
     <Application.Resources>
         <converters:StatusToBrushConverter x:Key="StatusToBrush" />
         <converters:StatusToIconConverter x:Key="StatusToIcon" />
         <converters:VoteToIconConverter x:Key="VoteToIcon" />
+        <converters:StringNotEmptyConverter x:Key="StringNotEmptyConverter" />
     </Application.Resources>
-  
+
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://AzurePrOps/Styles/Styles.xaml" />

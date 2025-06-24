@@ -6,11 +6,11 @@ using System.Collections.Generic;
 
 namespace AzurePrOps.AzureConnection.Services;
 
-public class AzureDevOpsClient
+public partial class AzureDevOpsClient
 {
     private const string AzureDevOpsBaseUrl = "https://dev.azure.com";
     private const string AzureDevOpsVsspsUrl = "https://vssps.dev.azure.com";
-    private const string ApiVersion = "6.0";
+    private const string ApiVersion = "7.1";
     private readonly HttpClient _httpClient;
     private Action<string>? _errorHandler;
 
@@ -40,7 +40,11 @@ public class AzureDevOpsClient
             throw new ArgumentException("Organization, project, repositoryId, and personalAccessToken must not be null or empty.");
         }
         
-        var requestUri = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_apis/git/repositories/{repositoryId}/pullrequests?api-version={ApiVersion}";
+        var encodedOrg = Uri.EscapeDataString(organization);
+        var encodedProject = Uri.EscapeDataString(project);
+        var encodedRepoId = Uri.EscapeDataString(repositoryId);
+
+        var requestUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullrequests?api-version={ApiVersion}";
 
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
 
@@ -74,7 +78,14 @@ public class AzureDevOpsClient
 
                     var url = string.Empty;
                     if (pr.TryGetProperty("_links", out var linksProp) && linksProp.TryGetProperty("web", out var webProp) && webProp.TryGetProperty("href", out var hrefProp))
+                    {
                         url = hrefProp.GetString() ?? string.Empty;
+                        // Ensure URL is properly formatted
+                        if (!string.IsNullOrEmpty(url) && !url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                        {
+                            url = $"https://{url.TrimStart('/')}";
+                        }
+                    }
 
                     var createdDate = pr.TryGetProperty("creationDate", out var createdDateProp) ? createdDateProp.GetDateTime() : DateTime.Now;
                     var status = pr.TryGetProperty("status", out var statusProp) ? statusProp.GetString() ?? string.Empty : string.Empty;
@@ -120,7 +131,11 @@ public class AzureDevOpsClient
         int pullRequestId,
         string personalAccessToken)
     {
-        var requestUri = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_apis/git/repositories/{repositoryId}/pullRequests/{pullRequestId}/threads?api-version={ApiVersion}";
+        var encodedOrg = Uri.EscapeDataString(organization);
+        var encodedProject = Uri.EscapeDataString(project);
+        var encodedRepoId = Uri.EscapeDataString(repositoryId);
+
+        var requestUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}/threads?api-version={ApiVersion}";
 
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
 
@@ -164,7 +179,12 @@ public class AzureDevOpsClient
         string personalAccessToken)
     {
         // Build the correct Azure DevOps API URL for setting a PR vote (update reviewer)
-        var url = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_apis/git/repositories/{repositoryId}/pullRequests/{pullRequestId}/reviewers/{reviewerId}?api-version={ApiVersion}";
+        var encodedOrg = Uri.EscapeDataString(organization);
+        var encodedProject = Uri.EscapeDataString(project);
+        var encodedRepoId = Uri.EscapeDataString(repositoryId);
+        var encodedReviewerId = Uri.EscapeDataString(reviewerId);
+
+        var url = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}/reviewers/{encodedReviewerId}?api-version={ApiVersion}";
 
         using var request = new HttpRequestMessage(HttpMethod.Patch, url);
         request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
@@ -193,7 +213,11 @@ public class AzureDevOpsClient
         string content,
         string personalAccessToken)
     {
-        var requestUri = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_apis/git/repositories/{repositoryId}/pullRequests/{pullRequestId}/threads?api-version={ApiVersion}";
+        var encodedOrg = Uri.EscapeDataString(organization);
+        var encodedProject = Uri.EscapeDataString(project);
+        var encodedRepoId = Uri.EscapeDataString(repositoryId);
+
+        var requestUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}/threads?api-version={ApiVersion}";
 
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
 
@@ -328,7 +352,8 @@ public class AzureDevOpsClient
     {
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
 
-        var requestUri = $"{AzureDevOpsBaseUrl}/{organization}/_apis/projects?api-version={ApiVersion}";
+        var encodedOrg = Uri.EscapeDataString(organization);
+        var requestUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/_apis/projects?api-version={ApiVersion}";
         using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
@@ -355,7 +380,9 @@ public class AzureDevOpsClient
     {
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
 
-        var requestUri = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_apis/git/repositories?api-version={ApiVersion}";
+        var encodedOrg = Uri.EscapeDataString(organization);
+        var encodedProject = Uri.EscapeDataString(project);
+        var requestUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories?api-version={ApiVersion}";
         using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
@@ -378,41 +405,76 @@ public class AzureDevOpsClient
         return list;
     }
 
-    public async Task<IReadOnlyList<FileDiff>> GetPullRequestDiffAsync(
-        string organization,
-        string project,
-        string repositoryId,
-        int pullRequestId,
-        string personalAccessToken)
-    {
-        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+public async Task<IReadOnlyList<FileDiff>> GetPullRequestDiffAsync(
+    string organization,
+    string project,
+    string repositoryId,
+    int pullRequestId,
+    string personalAccessToken)
+{
+    var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
 
-        var prUri = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_apis/git/repositories/{repositoryId}/pullRequests/{pullRequestId}?api-version={ApiVersion}";
+    try
+    {
+        // First get the PR information to extract branch/commit information
+        var encodedOrg = Uri.EscapeDataString(organization);
+        var encodedProject = Uri.EscapeDataString(project);
+        var encodedRepoId = Uri.EscapeDataString(repositoryId);
+
+        var prUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}?api-version={ApiVersion}";
         using var prRequest = new HttpRequestMessage(HttpMethod.Get, prUri);
         prRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
         using var prResponse = await _httpClient.SendAsync(prRequest);
+        if (prResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            ReportError($"Pull request not found. URI: {prUri}");
+            throw new Exception($"Pull request not found. Please check if the pull request still exists.");
+        }
+
         prResponse.EnsureSuccessStatusCode();
         using var prStream = await prResponse.Content.ReadAsStreamAsync();
         var prJson = await JsonDocument.ParseAsync(prStream);
 
-        var baseCommit = prJson.RootElement
-            .GetProperty("lastMergeTargetCommit")
-            .GetProperty("commitId")
+        // Extract source and target branch names - removing 'refs/heads/' prefix if present
+        string sourceBranch = prJson.RootElement
+            .GetProperty("sourceRefName")
             .GetString() ?? string.Empty;
-        var targetCommit = prJson.RootElement
-            .GetProperty("lastMergeSourceCommit")
-            .GetProperty("commitId")
+        if (sourceBranch.StartsWith("refs/heads/", StringComparison.OrdinalIgnoreCase))
+        {
+            sourceBranch = sourceBranch.Substring("refs/heads/".Length);
+        }
+
+        string targetBranch = prJson.RootElement
+            .GetProperty("targetRefName")
             .GetString() ?? string.Empty;
+        if (targetBranch.StartsWith("refs/heads/", StringComparison.OrdinalIgnoreCase))
+        {
+            targetBranch = targetBranch.Substring("refs/heads/".Length);
+        }
 
-        var diffUri = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_apis/git/repositories/{repositoryId}/diffs/commits?baseVersion={baseCommit}&targetVersion={targetCommit}&api-version={ApiVersion}&$format=diff";
-        using var diffRequest = new HttpRequestMessage(HttpMethod.Get, diffUri);
-        diffRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
-        using var diffResponse = await _httpClient.SendAsync(diffRequest);
-        diffResponse.EnsureSuccessStatusCode();
-        var diffText = await diffResponse.Content.ReadAsStringAsync();
+        // Extract commit IDs for diff comparison
+        string baseCommit = prJson.RootElement
+            .TryGetProperty("lastMergeTargetCommit", out var targetCommitProp) && 
+            targetCommitProp.TryGetProperty("commitId", out var targetCommitIdProp) ?
+            targetCommitIdProp.GetString() ?? string.Empty : string.Empty;
 
-        return UnifiedDiffParser.Parse(diffText);
+        string sourceCommit = prJson.RootElement
+            .TryGetProperty("lastMergeSourceCommit", out var sourceCommitProp) && 
+            sourceCommitProp.TryGetProperty("commitId", out var sourceCommitIdProp) ?
+            sourceCommitIdProp.GetString() ?? string.Empty : string.Empty;
+
+        // Use Direct method via Git Diffs API
+        return await GetDirectDiffViaGitDiffsApi(encodedOrg, encodedProject, encodedRepoId, sourceBranch, targetBranch, sourceCommit, baseCommit, authToken);
     }
+    catch (Exception ex)
+    {
+        ReportError($"Failed to get pull request diff: {ex.Message}");
+        return new List<FileDiff>();
+    }
+}
+
+// These methods have been moved to the partial class implementation
 
     private static string VoteToString(int vote) => vote switch
     {

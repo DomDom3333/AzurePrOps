@@ -18,7 +18,12 @@ public record PullRequestInfo(
     string SourceBranch,
     string TargetBranch,
     string Url)
-{
+    {
+    // Ensure URL is valid and well-formed
+    public string WebUrl => !string.IsNullOrWhiteSpace(Url) && Uri.IsWellFormedUriString(Url, UriKind.Absolute) 
+        ? Url 
+        : string.Empty;
+
     public string ReviewersText => string.Join(", ",
         Reviewers.Select(r => $"{VoteToIcon(r.Vote)} {r.DisplayName} ({r.Vote})"));
 

@@ -160,7 +160,7 @@ public class MainWindowViewModel : ViewModelBase
             FilterViews.Add(v);
 
         // Add error handling mechanism
-        _client.SetErrorHandler((message) => ShowErrorMessage(message).GetAwaiter().GetResult());
+        _client.SetErrorHandler((message) => ShowErrorMessage(message));
 
         RefreshCommand = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -224,20 +224,40 @@ public class MainWindowViewModel : ViewModelBase
             if (SelectedPullRequest == null)
                 return;
 
-            await LoadCommentsAsync();
-            var diffs = await _client.GetPullRequestDiffAsync(
-                _settings.Organization,
-                _settings.Project,
-                _settings.Repository,
-                SelectedPullRequest.Id,
-                _settings.PersonalAccessToken);
-
-            Dispatcher.UIThread.InvokeAsync(() =>
+            try
             {
-                var vm = new PullRequestDetailsWindowViewModel(SelectedPullRequest, Comments, diffs);
-                var window = new PullRequestDetailsWindow { DataContext = vm };
-                window.Show();
-            });
+                // First load comments - if this fails, we'll still try to show the window with diffs
+                try
+                {
+                    await LoadCommentsAsync();
+                }
+                catch (Exception ex)
+                {
+                    await ShowErrorMessage($"Failed to load comments: {ex.Message}");
+                    // Continue - we'll just show the PR with empty comments
+                }
+
+                // Try to get diffs
+                var diffs = await _client.GetPullRequestDiffAsync(
+                    _settings.Organization,
+                    _settings.Project,
+                    _settings.Repository,
+                    SelectedPullRequest.Id,
+                    _settings.PersonalAccessToken);
+
+                // Always show the window, even if we couldn't get diffs
+                Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    var vm = new PullRequestDetailsWindowViewModel(SelectedPullRequest, Comments, diffs);
+                    var window = new PullRequestDetailsWindow { DataContext = vm };
+                    window.Show();
+                });
+            }
+            catch (Exception ex)
+            {
+                // If we get here, something really went wrong
+                await ShowErrorMessage($"Failed to open pull request details: {ex.Message}");
+            }
         });
 
         SaveViewCommand = ReactiveCommand.Create(() =>
