@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:AzurePrOps.ViewModels"
         xmlns:model="using:AzurePrOps.AzureConnection.Models"
+        xmlns:controls="using:AzurePrOps.Controls"
         x:Class="AzurePrOps.Views.PullRequestDetailsWindow"
         x:DataType="vm:PullRequestDetailsWindowViewModel"
         Title="Pull Request Details"
@@ -65,9 +66,7 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="model:FileDiff">
                         <Expander Header="{Binding FilePath}" IsExpanded="False" Margin="0,0,0,4">
-                            <ScrollViewer HorizontalScrollBarVisibility="Auto">
-                                <TextBlock Text="{Binding Diff}" FontFamily="Consolas" FontSize="12"/>
-                            </ScrollViewer>
+                            <controls:DiffViewer OldText="{Binding OldText}" NewText="{Binding NewText}" />
                         </Expander>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
