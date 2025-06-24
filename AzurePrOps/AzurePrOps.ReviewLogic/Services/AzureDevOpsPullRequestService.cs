@@ -282,7 +282,7 @@ namespace AzurePrOps.ReviewLogic.Services
                     if (string.IsNullOrEmpty(oldContent) && string.IsNullOrEmpty(newContent))
                     {
                         // Log this case for debugging
-                        ReportError($"No content retrieved for {filePath} - attempting to parse content from raw diff");
+                        //ReportError($"No content retrieved for {filePath} - attempting to parse content from raw diff");
 
                         // For empty content, try to get at least the unified diff
                         var unifiedDiff = GenerateUnifiedDiff(filePath, changeType, oldContent, newContent, oldObjectId, newObjectId);
@@ -316,6 +316,26 @@ namespace AzurePrOps.ReviewLogic.Services
                             oldContent = string.Join("\n", oldLines);
                             if (string.IsNullOrWhiteSpace(oldContent))
                                 oldContent = "[Content could not be retrieved for this deleted file]\n";
+                        }
+                        else if (changeType.ToLowerInvariant() == "edit")
+                        {
+                            var oldLines = new List<string>();
+                            var newLines = new List<string>();
+
+                            foreach (var line in unifiedDiff.Split('\n'))
+                            {
+                                if (line.StartsWith("-") && !line.StartsWith("--- "))
+                                    oldLines.Add(line.Substring(1));
+                                else if (line.StartsWith("+") && !line.StartsWith("+++ "))
+                                    newLines.Add(line.Substring(1));
+                                else if (line.StartsWith(" "))
+                                {
+                                    // Context lines - add to both old and new
+                                    var contextLine = line.Substring(1);
+                                    oldLines.Add(contextLine);
+                                    newLines.Add(contextLine);
+                                }
+                            }
                         }
                         else
                         {

@@ -258,6 +258,8 @@ public class MainWindowViewModel : ViewModelBase
                 foreach (var diff in diffs)
                 {
                     Console.WriteLine($"  - {diff.FilePath}: OldText={diff.OldText?.Length ?? 0} bytes, NewText={diff.NewText?.Length ?? 0} bytes, Diff={diff.Diff?.Length ?? 0} bytes");
+                    Console.WriteLine(diff.OldText);
+                    Console.WriteLine(diff.NewText);
                 }
 
                 // Always show the window, even if we couldn't get diffs
