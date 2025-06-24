@@ -123,6 +123,50 @@ namespace AzurePrOps.ReviewLogic.Services
             }
         }
 
+        public async Task<IReadOnlyList<FileDiff>> GetPullRequestDiffByFilesAsync(
+            string organization,
+            string project,
+            string repositoryId,
+            int pullRequestId,
+            string personalAccessToken)
+        {
+            var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+
+            try
+            {
+                var encodedOrg = Uri.EscapeDataString(organization);
+                var encodedProject = Uri.EscapeDataString(project);
+                var encodedRepoId = Uri.EscapeDataString(repositoryId);
+
+                var prUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}?api-version={ApiVersion}";
+                using var prRequest = new HttpRequestMessage(HttpMethod.Get, prUri);
+                prRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", authToken);
+
+                using var prResponse = await _httpClient.SendAsync(prRequest);
+                prResponse.EnsureSuccessStatusCode();
+
+                using var prStream = await prResponse.Content.ReadAsStreamAsync();
+                var prJson = await System.Text.Json.JsonDocument.ParseAsync(prStream);
+
+                string baseCommit = prJson.RootElement
+                    .TryGetProperty("lastMergeTargetCommit", out var targetCommitProp) &&
+                    targetCommitProp.TryGetProperty("commitId", out var targetCommitIdProp) ?
+                    targetCommitIdProp.GetString() ?? string.Empty : string.Empty;
+
+                string sourceCommit = prJson.RootElement
+                    .TryGetProperty("lastMergeSourceCommit", out var sourceCommitProp) &&
+                    sourceCommitProp.TryGetProperty("commitId", out var sourceCommitIdProp) ?
+                    sourceCommitIdProp.GetString() ?? string.Empty : string.Empty;
+
+                return await GetItemsAndComputeDiff(encodedOrg, encodedProject, encodedRepoId, sourceCommit, baseCommit, authToken);
+            }
+            catch (Exception ex)
+            {
+                ReportError($"Failed to compute diff manually: {ex.Message}");
+                return new List<FileDiff>();
+            }
+        }
+
         private async Task<IReadOnlyList<FileDiff>> GetDirectDiffViaGitDiffsApi(
             string encodedOrg,
             string encodedProject,
@@ -451,6 +495,131 @@ namespace AzurePrOps.ReviewLogic.Services
                 return 0;
 
             return text.Split('\n').Length;
+        }
+
+        private async Task<IReadOnlyList<FileDiff>> GetItemsAndComputeDiff(
+            string encodedOrg,
+            string encodedProject,
+            string encodedRepoId,
+            string sourceCommit,
+            string baseCommit,
+            string authToken)
+        {
+            try
+            {
+                var changesUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/diffs/commits" +
+                               $"?baseVersion={baseCommit}&targetVersion={sourceCommit}&api-version=7.1";
+
+                using var changesRequest = new HttpRequestMessage(HttpMethod.Get, changesUri);
+                changesRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", authToken);
+
+                using var changesResponse = await _httpClient.SendAsync(changesRequest);
+                changesResponse.EnsureSuccessStatusCode();
+
+                var changesContent = await changesResponse.Content.ReadAsStringAsync();
+                using var changesJson = System.Text.Json.JsonDocument.Parse(changesContent);
+
+                if (!changesJson.RootElement.TryGetProperty("changes", out var changesArray))
+                {
+                    return new List<FileDiff>();
+                }
+
+                var fileDiffs = new List<FileDiff>();
+
+                foreach (var change in changesArray.EnumerateArray())
+                {
+                    if (!change.TryGetProperty("item", out var item) ||
+                        !item.TryGetProperty("path", out var pathProp))
+                    {
+                        continue;
+                    }
+
+                    var filePath = pathProp.GetString() ?? string.Empty;
+                    if (string.IsNullOrEmpty(filePath))
+                    {
+                        continue;
+                    }
+
+                    var changeType = change.TryGetProperty("changeType", out var changeTypeProp) ?
+                        changeTypeProp.GetString() ?? "edit" : "edit";
+
+                    var (oldContent, newContent) = await FetchFileVersions(
+                        encodedOrg, encodedProject, encodedRepoId, filePath, baseCommit, sourceCommit, changeType, authToken);
+
+                    var diffText = GenerateUnifiedDiff(filePath, changeType, oldContent, newContent);
+                    fileDiffs.Add(new FileDiff(filePath, diffText, oldContent, newContent));
+                }
+
+                return fileDiffs;
+            }
+            catch (Exception ex)
+            {
+                ReportError($"Error in GetItemsAndComputeDiff: {ex.Message}");
+                return new List<FileDiff>();
+            }
+        }
+
+        private async Task<(string oldContent, string newContent)> FetchFileVersions(
+            string encodedOrg,
+            string encodedProject,
+            string encodedRepoId,
+            string filePath,
+            string baseCommit,
+            string sourceCommit,
+            string changeType,
+            string authToken)
+        {
+            string oldContent = string.Empty;
+            string newContent = string.Empty;
+
+            try
+            {
+                var encodedPath = Uri.EscapeDataString(filePath);
+
+                if (changeType.ToLowerInvariant() != "add" && !string.IsNullOrEmpty(baseCommit))
+                {
+                    var oldVersionUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/items" +
+                                      $"?path={encodedPath}" +
+                                      $"&versionDescriptor.version={baseCommit}" +
+                                      $"&versionDescriptor.versionType=commit" +
+                                      $"&includeContent=true" +
+                                      $"&api-version=7.1";
+
+                    using var oldRequest = new HttpRequestMessage(HttpMethod.Get, oldVersionUri);
+                    oldRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", authToken);
+
+                    using var oldResponse = await _httpClient.SendAsync(oldRequest);
+                    if (oldResponse.IsSuccessStatusCode)
+                    {
+                        oldContent = await oldResponse.Content.ReadAsStringAsync();
+                    }
+                }
+
+                if (changeType.ToLowerInvariant() != "delete" && !string.IsNullOrEmpty(sourceCommit))
+                {
+                    var newVersionUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/items" +
+                                      $"?path={encodedPath}" +
+                                      $"&versionDescriptor.version={sourceCommit}" +
+                                      $"&versionDescriptor.versionType=commit" +
+                                      $"&includeContent=true" +
+                                      $"&api-version=7.1";
+
+                    using var newRequest = new HttpRequestMessage(HttpMethod.Get, newVersionUri);
+                    newRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", authToken);
+
+                    using var newResponse = await _httpClient.SendAsync(newRequest);
+                    if (newResponse.IsSuccessStatusCode)
+                    {
+                        newContent = await newResponse.Content.ReadAsStringAsync();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ReportError($"Error fetching file versions for {filePath}: {ex.Message}");
+            }
+
+            return (oldContent, newContent);
         }
 
         public async Task<IReadOnlyList<PullRequestInfo>> GetPullRequestsAsync(

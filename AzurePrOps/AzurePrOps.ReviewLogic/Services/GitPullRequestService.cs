@@ -170,6 +170,128 @@ public class GitPullRequestService : IPullRequestService
         return Task.FromResult<IReadOnlyList<FileDiff>>(new List<FileDiff>());
     }
 
+    public Task<IReadOnlyList<FileDiff>> GetPullRequestDiffByFilesAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        string personalAccessToken)
+    {
+        var diffs = new List<FileDiff>();
+        try
+        {
+            using var repo = new Repository(repositoryId);
+            var prBranch = repo.Branches.FirstOrDefault(b => b.FriendlyName.EndsWith($"/pr/{pullRequestId}", StringComparison.OrdinalIgnoreCase))
+                ?? repo.Branches.FirstOrDefault(b =>
+                    b.FriendlyName.Contains($"PR-{pullRequestId}", StringComparison.OrdinalIgnoreCase) ||
+                    b.FriendlyName.Contains($"PR{pullRequestId}", StringComparison.OrdinalIgnoreCase) ||
+                    b.FriendlyName.Contains($"pull/{pullRequestId}", StringComparison.OrdinalIgnoreCase));
+            if (prBranch == null)
+            {
+                ReportError($"Could not find any branch for PR {pullRequestId}");
+                return Task.FromResult<IReadOnlyList<FileDiff>>(diffs);
+            }
+
+            var prCommit = prBranch.Tip;
+            var parent = prCommit.Parents.FirstOrDefault() ?? repo.Head.Tip;
+
+            var changes = repo.Diff.Compare<TreeChanges>(parent.Tree, prCommit.Tree);
+            foreach (var change in changes)
+            {
+                string oldContent = string.Empty;
+                string newContent = string.Empty;
+
+                if (change.Status != ChangeKind.Added)
+                {
+                    var parentEntry = parent[change.Path];
+                    if (parentEntry != null && parentEntry.TargetType == TreeEntryTargetType.Blob)
+                    {
+                        var blob = repo.Lookup<Blob>(parentEntry.Target.Id);
+                        oldContent = blob?.GetContentText() ?? string.Empty;
+                    }
+                }
+
+                if (change.Status != ChangeKind.Deleted)
+                {
+                    var newEntry = prCommit[change.Path];
+                    if (newEntry != null && newEntry.TargetType == TreeEntryTargetType.Blob)
+                    {
+                        var blob = repo.Lookup<Blob>(newEntry.Target.Id);
+                        newContent = blob?.GetContentText() ?? string.Empty;
+                    }
+                }
+
+                var diffText = GenerateUnifiedDiff(change.Path, change.Status.ToString().ToLowerInvariant(), oldContent, newContent);
+                diffs.Add(new FileDiff(change.Path, diffText, oldContent, newContent));
+            }
+        }
+        catch (Exception ex)
+        {
+            ReportError($"Error computing diff: {ex.Message}");
+        }
+
+        return Task.FromResult<IReadOnlyList<FileDiff>>(diffs);
+    }
+
+    private string GenerateUnifiedDiff(string filePath, string changeType, string oldContent, string newContent)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"diff --git a/{filePath} b/{filePath}");
+
+        switch (changeType.ToLowerInvariant())
+        {
+            case "add":
+                sb.AppendLine("new file mode 100644");
+                sb.AppendLine("index 0000000..1234567");
+                sb.AppendLine("--- /dev/null");
+                sb.AppendLine($"+++ b/{filePath}");
+                sb.AppendLine("@@ -0,0 +1," + CountLines(newContent) + " @@");
+                foreach (var line in newContent.Split('\n'))
+                    sb.AppendLine("+" + line);
+                break;
+            case "delete":
+                sb.AppendLine("deleted file mode 100644");
+                sb.AppendLine("index 1234567..0000000");
+                sb.AppendLine($"--- a/{filePath}");
+                sb.AppendLine("+++ /dev/null");
+                sb.AppendLine("@@ -1," + CountLines(oldContent) + " +0,0 @@");
+                foreach (var line in oldContent.Split('\n'))
+                    sb.AppendLine("-" + line);
+                break;
+            default:
+                GenerateSimpleDiff(sb, oldContent, newContent);
+                break;
+        }
+
+        return sb.ToString();
+    }
+
+    private void GenerateSimpleDiff(System.Text.StringBuilder sb, string oldContent, string newContent)
+    {
+        sb.AppendLine("index 1234567..abcdefg 100644");
+        sb.AppendLine("--- a/file");
+        sb.AppendLine("+++ b/file");
+
+        var oldLines = oldContent.Split('\n');
+        var newLines = newContent.Split('\n');
+
+        sb.AppendLine($"@@ -1,{oldLines.Length} +1,{newLines.Length} @@");
+
+        int commonPrefix = 0;
+        int minLength = Math.Min(oldLines.Length, newLines.Length);
+        while (commonPrefix < minLength && oldLines[commonPrefix] == newLines[commonPrefix])
+        {
+            sb.AppendLine(" " + oldLines[commonPrefix]);
+            commonPrefix++;
+        }
+        for (int i = commonPrefix; i < oldLines.Length; i++)
+            sb.AppendLine("-" + oldLines[i]);
+        for (int i = commonPrefix; i < newLines.Length; i++)
+            sb.AppendLine("+" + newLines[i]);
+    }
+
+    private int CountLines(string text) => string.IsNullOrEmpty(text) ? 0 : text.Split('\n').Length;
+
     public Task<IReadOnlyList<PullRequestInfo>> GetPullRequestsAsync(
         string organization,
         string project,
