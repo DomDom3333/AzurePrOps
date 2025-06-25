@@ -54,6 +54,9 @@ namespace AzurePrOps.Controls
         private TextBlock? _removedLinesText;
         private TextBlock? _modifiedLinesText;
 
+        // Keep a reference to the current diff so we can inspect the raw patch
+        private FileDiff? _currentDiff;
+
         // Diff tracking
         private Dictionary<int, DiffLineType> _lineTypes = new();
         private List<int> _changedLines = new();
@@ -104,18 +107,32 @@ namespace AzurePrOps.Controls
         {
             base.OnDataContextChanged(e);
 
+            Console.WriteLine($"OnDataContextChanged: {DataContext?.GetType().Name ?? "null"}");
+
             if (DataContext is FileDiff diff)
             {
                 // Assign bound texts when the DataContext changes so the viewer
                 // renders even if the control is created before data is set.
                 OldText = diff.OldText ?? string.Empty;
                 NewText = diff.NewText ?? string.Empty;
+                _currentDiff = diff;
+                Console.WriteLine($"DataContext changed to FileDiff: {diff.FilePath}");
+
+                // Render again once the control is fully loaded to ensure the
+                // text appears even if DataContext was set before loading
+                Dispatcher.UIThread.Post(() =>
+                {
+                    Console.WriteLine("Post-DataContextChanged render");
+                    Render();
+                }, DispatcherPriority.Loaded);
             }
             else
             {
                 // Clear content when the DataContext is unset or of the wrong type
                 OldText = string.Empty;
                 NewText = string.Empty;
+                _currentDiff = null;
+                Console.WriteLine("DataContext cleared or invalid");
             }
         }
 
@@ -207,12 +224,47 @@ namespace AzurePrOps.Controls
             _oldEditor.ShowLineNumbers = true;
             _newEditor.ShowLineNumbers = true;
 
+            // Explicitly set editor foreground/background to match the app theme
+            var fgBrush = (IBrush?)Application.Current?.FindResource("PrimaryBrush");
+            var bgBrush = (IBrush?)Application.Current?.FindResource("CardBackgroundBrush");
+            if (fgBrush != null && bgBrush != null)
+            {
+                _oldEditor.Foreground = fgBrush;
+                _oldEditor.Background = bgBrush;
+                _newEditor.Foreground = fgBrush;
+                _newEditor.Background = bgBrush;
+                Console.WriteLine($"OldEditor colors - FG: {fgBrush}, BG: {bgBrush}");
+                Console.WriteLine($"NewEditor colors - FG: {fgBrush}, BG: {bgBrush}");
+
+                if (fgBrush is ISolidColorBrush fgSolid && bgBrush is ISolidColorBrush bgSolid)
+                {
+                    bool sameColor = fgSolid.Color.ToUInt32() == bgSolid.Color.ToUInt32();
+                    Console.WriteLine($"Foreground matches background? {sameColor}");
+                    Console.WriteLine($"OldEditor alpha: {fgSolid.Color.A}, BG alpha: {bgSolid.Color.A}");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Theme brushes missing - using defaults");
+                _oldEditor.Foreground = Brushes.White;
+                _oldEditor.Background = Brushes.Black;
+                _newEditor.Foreground = Brushes.White;
+                _newEditor.Background = Brushes.Black;
+            }
+
             // Set explicit height for better visibility
             _oldEditor.MinHeight = 250;
             _newEditor.MinHeight = 250;
 
             // Render initial diff
             Render();
+
+            // Trigger a second render on the UI thread once layout has completed
+            Dispatcher.UIThread.Post(() =>
+            {
+                Console.WriteLine("Post-SetupEditors render");
+                Render();
+            }, DispatcherPriority.Loaded);
         }
 
         public void Render()
@@ -228,18 +280,50 @@ namespace AzurePrOps.Controls
             Console.WriteLine($"DiffViewer.Render(): OldText length={OldText?.Length ?? 0}, NewText length={NewText?.Length ?? 0}");
 
             // Make sure we explicitly set the Document's text, not just the editor's Text property
-            string oldTextValue = OldText ?? "";
-            string newTextValue = NewText ?? "";
+            string oldTextValue = NormalizeLineEndings(OldText ?? "");
+            string newTextValue = NormalizeLineEndings(NewText ?? "");
 
             // Force text display by setting document text directly
-            _oldEditor.Document = new AvaloniaEdit.Document.TextDocument(oldTextValue);
-            _newEditor.Document = new AvaloniaEdit.Document.TextDocument(newTextValue);
+            if (_oldEditor.Document == null)
+                _oldEditor.Document = new AvaloniaEdit.Document.TextDocument();
+            if (_newEditor.Document == null)
+                _newEditor.Document = new AvaloniaEdit.Document.TextDocument();
+
+            _oldEditor.Document.Text = oldTextValue;
+            _newEditor.Document.Text = newTextValue;
 
             // Also set the Text property for consistency
             _oldEditor.Text = oldTextValue;
             _newEditor.Text = newTextValue;
 
+            // Force redraw after setting text to ensure content becomes visible
+            _oldEditor.InvalidateVisual();
+            _newEditor.InvalidateVisual();
+            _oldEditor.TextArea.TextView.InvalidateVisual();
+            _newEditor.TextArea.TextView.InvalidateVisual();
+            _oldEditor.TextArea.TextView.EnsureVisualLines();
+            _newEditor.TextArea.TextView.EnsureVisualLines();
+            Console.WriteLine($"Editors invalidated for redraw");
+            Console.WriteLine($"VisualLines valid? old: {_oldEditor.TextArea.TextView.VisualLinesValid}, new: {_newEditor.TextArea.TextView.VisualLinesValid}");
+            Console.WriteLine($"OldEditor size: {_oldEditor.Bounds.Width}x{_oldEditor.Bounds.Height}");
+            Console.WriteLine($"NewEditor size: {_newEditor.Bounds.Width}x{_newEditor.Bounds.Height}");
+            Console.WriteLine($"Visual line count old: {_oldEditor.TextArea.TextView.VisualLines.Count}, new: {_newEditor.TextArea.TextView.VisualLines.Count}");
+            Console.WriteLine($"OldEditor visible: {_oldEditor.IsVisible}, effective: {_oldEditor.IsEffectivelyVisible}, opacity: {_oldEditor.Opacity}");
+            Console.WriteLine($"NewEditor visible: {_newEditor.IsVisible}, effective: {_newEditor.IsEffectivelyVisible}, opacity: {_newEditor.Opacity}");
+            if (_oldEditor.Foreground is ISolidColorBrush oldFg && _oldEditor.Background is ISolidColorBrush oldBg)
+                Console.WriteLine($"OldEditor colors numeric - FG: {oldFg.Color}, BG: {oldBg.Color}");
+            if (_newEditor.Foreground is ISolidColorBrush newFg && _newEditor.Background is ISolidColorBrush newBg)
+                Console.WriteLine($"NewEditor colors numeric - FG: {newFg.Color}, BG: {newBg.Color}");
+
             Console.WriteLine($"Set document text - Old: {oldTextValue.Length} bytes, New: {newTextValue.Length} bytes");
+            Console.WriteLine($"OldEditor.Document length now: {_oldEditor.Document.TextLength}");
+            Console.WriteLine($"NewEditor.Document length now: {_newEditor.Document.TextLength}");
+            Console.WriteLine($"OldEditor line count: {_oldEditor.Document.LineCount}");
+            Console.WriteLine($"NewEditor line count: {_newEditor.Document.LineCount}");
+            Console.WriteLine($"Old text preview: '{oldTextValue.Substring(0, Math.Min(100, oldTextValue.Length))}'");
+            Console.WriteLine($"New text preview: '{newTextValue.Substring(0, Math.Min(100, newTextValue.Length))}'");
+            Console.WriteLine($"Document first lines - old: '{_oldEditor.Document.GetText(0, Math.Min(100, _oldEditor.Document.TextLength))}'");
+            Console.WriteLine($"Document first lines - new: '{_newEditor.Document.GetText(0, Math.Min(100, _newEditor.Document.TextLength))}'");
 
             // Clear previous transformers
             _oldEditor.TextArea.TextView.LineTransformers.Clear();
@@ -426,6 +510,14 @@ namespace AzurePrOps.Controls
 
             Console.WriteLine($"Built diff model with {model.Lines.Count} lines and {lineMap.Count(kv => kv.Value != DiffLineType.Unchanged)} changes");
 
+            if (_currentDiff != null && !string.IsNullOrEmpty(_currentDiff.Diff))
+            {
+                var patchLines = _currentDiff.Diff.Split('\n');
+                int addedFromPatch = patchLines.Count(l => l.StartsWith("+") && !l.StartsWith("+++"));
+                int removedFromPatch = patchLines.Count(l => l.StartsWith("-") && !l.StartsWith("---"));
+                Console.WriteLine($"Patch stats - added: {addedFromPatch}, removed: {removedFromPatch}");
+            }
+
             // Highlight backgrounds
             var transformer = new DiffLineBackgroundTransformer(lineMap);
             _oldEditor.TextArea.TextView.LineTransformers.Add(transformer);
@@ -463,6 +555,11 @@ namespace AzurePrOps.Controls
 
             // Log line counts for debugging
             Console.WriteLine($"DiffViewer stats: {addedLines} added, {removedLines} removed, {modifiedLines} modified");
+
+            // Log first displayed line for extra visibility
+            var firstOld = _oldEditor.Document.Lines.Count > 0 ? _oldEditor.Document.GetText(_oldEditor.Document.Lines.First()) : "<none>";
+            var firstNew = _newEditor.Document.Lines.Count > 0 ? _newEditor.Document.GetText(_newEditor.Document.Lines.First()) : "<none>";
+            Console.WriteLine($"First lines - old: '{firstOld}', new: '{firstNew}'");
 
             if (_addedLinesText != null)
                 _addedLinesText.Text = $"{addedLines} added";
@@ -505,6 +602,9 @@ namespace AzurePrOps.Controls
             ChangeType.Modified => DiffLineType.Modified,
             _                   => DiffLineType.Unchanged
         };
+
+        private static string NormalizeLineEndings(string text)
+            => text.Replace("\r\n", "\n").Replace('\r', '\n');
 
         private void NavigateToNextChange()
         {

@@ -140,6 +140,8 @@
                     MinHeight="250"
                     VerticalAlignment="Stretch"
                     VerticalScrollBarVisibility="Visible"
+                    Background="{DynamicResource CardBackgroundBrush}"
+                    Foreground="{DynamicResource PrimaryBrush}"
                     x:Name="OldEditor" />
             </Grid>
         </Border>
@@ -173,6 +175,8 @@
                     MinHeight="250"
                     VerticalAlignment="Stretch"
                     VerticalScrollBarVisibility="Visible"
+                    Background="{DynamicResource CardBackgroundBrush}"
+                    Foreground="{DynamicResource PrimaryBrush}"
                     x:Name="NewEditor" />
             </Grid>
         </Border>
