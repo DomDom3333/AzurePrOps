@@ -54,6 +54,9 @@ namespace AzurePrOps.Controls
         private TextBlock? _removedLinesText;
         private TextBlock? _modifiedLinesText;
 
+        // Keep a reference to the current diff so we can inspect the raw patch
+        private FileDiff? _currentDiff;
+
         // Diff tracking
         private Dictionary<int, DiffLineType> _lineTypes = new();
         private List<int> _changedLines = new();
@@ -110,6 +113,7 @@ namespace AzurePrOps.Controls
                 // renders even if the control is created before data is set.
                 OldText = diff.OldText ?? string.Empty;
                 NewText = diff.NewText ?? string.Empty;
+                _currentDiff = diff;
                 Console.WriteLine($"DataContext changed to FileDiff: {diff.FilePath}");
             }
             else
@@ -117,6 +121,7 @@ namespace AzurePrOps.Controls
                 // Clear content when the DataContext is unset or of the wrong type
                 OldText = string.Empty;
                 NewText = string.Empty;
+                _currentDiff = null;
                 Console.WriteLine("DataContext cleared or invalid");
             }
         }
@@ -243,12 +248,17 @@ namespace AzurePrOps.Controls
             Console.WriteLine($"DiffViewer.Render(): OldText length={OldText?.Length ?? 0}, NewText length={NewText?.Length ?? 0}");
 
             // Make sure we explicitly set the Document's text, not just the editor's Text property
-            string oldTextValue = OldText ?? "";
-            string newTextValue = NewText ?? "";
+            string oldTextValue = NormalizeLineEndings(OldText ?? "");
+            string newTextValue = NormalizeLineEndings(NewText ?? "");
 
             // Force text display by setting document text directly
-            _oldEditor.Document = new AvaloniaEdit.Document.TextDocument(oldTextValue);
-            _newEditor.Document = new AvaloniaEdit.Document.TextDocument(newTextValue);
+            if (_oldEditor.Document == null)
+                _oldEditor.Document = new AvaloniaEdit.Document.TextDocument();
+            if (_newEditor.Document == null)
+                _newEditor.Document = new AvaloniaEdit.Document.TextDocument();
+
+            _oldEditor.Document.Text = oldTextValue;
+            _newEditor.Document.Text = newTextValue;
 
             // Also set the Text property for consistency
             _oldEditor.Text = oldTextValue;
@@ -264,6 +274,8 @@ namespace AzurePrOps.Controls
             Console.WriteLine($"Set document text - Old: {oldTextValue.Length} bytes, New: {newTextValue.Length} bytes");
             Console.WriteLine($"OldEditor.Document length now: {_oldEditor.Document.TextLength}");
             Console.WriteLine($"NewEditor.Document length now: {_newEditor.Document.TextLength}");
+            Console.WriteLine($"Old text preview: '{oldTextValue.Substring(0, Math.Min(100, oldTextValue.Length))}'");
+            Console.WriteLine($"New text preview: '{newTextValue.Substring(0, Math.Min(100, newTextValue.Length))}'");
 
             // Clear previous transformers
             _oldEditor.TextArea.TextView.LineTransformers.Clear();
@@ -450,6 +462,14 @@ namespace AzurePrOps.Controls
 
             Console.WriteLine($"Built diff model with {model.Lines.Count} lines and {lineMap.Count(kv => kv.Value != DiffLineType.Unchanged)} changes");
 
+            if (_currentDiff != null && !string.IsNullOrEmpty(_currentDiff.Diff))
+            {
+                var patchLines = _currentDiff.Diff.Split('\n');
+                int addedFromPatch = patchLines.Count(l => l.StartsWith("+") && !l.StartsWith("+++"));
+                int removedFromPatch = patchLines.Count(l => l.StartsWith("-") && !l.StartsWith("---"));
+                Console.WriteLine($"Patch stats - added: {addedFromPatch}, removed: {removedFromPatch}");
+            }
+
             // Highlight backgrounds
             var transformer = new DiffLineBackgroundTransformer(lineMap);
             _oldEditor.TextArea.TextView.LineTransformers.Add(transformer);
@@ -534,6 +554,9 @@ namespace AzurePrOps.Controls
             ChangeType.Modified => DiffLineType.Modified,
             _                   => DiffLineType.Unchanged
         };
+
+        private static string NormalizeLineEndings(string text)
+            => text.Replace("\r\n", "\n").Replace('\r', '\n');
 
         private void NavigateToNextChange()
         {
