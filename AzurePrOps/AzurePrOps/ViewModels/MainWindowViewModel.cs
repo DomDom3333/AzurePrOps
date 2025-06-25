@@ -251,7 +251,9 @@ public class MainWindowViewModel : ViewModelBase
                     _settings.Project,
                     _settings.Repository,
                     SelectedPullRequest.Id,
-                    _settings.PersonalAccessToken);
+                    _settings.PersonalAccessToken,
+                    null,
+                    null);
 
                 // Log information about the diffs
                 Console.WriteLine($"Retrieved {diffs.Count} diffs for PR #{SelectedPullRequest.Id}");

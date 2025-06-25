@@ -1,5 +1,7 @@
 ﻿using AzurePrOps.ReviewLogic.Models;
 using LibGit2Sharp;
+using System.Diagnostics;
+using System.IO;
 
 namespace AzurePrOps.ReviewLogic.Services
 {
@@ -28,6 +30,52 @@ namespace AzurePrOps.ReviewLogic.Services
         private void ReportError(string message)
         {
             _errorHandler?.Invoke(message);
+        }
+
+        private static string RunGit(string workingDirectory, string arguments)
+        {
+            var psi = new ProcessStartInfo("git", arguments)
+            {
+                WorkingDirectory = workingDirectory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            using var process = Process.Start(psi)!;
+            string output = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+            return output;
+        }
+
+        private string CloneRepository(string organization, string project, string repositoryId, string pat)
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+            Directory.CreateDirectory(tempDir);
+            string repoUrl = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_git/{repositoryId}";
+            string authUrl = repoUrl.Insert(8, $"pat:{pat}@");
+            RunGit(Path.GetTempPath(), $"clone \"{authUrl}\" \"{tempDir}\"");
+            return tempDir;
+        }
+
+        private static string GetCommitSha(string repoPath, string refName)
+        {
+            return RunGit(repoPath, $"rev-parse {refName}").Trim();
+        }
+
+        private IReadOnlyList<FileDiff> ComputeDiffWithGit(string repoPath, string baseCommit, string sourceCommit)
+        {
+            var fileDiffs = new List<FileDiff>();
+            string names = RunGit(repoPath, $"diff --name-only {baseCommit} {sourceCommit}");
+            foreach (var file in names.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                string diff = RunGit(repoPath, $"diff {baseCommit} {sourceCommit} -- \"{file}\"");
+                string oldContent = string.Empty;
+                string newContent = string.Empty;
+                try { oldContent = RunGit(repoPath, $"show {baseCommit}:{file}"); } catch { }
+                try { newContent = RunGit(repoPath, $"show {sourceCommit}:{file}"); } catch { }
+                fileDiffs.Add(new FileDiff(file, diff, oldContent, newContent));
+            }
+            return fileDiffs;
         }
 
         public (string oldText, string newText) LoadDiff(string repositoryPath, int pullRequestId)
@@ -60,7 +108,9 @@ namespace AzurePrOps.ReviewLogic.Services
             string project,
             string repositoryId,
             int pullRequestId,
-            string personalAccessToken)
+            string personalAccessToken,
+            string? baseCommit = null,
+            string? diffCommit = null)
         {
             var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
 
@@ -104,17 +154,29 @@ namespace AzurePrOps.ReviewLogic.Services
                 }
 
                 // Extract commit IDs for diff comparison
-                string baseCommit = prJson.RootElement
-                    .TryGetProperty("lastMergeTargetCommit", out var targetCommitProp) && 
+                string baseCommitId = prJson.RootElement
+                    .TryGetProperty("lastMergeTargetCommit", out var targetCommitProp) &&
                     targetCommitProp.TryGetProperty("commitId", out var targetCommitIdProp) ?
                     targetCommitIdProp.GetString() ?? string.Empty : string.Empty;
 
-                string sourceCommit = prJson.RootElement
-                    .TryGetProperty("lastMergeSourceCommit", out var sourceCommitProp) && 
+                string sourceCommitId = prJson.RootElement
+                    .TryGetProperty("lastMergeSourceCommit", out var sourceCommitProp) &&
                     sourceCommitProp.TryGetProperty("commitId", out var sourceCommitIdProp) ?
                     sourceCommitIdProp.GetString() ?? string.Empty : string.Empty;
 
-                return await GetDirectDiffViaGitDiffsApi(encodedOrg, encodedProject, encodedRepoId, sourceBranch, targetBranch, sourceCommit, baseCommit, authToken);
+                var repoPath = CloneRepository(organization, project, repositoryId, personalAccessToken);
+                try
+                {
+                    RunGit(repoPath, $"fetch origin {targetBranch} {sourceBranch}");
+                    string baseSha = GetCommitSha(repoPath, baseCommit ?? baseCommitId ?? $"origin/{targetBranch}");
+                    string sourceSha = GetCommitSha(repoPath, diffCommit ?? sourceCommitId ?? $"origin/{sourceBranch}");
+                    var result = ComputeDiffWithGit(repoPath, baseSha, sourceSha);
+                    return await Task.FromResult(result);
+                }
+                finally
+                {
+                    try { Directory.Delete(repoPath, true); } catch { }
+                }
             }
             catch (Exception ex)
             {
@@ -128,7 +190,9 @@ namespace AzurePrOps.ReviewLogic.Services
             string project,
             string repositoryId,
             int pullRequestId,
-            string personalAccessToken)
+            string personalAccessToken,
+            string? baseCommit = null,
+            string? diffCommit = null)
         {
             var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
 
@@ -148,17 +212,45 @@ namespace AzurePrOps.ReviewLogic.Services
                 using var prStream = await prResponse.Content.ReadAsStreamAsync();
                 var prJson = await System.Text.Json.JsonDocument.ParseAsync(prStream);
 
-                string baseCommit = prJson.RootElement
+                string sourceBranch = prJson.RootElement
+                    .GetProperty("sourceRefName")
+                    .GetString() ?? string.Empty;
+                if (sourceBranch.StartsWith("refs/heads/", StringComparison.OrdinalIgnoreCase))
+                {
+                    sourceBranch = sourceBranch.Substring("refs/heads/".Length);
+                }
+
+                string targetBranch = prJson.RootElement
+                    .GetProperty("targetRefName")
+                    .GetString() ?? string.Empty;
+                if (targetBranch.StartsWith("refs/heads/", StringComparison.OrdinalIgnoreCase))
+                {
+                    targetBranch = targetBranch.Substring("refs/heads/".Length);
+                }
+
+                string baseCommitId = prJson.RootElement
                     .TryGetProperty("lastMergeTargetCommit", out var targetCommitProp) &&
                     targetCommitProp.TryGetProperty("commitId", out var targetCommitIdProp) ?
                     targetCommitIdProp.GetString() ?? string.Empty : string.Empty;
 
-                string sourceCommit = prJson.RootElement
+                string sourceCommitId = prJson.RootElement
                     .TryGetProperty("lastMergeSourceCommit", out var sourceCommitProp) &&
                     sourceCommitProp.TryGetProperty("commitId", out var sourceCommitIdProp) ?
                     sourceCommitIdProp.GetString() ?? string.Empty : string.Empty;
 
-                return await GetItemsAndComputeDiff(encodedOrg, encodedProject, encodedRepoId, sourceCommit, baseCommit, authToken);
+                var repoPath = CloneRepository(organization, project, repositoryId, personalAccessToken);
+                try
+                {
+                    RunGit(repoPath, $"fetch origin {targetBranch} {sourceBranch}");
+                    string baseSha = GetCommitSha(repoPath, baseCommit ?? baseCommitId ?? $"origin/{targetBranch}");
+                    string sourceSha = GetCommitSha(repoPath, diffCommit ?? sourceCommitId ?? $"origin/{sourceBranch}");
+                    var result = ComputeDiffWithGit(repoPath, baseSha, sourceSha);
+                    return await Task.FromResult(result);
+                }
+                finally
+                {
+                    try { Directory.Delete(repoPath, true); } catch { }
+                }
             }
             catch (Exception ex)
             {
@@ -432,94 +524,9 @@ namespace AzurePrOps.ReviewLogic.Services
 
         private string GenerateUnifiedDiff(string filePath, string changeType, string oldContent, string newContent, string? oldId = null, string? newId = null)
         {
-            var sb = new System.Text.StringBuilder();
-
-            // Add the diff header
-            var sanitizedPath = filePath.TrimStart('/');
-            sb.AppendLine($"diff --git a/{sanitizedPath} b/{sanitizedPath}");
-
-            switch (changeType.ToLowerInvariant())
-            {
-                case "add":
-                    sb.AppendLine("new file mode 100644");
-                    sb.AppendLine($"index 0000000..{(newId ?? "0000000").Substring(0, Math.Min(7, (newId ?? "0000000").Length))}");
-                    sb.AppendLine("--- /dev/null");
-                    sb.AppendLine($"+++ b/{sanitizedPath}");
-                    sb.AppendLine("@@ -0,0 +1," + CountLines(newContent) + " @@");
-
-                    // Add all new content as added lines
-                    foreach (var line in newContent.Split('\n'))
-                    {
-                        sb.AppendLine("+" + line);
-                    }
-                    break;
-
-                case "delete":
-                    sb.AppendLine("deleted file mode 100644");
-                    sb.AppendLine($"index {(oldId ?? "1234567").Substring(0, Math.Min(7, (oldId ?? "1234567").Length))}..0000000");
-                    sb.AppendLine($"--- a/{sanitizedPath}");
-                    sb.AppendLine("+++ /dev/null");
-                    sb.AppendLine("@@ -1," + CountLines(oldContent) + " +0,0 @@");
-
-                    // Add all old content as removed lines
-                    foreach (var line in oldContent.Split('\n'))
-                    {
-                        sb.AppendLine("-" + line);
-                    }
-                    break;
-
-                default: // edit/modify
-                    GenerateSimpleDiff(sb, sanitizedPath, oldContent, newContent, oldId, newId);
-                    break;
-            }
-
-            return sb.ToString();
+            return DiffHelper.GenerateUnifiedDiff(filePath, oldContent, newContent, changeType);
         }
 
-        private void GenerateSimpleDiff(System.Text.StringBuilder sb, string filePath, string oldContent, string newContent, string? oldId, string? newId)
-        {
-            var oldIndex = string.IsNullOrEmpty(oldId) ? "0000000" : oldId.Substring(0, Math.Min(7, oldId.Length));
-            var newIndex = string.IsNullOrEmpty(newId) ? "0000000" : newId.Substring(0, Math.Min(7, newId.Length));
-
-            sb.AppendLine($"index {oldIndex}..{newIndex} 100644");
-            sb.AppendLine($"--- a/{filePath}");
-            sb.AppendLine($"+++ b/{filePath}");
-
-            // Generate a simple diff by comparing lines
-            var oldLines = oldContent.Split('\n');
-            var newLines = newContent.Split('\n');
-
-            sb.AppendLine($"@@ -1,{oldLines.Length} +1,{newLines.Length} @@");
-
-            // Find common prefix
-            int commonPrefix = 0;
-            int minLength = Math.Min(oldLines.Length, newLines.Length);
-            while (commonPrefix < minLength && oldLines[commonPrefix] == newLines[commonPrefix])
-            {
-                sb.AppendLine(" " + oldLines[commonPrefix]);
-                commonPrefix++;
-            }
-
-            // Output deleted lines
-            for (int i = commonPrefix; i < oldLines.Length; i++)
-            {
-                sb.AppendLine("-" + oldLines[i]);
-            }
-
-            // Output added lines
-            for (int i = commonPrefix; i < newLines.Length; i++)
-            {
-                sb.AppendLine("+" + newLines[i]);
-            }
-        }
-
-        private int CountLines(string text)
-        {
-            if (string.IsNullOrEmpty(text))
-                return 0;
-
-            return text.Split('\n').Length;
-        }
 
         private async Task<IReadOnlyList<FileDiff>> GetItemsAndComputeDiff(
             string encodedOrg,
