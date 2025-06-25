@@ -207,6 +207,19 @@ namespace AzurePrOps.Controls
             _oldEditor.ShowLineNumbers = true;
             _newEditor.ShowLineNumbers = true;
 
+            // Explicitly set editor foreground/background to match the app theme
+            var fgBrush = (IBrush?)Application.Current?.FindResource("PrimaryBrush");
+            var bgBrush = (IBrush?)Application.Current?.FindResource("CardBackgroundBrush");
+            if (fgBrush != null && bgBrush != null)
+            {
+                _oldEditor.Foreground = fgBrush;
+                _oldEditor.Background = bgBrush;
+                _newEditor.Foreground = fgBrush;
+                _newEditor.Background = bgBrush;
+                Console.WriteLine($"OldEditor colors - FG: {fgBrush}, BG: {bgBrush}");
+                Console.WriteLine($"NewEditor colors - FG: {fgBrush}, BG: {bgBrush}");
+            }
+
             // Set explicit height for better visibility
             _oldEditor.MinHeight = 250;
             _newEditor.MinHeight = 250;
@@ -240,6 +253,8 @@ namespace AzurePrOps.Controls
             _newEditor.Text = newTextValue;
 
             Console.WriteLine($"Set document text - Old: {oldTextValue.Length} bytes, New: {newTextValue.Length} bytes");
+            Console.WriteLine($"OldEditor.Document length now: {_oldEditor.Document.TextLength}");
+            Console.WriteLine($"NewEditor.Document length now: {_newEditor.Document.TextLength}");
 
             // Clear previous transformers
             _oldEditor.TextArea.TextView.LineTransformers.Clear();
