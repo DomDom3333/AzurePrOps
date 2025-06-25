@@ -232,7 +232,16 @@ namespace AzurePrOps.Controls
                 {
                     bool sameColor = fgSolid.Color.ToUInt32() == bgSolid.Color.ToUInt32();
                     Console.WriteLine($"Foreground matches background? {sameColor}");
+                    Console.WriteLine($"OldEditor alpha: {fgSolid.Color.A}, BG alpha: {bgSolid.Color.A}");
                 }
+            }
+            else
+            {
+                Console.WriteLine("Theme brushes missing - using defaults");
+                _oldEditor.Foreground = Brushes.White;
+                _oldEditor.Background = Brushes.Black;
+                _newEditor.Foreground = Brushes.White;
+                _newEditor.Background = Brushes.Black;
             }
 
             // Set explicit height for better visibility
@@ -283,6 +292,9 @@ namespace AzurePrOps.Controls
             Console.WriteLine($"VisualLines valid? old: {_oldEditor.TextArea.TextView.VisualLinesValid}, new: {_newEditor.TextArea.TextView.VisualLinesValid}");
             Console.WriteLine($"OldEditor size: {_oldEditor.Bounds.Width}x{_oldEditor.Bounds.Height}");
             Console.WriteLine($"NewEditor size: {_newEditor.Bounds.Width}x{_newEditor.Bounds.Height}");
+            Console.WriteLine($"Visual line count old: {_oldEditor.TextArea.TextView.VisualLines.Count}, new: {_newEditor.TextArea.TextView.VisualLines.Count}");
+            Console.WriteLine($"OldEditor visible: {_oldEditor.IsVisible}, effective: {_oldEditor.IsEffectivelyVisible}, opacity: {_oldEditor.Opacity}");
+            Console.WriteLine($"NewEditor visible: {_newEditor.IsVisible}, effective: {_newEditor.IsEffectivelyVisible}, opacity: {_newEditor.Opacity}");
             if (_oldEditor.Foreground is ISolidColorBrush oldFg && _oldEditor.Background is ISolidColorBrush oldBg)
                 Console.WriteLine($"OldEditor colors numeric - FG: {oldFg.Color}, BG: {oldBg.Color}");
             if (_newEditor.Foreground is ISolidColorBrush newFg && _newEditor.Background is ISolidColorBrush newBg)
