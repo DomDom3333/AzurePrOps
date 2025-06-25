@@ -117,6 +117,14 @@ namespace AzurePrOps.Controls
                 NewText = diff.NewText ?? string.Empty;
                 _currentDiff = diff;
                 Console.WriteLine($"DataContext changed to FileDiff: {diff.FilePath}");
+
+                // Render again once the control is fully loaded to ensure the
+                // text appears even if DataContext was set before loading
+                Dispatcher.UIThread.Post(() =>
+                {
+                    Console.WriteLine("Post-DataContextChanged render");
+                    Render();
+                }, DispatcherPriority.Loaded);
             }
             else
             {
@@ -250,6 +258,13 @@ namespace AzurePrOps.Controls
 
             // Render initial diff
             Render();
+
+            // Trigger a second render on the UI thread once layout has completed
+            Dispatcher.UIThread.Post(() =>
+            {
+                Console.WriteLine("Post-SetupEditors render");
+                Render();
+            }, DispatcherPriority.Loaded);
         }
 
         public void Render()
