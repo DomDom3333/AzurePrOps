@@ -162,7 +162,9 @@ public class GitPullRequestService : IPullRequestService
         string project,
         string repositoryId,
         int pullRequestId,
-        string personalAccessToken)
+        string personalAccessToken,
+        string? baseCommit = null,
+        string? diffCommit = null)
     {
         // This implementation only works with local git repository
         // See AzureDevOpsPullRequestService for a remote implementation
@@ -175,7 +177,9 @@ public class GitPullRequestService : IPullRequestService
         string project,
         string repositoryId,
         int pullRequestId,
-        string personalAccessToken)
+        string personalAccessToken,
+        string? baseCommit = null,
+        string? diffCommit = null)
     {
         var diffs = new List<FileDiff>();
         try
@@ -239,66 +243,9 @@ public class GitPullRequestService : IPullRequestService
 
     private string GenerateUnifiedDiff(string filePath, string changeType, string oldContent, string newContent, string? oldId = null, string? newId = null)
     {
-        var sb = new System.Text.StringBuilder();
-        var sanitizedPath = filePath.TrimStart('/');
-        sb.AppendLine($"diff --git a/{sanitizedPath} b/{sanitizedPath}");
-
-        switch (changeType.ToLowerInvariant())
-        {
-            case "add":
-                sb.AppendLine("new file mode 100644");
-                sb.AppendLine($"index 0000000..{(newId ?? "0000000").Substring(0, Math.Min(7, (newId ?? "0000000").Length))}");
-                sb.AppendLine("--- /dev/null");
-                sb.AppendLine($"+++ b/{sanitizedPath}");
-                sb.AppendLine("@@ -0,0 +1," + CountLines(newContent) + " @@");
-                foreach (var line in newContent.Split('\n'))
-                    sb.AppendLine("+" + line);
-                break;
-            case "delete":
-                sb.AppendLine("deleted file mode 100644");
-                sb.AppendLine($"index {(oldId ?? "1234567").Substring(0, Math.Min(7, (oldId ?? "1234567").Length))}..0000000");
-                sb.AppendLine($"--- a/{sanitizedPath}");
-                sb.AppendLine("+++ /dev/null");
-                sb.AppendLine("@@ -1," + CountLines(oldContent) + " +0,0 @@");
-                foreach (var line in oldContent.Split('\n'))
-                    sb.AppendLine("-" + line);
-                break;
-            default:
-                GenerateSimpleDiff(sb, sanitizedPath, oldContent, newContent, oldId, newId);
-                break;
-        }
-
-        return sb.ToString();
+        return DiffHelper.GenerateUnifiedDiff(filePath, oldContent, newContent, changeType);
     }
 
-    private void GenerateSimpleDiff(System.Text.StringBuilder sb, string filePath, string oldContent, string newContent, string? oldId, string? newId)
-    {
-        var oldIndex = string.IsNullOrEmpty(oldId) ? "0000000" : oldId.Substring(0, Math.Min(7, oldId.Length));
-        var newIndex = string.IsNullOrEmpty(newId) ? "0000000" : newId.Substring(0, Math.Min(7, newId.Length));
-
-        sb.AppendLine($"index {oldIndex}..{newIndex} 100644");
-        sb.AppendLine($"--- a/{filePath}");
-        sb.AppendLine($"+++ b/{filePath}");
-
-        var oldLines = oldContent.Split('\n');
-        var newLines = newContent.Split('\n');
-
-        sb.AppendLine($"@@ -1,{oldLines.Length} +1,{newLines.Length} @@");
-
-        int commonPrefix = 0;
-        int minLength = Math.Min(oldLines.Length, newLines.Length);
-        while (commonPrefix < minLength && oldLines[commonPrefix] == newLines[commonPrefix])
-        {
-            sb.AppendLine(" " + oldLines[commonPrefix]);
-            commonPrefix++;
-        }
-        for (int i = commonPrefix; i < oldLines.Length; i++)
-            sb.AppendLine("-" + oldLines[i]);
-        for (int i = commonPrefix; i < newLines.Length; i++)
-            sb.AppendLine("+" + newLines[i]);
-    }
-
-    private int CountLines(string text) => string.IsNullOrEmpty(text) ? 0 : text.Split('\n').Length;
 
     public Task<IReadOnlyList<PullRequestInfo>> GetPullRequestsAsync(
         string organization,
