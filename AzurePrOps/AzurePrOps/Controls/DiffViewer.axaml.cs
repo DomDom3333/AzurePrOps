@@ -281,6 +281,12 @@ namespace AzurePrOps.Controls
             _newEditor.TextArea.TextView.EnsureVisualLines();
             Console.WriteLine($"Editors invalidated for redraw");
             Console.WriteLine($"VisualLines valid? old: {_oldEditor.TextArea.TextView.VisualLinesValid}, new: {_newEditor.TextArea.TextView.VisualLinesValid}");
+            Console.WriteLine($"OldEditor size: {_oldEditor.Bounds.Width}x{_oldEditor.Bounds.Height}");
+            Console.WriteLine($"NewEditor size: {_newEditor.Bounds.Width}x{_newEditor.Bounds.Height}");
+            if (_oldEditor.Foreground is ISolidColorBrush oldFg && _oldEditor.Background is ISolidColorBrush oldBg)
+                Console.WriteLine($"OldEditor colors numeric - FG: {oldFg.Color}, BG: {oldBg.Color}");
+            if (_newEditor.Foreground is ISolidColorBrush newFg && _newEditor.Background is ISolidColorBrush newBg)
+                Console.WriteLine($"NewEditor colors numeric - FG: {newFg.Color}, BG: {newBg.Color}");
 
             Console.WriteLine($"Set document text - Old: {oldTextValue.Length} bytes, New: {newTextValue.Length} bytes");
             Console.WriteLine($"OldEditor.Document length now: {_oldEditor.Document.TextLength}");
