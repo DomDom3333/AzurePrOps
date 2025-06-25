@@ -110,12 +110,14 @@ namespace AzurePrOps.Controls
                 // renders even if the control is created before data is set.
                 OldText = diff.OldText ?? string.Empty;
                 NewText = diff.NewText ?? string.Empty;
+                Console.WriteLine($"DataContext changed to FileDiff: {diff.FilePath}");
             }
             else
             {
                 // Clear content when the DataContext is unset or of the wrong type
                 OldText = string.Empty;
                 NewText = string.Empty;
+                Console.WriteLine("DataContext cleared or invalid");
             }
         }
 
@@ -251,6 +253,13 @@ namespace AzurePrOps.Controls
             // Also set the Text property for consistency
             _oldEditor.Text = oldTextValue;
             _newEditor.Text = newTextValue;
+
+            // Force redraw after setting text to ensure content becomes visible
+            _oldEditor.InvalidateVisual();
+            _newEditor.InvalidateVisual();
+            _oldEditor.TextArea.TextView.InvalidateVisual();
+            _newEditor.TextArea.TextView.InvalidateVisual();
+            Console.WriteLine("Editors invalidated for redraw");
 
             Console.WriteLine($"Set document text - Old: {oldTextValue.Length} bytes, New: {newTextValue.Length} bytes");
             Console.WriteLine($"OldEditor.Document length now: {_oldEditor.Document.TextLength}");
@@ -478,6 +487,11 @@ namespace AzurePrOps.Controls
 
             // Log line counts for debugging
             Console.WriteLine($"DiffViewer stats: {addedLines} added, {removedLines} removed, {modifiedLines} modified");
+
+            // Log first displayed line for extra visibility
+            var firstOld = _oldEditor.Document.Lines.Count > 0 ? _oldEditor.Document.GetText(_oldEditor.Document.Lines.First()) : "<none>";
+            var firstNew = _newEditor.Document.Lines.Count > 0 ? _newEditor.Document.GetText(_newEditor.Document.Lines.First()) : "<none>";
+            Console.WriteLine($"First lines - old: '{firstOld}', new: '{firstNew}'");
 
             if (_addedLinesText != null)
                 _addedLinesText.Text = $"{addedLines} added";
