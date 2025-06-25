@@ -99,7 +99,6 @@
                                 <Grid HorizontalAlignment="Stretch" MinHeight="300">
                                     <controls:DiffViewer
                                         HorizontalAlignment="Stretch"
-                                        Loaded="DiffViewer_Loaded"
                                         MinHeight="300"
                                         NewText="{Binding NewText}"
                                         OldText="{Binding OldText}"

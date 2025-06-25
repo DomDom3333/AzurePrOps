@@ -100,6 +100,25 @@ namespace AzurePrOps.Controls
             Loaded += (_, __) => SetupEditors();
         }
 
+        protected override void OnDataContextChanged(EventArgs e)
+        {
+            base.OnDataContextChanged(e);
+
+            if (DataContext is FileDiff diff)
+            {
+                // Assign bound texts when the DataContext changes so the viewer
+                // renders even if the control is created before data is set.
+                OldText = diff.OldText ?? string.Empty;
+                NewText = diff.NewText ?? string.Empty;
+            }
+            else
+            {
+                // Clear content when the DataContext is unset or of the wrong type
+                OldText = string.Empty;
+                NewText = string.Empty;
+            }
+        }
+
         private void InitializeComponent()
         {
             AvaloniaXamlLoader.Load(this);
