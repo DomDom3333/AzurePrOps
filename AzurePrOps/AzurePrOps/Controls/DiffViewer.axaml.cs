@@ -107,6 +107,8 @@ namespace AzurePrOps.Controls
         {
             base.OnDataContextChanged(e);
 
+            Console.WriteLine($"OnDataContextChanged: {DataContext?.GetType().Name ?? "null"}");
+
             if (DataContext is FileDiff diff)
             {
                 // Assign bound texts when the DataContext changes so the viewer
@@ -225,6 +227,12 @@ namespace AzurePrOps.Controls
                 _newEditor.Background = bgBrush;
                 Console.WriteLine($"OldEditor colors - FG: {fgBrush}, BG: {bgBrush}");
                 Console.WriteLine($"NewEditor colors - FG: {fgBrush}, BG: {bgBrush}");
+
+                if (fgBrush is ISolidColorBrush fgSolid && bgBrush is ISolidColorBrush bgSolid)
+                {
+                    bool sameColor = fgSolid.Color.ToUInt32() == bgSolid.Color.ToUInt32();
+                    Console.WriteLine($"Foreground matches background? {sameColor}");
+                }
             }
 
             // Set explicit height for better visibility
@@ -269,13 +277,20 @@ namespace AzurePrOps.Controls
             _newEditor.InvalidateVisual();
             _oldEditor.TextArea.TextView.InvalidateVisual();
             _newEditor.TextArea.TextView.InvalidateVisual();
-            Console.WriteLine("Editors invalidated for redraw");
+            _oldEditor.TextArea.TextView.EnsureVisualLines();
+            _newEditor.TextArea.TextView.EnsureVisualLines();
+            Console.WriteLine($"Editors invalidated for redraw");
+            Console.WriteLine($"VisualLines valid? old: {_oldEditor.TextArea.TextView.VisualLinesValid}, new: {_newEditor.TextArea.TextView.VisualLinesValid}");
 
             Console.WriteLine($"Set document text - Old: {oldTextValue.Length} bytes, New: {newTextValue.Length} bytes");
             Console.WriteLine($"OldEditor.Document length now: {_oldEditor.Document.TextLength}");
             Console.WriteLine($"NewEditor.Document length now: {_newEditor.Document.TextLength}");
+            Console.WriteLine($"OldEditor line count: {_oldEditor.Document.LineCount}");
+            Console.WriteLine($"NewEditor line count: {_newEditor.Document.LineCount}");
             Console.WriteLine($"Old text preview: '{oldTextValue.Substring(0, Math.Min(100, oldTextValue.Length))}'");
             Console.WriteLine($"New text preview: '{newTextValue.Substring(0, Math.Min(100, newTextValue.Length))}'");
+            Console.WriteLine($"Document first lines - old: '{_oldEditor.Document.GetText(0, Math.Min(100, _oldEditor.Document.TextLength))}'");
+            Console.WriteLine($"Document first lines - new: '{_newEditor.Document.GetText(0, Math.Min(100, _newEditor.Document.TextLength))}'");
 
             // Clear previous transformers
             _oldEditor.TextArea.TextView.LineTransformers.Clear();
