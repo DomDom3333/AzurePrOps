@@ -16,6 +16,8 @@ using AzurePrOps.ReviewLogic.Services;
 using DiffPlex;
 using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
+using Microsoft.Extensions.Logging;
+using AzurePrOps.Logging;
 
 namespace AzurePrOps.Controls
 {
@@ -23,6 +25,7 @@ namespace AzurePrOps.Controls
 
     public partial class DiffViewer : UserControl
     {
+        private static readonly ILogger _logger = AppLogger.CreateLogger<DiffViewer>();
         // Dependency properties
         public static readonly StyledProperty<string> OldTextProperty =
             AvaloniaProperty.Register<DiffViewer, string>(nameof(OldText));
@@ -63,15 +66,15 @@ namespace AzurePrOps.Controls
         static DiffViewer()
         {
             ViewModeProperty.Changed.AddClassHandler<DiffViewer>((x, e) => {
-                Console.WriteLine($"DiffViewer ViewMode changed: {e.OldValue} -> {e.NewValue}");
+                _logger.LogDebug("DiffViewer ViewMode changed: {Old} -> {New}", e.OldValue, e.NewValue);
                 x.Render();
             });
             OldTextProperty.Changed.AddClassHandler<DiffViewer>((x, e) => {
-                Console.WriteLine($"DiffViewer OldText changed: Length = {(e.NewValue as string)?.Length ?? 0}");
+                _logger.LogDebug("DiffViewer OldText changed: Length = {Length}", (e.NewValue as string)?.Length ?? 0);
                 x.Render();
             });
             NewTextProperty.Changed.AddClassHandler<DiffViewer>((x, e) => {
-                Console.WriteLine($"DiffViewer NewText changed: Length = {(e.NewValue as string)?.Length ?? 0}");
+                _logger.LogDebug("DiffViewer NewText changed: Length = {Length}", (e.NewValue as string)?.Length ?? 0);
                 x.Render();
             });
         }
@@ -195,7 +198,7 @@ namespace AzurePrOps.Controls
             if (_oldEditor is null || _newEditor is null)
                 return;
 
-            Console.WriteLine("Setting up DiffViewer editors");
+            _logger.LogDebug("Setting up DiffViewer editors");
 
             // Use AvaloniaEdit's built-in C# highlighting (no TextMate)
             var highlightDef = HighlightingManager.Instance.GetDefinitionByExtension(".cs");
@@ -217,15 +220,15 @@ namespace AzurePrOps.Controls
 
         public void Render()
         {
-            Console.WriteLine($"DiffViewer.Render() called");
+            _logger.LogDebug("DiffViewer.Render() called");
             if (_oldEditor is null || _newEditor is null)
             {
-                Console.WriteLine($"DiffViewer.Render(): editors are null, aborting render");
+                _logger.LogWarning("DiffViewer.Render(): editors are null, aborting render");
                 return;
             }
 
             // Load texts
-            Console.WriteLine($"DiffViewer.Render(): OldText length={OldText?.Length ?? 0}, NewText length={NewText?.Length ?? 0}");
+            _logger.LogDebug("DiffViewer.Render(): OldText length={OldLength}, NewText length={NewLength}", OldText?.Length ?? 0, NewText?.Length ?? 0);
 
             // Make sure we explicitly set the Document's text, not just the editor's Text property
             string oldTextValue = OldText ?? "";
@@ -239,7 +242,7 @@ namespace AzurePrOps.Controls
             _oldEditor.Text = oldTextValue;
             _newEditor.Text = newTextValue;
 
-            Console.WriteLine($"Set document text - Old: {oldTextValue.Length} bytes, New: {newTextValue.Length} bytes");
+            _logger.LogDebug("Set document text - Old: {OldBytes} bytes, New: {NewBytes} bytes", oldTextValue.Length, newTextValue.Length);
 
             // Clear previous transformers
             _oldEditor.TextArea.TextView.LineTransformers.Clear();
@@ -250,7 +253,7 @@ namespace AzurePrOps.Controls
             _newEditor.TextArea.TextView.BackgroundRenderers.Clear();
 
             // Compute unified diff
-            Console.WriteLine($"Building diff model with OldText ({OldText?.Length ?? 0} bytes) and NewText ({NewText?.Length ?? 0} bytes)");
+            _logger.LogDebug("Building diff model with OldText ({OldBytes} bytes) and NewText ({NewBytes} bytes)", OldText?.Length ?? 0, NewText?.Length ?? 0);
 
             // Add explicit handling for empty string cases
             string oldTextForDiff = OldText ?? "";
@@ -259,14 +262,14 @@ namespace AzurePrOps.Controls
             // Handle special case for new files (empty old text)
             if (string.IsNullOrEmpty(oldTextForDiff) && !string.IsNullOrEmpty(newTextForDiff))
             {
-                Console.WriteLine("Special case: New file detected (empty old text)");
+                _logger.LogDebug("Special case: New file detected (empty old text)");
                 // For a new file, all lines should be marked as added
                 var newLines = newTextForDiff.Split('\n');
                 _lineTypes = newLines
                     .Select((_, i) => (Line: i + 1, Type: DiffLineType.Added))
                     .ToDictionary(t => t.Line, t => t.Type);
 
-                Console.WriteLine($"Created manual _lineTypes with {_lineTypes.Count} lines, all marked as added");
+                _logger.LogDebug("Created manual _lineTypes with {Count} lines, all marked as added", _lineTypes.Count);
 
                 // Track changed lines for navigation
                 _changedLines = _lineTypes.Keys.OrderBy(k => k).ToList();
@@ -291,7 +294,7 @@ namespace AzurePrOps.Controls
     {
         // Strip markers before diff processing
         oldTextForDiff = oldTextForDiff.Replace("[FILE DELETED]\n", "").Replace("[FILE ADDED]\n", "");
-        Console.WriteLine($"Detected special file marker. IsDeleted={isDeletedFile}, IsNew={isNewFile}");
+        _logger.LogDebug("Detected special file marker. IsDeleted={IsDeleted}, IsNew={IsNew}", isDeletedFile, isNewFile);
     }
 
                 // Apply coloring to the editors
@@ -312,14 +315,14 @@ namespace AzurePrOps.Controls
             // Handle special case for deleted files (empty new text)
             if (!string.IsNullOrEmpty(oldTextForDiff) && string.IsNullOrEmpty(newTextForDiff))
             {
-                Console.WriteLine("Special case: Deleted file detected (empty new text)");
+                _logger.LogDebug("Special case: Deleted file detected (empty new text)");
                 // For a deleted file, all lines should be marked as removed
                 var oldLines = oldTextForDiff.Split('\n');
                 _lineTypes = oldLines
                     .Select((_, i) => (Line: i + 1, Type: DiffLineType.Removed))
                     .ToDictionary(t => t.Line, t => t.Type);
 
-                Console.WriteLine($"Created manual _lineTypes with {_lineTypes.Count} lines, all marked as removed");
+                _logger.LogDebug("Created manual _lineTypes with {Count} lines, all marked as removed", _lineTypes.Count);
 
                 // Track changed lines for navigation
                 _changedLines = _lineTypes.Keys.OrderBy(k => k).ToList();
@@ -359,7 +362,7 @@ namespace AzurePrOps.Controls
             bool textsAreIdentical = string.Equals(oldTextForDiff, newTextForDiff, StringComparison.Ordinal);
             if (!textsAreIdentical && oldTextForDiff.Length == newTextForDiff.Length)
             {
-                Console.WriteLine("Equal length texts with different content detected!");
+                _logger.LogDebug("Equal length texts with different content detected!");
             }
 
             // Map line numbers to change types
@@ -373,7 +376,7 @@ namespace AzurePrOps.Controls
             if ((lineMap.Count == 0 && (oldTextForDiff.Length > 0 || newTextForDiff.Length > 0)) ||
                 (lineMap.Count > 0 && !lineMap.Any(kv => kv.Value != DiffLineType.Unchanged) && !string.Equals(oldTextForDiff, newTextForDiff, StringComparison.Ordinal)))
             {
-                Console.WriteLine("Edge case: Empty diff model with non-empty content, creating manual mapping");
+                _logger.LogDebug("Edge case: Empty diff model with non-empty content, creating manual mapping");
                 _lineTypes = new Dictionary<int, DiffLineType>();
 
                 var oldLines = oldTextForDiff.Split('\n').Length;
@@ -402,7 +405,7 @@ namespace AzurePrOps.Controls
 
                     if (equalLengthButDifferent)
                     {
-                        Console.WriteLine("Equal length but different content detected - creating manual diff");
+                        _logger.LogDebug("Equal length but different content detected - creating manual diff");
 
                         // Mark all lines as modified when we have equal length but different content
                         for (int i = 1; i <= oldLines; i++)
@@ -420,11 +423,11 @@ namespace AzurePrOps.Controls
                     }
                 }
 
-                Console.WriteLine($"Created manual lineTypes with {_lineTypes.Count} lines");
+                _logger.LogDebug("Created manual lineTypes with {Count} lines", _lineTypes.Count);
                 return;
             }
 
-            Console.WriteLine($"Built diff model with {model.Lines.Count} lines and {lineMap.Count(kv => kv.Value != DiffLineType.Unchanged)} changes");
+            _logger.LogDebug("Built diff model with {Lines} lines and {Changes} changes", model.Lines.Count, lineMap.Count(kv => kv.Value != DiffLineType.Unchanged));
 
             // Highlight backgrounds
             var transformer = new DiffLineBackgroundTransformer(lineMap);
@@ -446,7 +449,7 @@ namespace AzurePrOps.Controls
             // Special case for new files (if there's only new content)
             if (string.IsNullOrWhiteSpace(OldText) && !string.IsNullOrWhiteSpace(NewText))
             {
-                Console.WriteLine("Special case for stats: New file detected");
+                _logger.LogDebug("Special case for stats: New file detected");
                 addedLines = NewText.Split('\n').Length;
                 removedLines = 0;
                 modifiedLines = 0;
@@ -455,14 +458,14 @@ namespace AzurePrOps.Controls
             // Special case for deleted files (if there's only old content)
             if (!string.IsNullOrWhiteSpace(OldText) && string.IsNullOrWhiteSpace(NewText))
             {
-                Console.WriteLine("Special case for stats: Deleted file detected");
+                _logger.LogDebug("Special case for stats: Deleted file detected");
                 addedLines = 0;
                 removedLines = OldText.Split('\n').Length;
                 modifiedLines = 0;
             }
 
             // Log line counts for debugging
-            Console.WriteLine($"DiffViewer stats: {addedLines} added, {removedLines} removed, {modifiedLines} modified");
+            _logger.LogDebug("DiffViewer stats: {Added} added, {Removed} removed, {Modified} modified", addedLines, removedLines, modifiedLines);
 
             if (_addedLinesText != null)
                 _addedLinesText.Text = $"{addedLines} added";

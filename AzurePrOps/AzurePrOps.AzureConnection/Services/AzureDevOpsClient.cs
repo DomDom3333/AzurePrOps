@@ -3,11 +3,14 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using AzurePrOps.AzureConnection.Models;
 using System.Collections.Generic;
+using Microsoft.Extensions.Logging;
+using AzurePrOps.Logging;
 
 namespace AzurePrOps.AzureConnection.Services;
 
 public partial class AzureDevOpsClient
 {
+    private static readonly ILogger _logger = AppLogger.CreateLogger<AzureDevOpsClient>();
     private const string AzureDevOpsBaseUrl = "https://dev.azure.com";
     private const string AzureDevOpsVsspsUrl = "https://vssps.dev.azure.com";
     private const string ApiVersion = "7.1";
@@ -106,7 +109,7 @@ public partial class AzureDevOpsClient
                         catch (Exception ex)
                         {
                             // Skip this reviewer if there's an issue with the JSON
-                            Console.WriteLine($"Error processing reviewer: {ex.Message}");
+                            _logger.LogWarning(ex, "Error processing reviewer");
                         }
                     }
                 }
@@ -116,7 +119,7 @@ public partial class AzureDevOpsClient
                             catch (Exception ex)
                             {
                 // Skip this PR if there's an issue with the JSON
-                Console.WriteLine($"Error processing pull request: {ex.Message}");
+                _logger.LogWarning(ex, "Error processing pull request");
                             }
             }
         }
