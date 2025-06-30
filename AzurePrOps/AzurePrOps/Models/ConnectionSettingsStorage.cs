@@ -50,4 +50,10 @@ public static class ConnectionSettingsStorage
         var json = JsonSerializer.Serialize(connectionSettings);
         await File.WriteAllTextAsync(FilePath, json);
     }
+
+    public static void Delete()
+    {
+        if (File.Exists(FilePath))
+            File.Delete(FilePath);
+    }
 }

@@ -11,11 +11,12 @@ using System.Threading.Tasks;
 
 namespace AzurePrOps.ViewModels;
 
-public class ProjectSelectionWindowViewModel : ViewModelBase
+public class SettingsWindowViewModel : ViewModelBase
 {
     private readonly AzureDevOpsClient _client = new();
     private readonly string _personalAccessToken;
     private readonly string _reviewerId;
+    private readonly ConnectionSettings _initialSettings;
 
     public ObservableCollection<NamedItem> Organizations { get; } = new();
     public ObservableCollection<NamedItem> Projects { get; } = new();
@@ -57,14 +58,24 @@ public class ProjectSelectionWindowViewModel : ViewModelBase
         private set => this.RaiseAndSetIfChanged(ref _connectionSettings, value);
     }
 
-    public ReactiveCommand<Unit, ConnectionSettings> ConnectCommand { get; }
+    public ReactiveCommand<Unit, ConnectionSettings> SaveCommand { get; }
+    public ReactiveCommand<Unit, Unit> LogoutCommand { get; }
 
-    public ProjectSelectionWindowViewModel(string personalAccessToken, string reviewerId)
+    private bool _useGitDiff;
+    public bool UseGitDiff
     {
-        _personalAccessToken = personalAccessToken;
-        _reviewerId = reviewerId;
+        get => _useGitDiff;
+        set => this.RaiseAndSetIfChanged(ref _useGitDiff, value);
+    }
 
-        ConnectCommand = ReactiveCommand.Create(() =>
+    public SettingsWindowViewModel(ConnectionSettings currentSettings)
+    {
+        _initialSettings = currentSettings;
+        _personalAccessToken = currentSettings.PersonalAccessToken;
+        _reviewerId = currentSettings.ReviewerId;
+        _useGitDiff = currentSettings.UseGitDiff;
+
+        SaveCommand = ReactiveCommand.Create(() =>
         {
             var settings = new ConnectionSettings(
                 SelectedOrganization?.Name ?? string.Empty,
@@ -72,17 +83,40 @@ public class ProjectSelectionWindowViewModel : ViewModelBase
                 SelectedRepository?.Id ?? string.Empty,
                 _personalAccessToken,
                 _reviewerId,
-                UseGitDiff: false);
+                UseGitDiff);
             ConnectionSettingsStorage.Save(settings);
             ConnectionSettings = settings;
 
-            // Close the window
             if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
             {
-                desktop.MainWindow?.Close();
+                var mainWindow = new Views.MainWindow
+                {
+                    DataContext = new MainWindowViewModel(settings)
+                };
+                var oldWindow = desktop.MainWindow;
+                desktop.MainWindow = mainWindow;
+                mainWindow.Show();
+                oldWindow?.Close();
             }
 
             return settings;
+        });
+
+        LogoutCommand = ReactiveCommand.Create(() =>
+        {
+            ConnectionSettingsStorage.Delete();
+            if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                var loginWindow = new Views.LoginWindow
+                {
+                    DataContext = new LoginWindowViewModel(loginInfo =>
+                        ConnectionSettingsStorage.TryLoad(out var settings) ? new MainWindowViewModel(settings!) : null)
+                };
+                var oldWindow = desktop.MainWindow;
+                desktop.MainWindow = loginWindow;
+                loginWindow.Show();
+                oldWindow?.Close();
+            }
         });
     }
 
@@ -105,7 +139,8 @@ public class ProjectSelectionWindowViewModel : ViewModelBase
             var orgs = await _client.GetOrganizationsAsync(userId, _personalAccessToken);
             foreach (var o in orgs)
                 Organizations.Add(o);
-            SelectedOrganization = Organizations.FirstOrDefault();
+            SelectedOrganization = Organizations.FirstOrDefault(o => o.Name == _initialSettings.Organization) ??
+                                  Organizations.FirstOrDefault();
 
             if (Organizations.Count == 0)
             {
@@ -169,7 +204,8 @@ public class ProjectSelectionWindowViewModel : ViewModelBase
             var projects = await _client.GetProjectsAsync(SelectedOrganization.Name, _personalAccessToken);
             foreach (var p in projects)
                 Projects.Add(p);
-            SelectedProject = Projects.FirstOrDefault();
+            SelectedProject = Projects.FirstOrDefault(p => p.Name == _initialSettings.Project) ??
+                              Projects.FirstOrDefault();
         }
         catch (Exception ex)
         {
@@ -195,7 +231,8 @@ public class ProjectSelectionWindowViewModel : ViewModelBase
             var repos = await _client.GetRepositoriesAsync(SelectedOrganization.Name, SelectedProject.Name, _personalAccessToken);
             foreach (var r in repos)
                 Repositories.Add(r);
-            SelectedRepository = Repositories.FirstOrDefault();
+            SelectedRepository = Repositories.FirstOrDefault(r => r.Id == _initialSettings.Repository) ??
+                                Repositories.FirstOrDefault();
         }
         catch (Exception ex)
         {

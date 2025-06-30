@@ -5,4 +5,5 @@ public record ConnectionSettings(
     string Project,
     string Repository,
     string PersonalAccessToken,
-    string ReviewerId);
+    string ReviewerId,
+    bool UseGitDiff = false);

@@ -134,6 +134,7 @@ public class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> PostCommentCommand { get; }
     public ReactiveCommand<Unit, Unit> ViewDetailsCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveViewCommand { get; }
+    public ReactiveCommand<Unit, Unit> OpenSettingsCommand { get; }
 
     private async Task ShowErrorMessage(string message)
     {
@@ -161,6 +162,10 @@ public class MainWindowViewModel : ViewModelBase
 
         _pullRequestService = PullRequestServiceFactory.Create(
             PullRequestServiceType.AzureDevOps);
+        if (_pullRequestService is AzureDevOpsPullRequestService azService)
+        {
+            azService.UseGitClient = _settings.UseGitDiff;
+        }
         _pullRequestService.SetErrorHandler(message =>
             _ = ShowErrorMessage(message));
 
@@ -301,6 +306,20 @@ public class MainWindowViewModel : ViewModelBase
             FilterViewStorage.Save(FilterViews);
             NewViewName = string.Empty;
             SelectedFilterView = view;
+        });
+
+        OpenSettingsCommand = ReactiveCommand.Create(() =>
+        {
+            if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            {
+                var vm = new SettingsWindowViewModel(_settings);
+                var window = new Views.SettingsWindow { DataContext = vm };
+                _ = vm.LoadAsync();
+                var old = desktop.MainWindow;
+                desktop.MainWindow = window;
+                window.Show();
+                old?.Close();
+            }
         });
     }
 
