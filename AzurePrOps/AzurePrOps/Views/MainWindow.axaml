@@ -17,7 +17,10 @@
 
     <ScrollViewer Margin="10" VerticalScrollBarVisibility="Auto">
         <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,*">
-            <Button Grid.Row="0" Content="Refresh PRs" Command="{Binding RefreshCommand}" Width="120"/>
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4">
+                <Button Content="Refresh PRs" Command="{Binding RefreshCommand}" Width="120"/>
+                <Button Content="Settings" Command="{Binding OpenSettingsCommand}" Width="120"/>
+            </StackPanel>
             <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="4">
             <AutoCompleteBox Width="150"
                              Watermark="Title"
