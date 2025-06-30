@@ -12,11 +12,14 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using AzurePrOps.Views;
+using Microsoft.Extensions.Logging;
+using AzurePrOps.Logging;
 
 namespace AzurePrOps.ViewModels;
 
 public class MainWindowViewModel : ViewModelBase
 {
+    private static readonly ILogger _logger = AppLogger.CreateLogger<MainWindowViewModel>();
     private readonly AzureDevOpsClient _client = new();
     private readonly IPullRequestService _pullRequestService;
     private readonly Models.ConnectionSettings _settings;
@@ -261,19 +264,17 @@ public class MainWindowViewModel : ViewModelBase
                     null);
 
                 // Log information about the diffs
-                Console.WriteLine($"Retrieved {diffs.Count} diffs for PR #{SelectedPullRequest.Id}");
+                _logger.LogDebug("Retrieved {Count} diffs for PR #{Id}", diffs.Count, SelectedPullRequest.Id);
                 foreach (var diff in diffs)
                 {
-                    Console.WriteLine($"  - {diff.FilePath}: OldText={diff.OldText?.Length ?? 0} bytes, NewText={diff.NewText?.Length ?? 0} bytes, Diff={diff.Diff?.Length ?? 0} bytes");
-                    Console.WriteLine(diff.OldText);
-                    Console.WriteLine(diff.NewText);
+                    _logger.LogDebug("  - {Path}: OldText={Old} bytes, NewText={New} bytes, Diff={Diff} bytes", diff.FilePath, diff.OldText?.Length ?? 0, diff.NewText?.Length ?? 0, diff.Diff?.Length ?? 0);
                 }
 
                 // Always show the window, even if we couldn't get diffs
                 Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     var vm = new PullRequestDetailsWindowViewModel(SelectedPullRequest, Comments, diffs);
-                    Console.WriteLine($"Created ViewModel with {vm.FileDiffs.Count} FileDiffs");
+                    _logger.LogDebug("Created ViewModel with {Count} FileDiffs", vm.FileDiffs.Count);
                     var window = new PullRequestDetailsWindow { DataContext = vm };
                     window.Show();
                 });

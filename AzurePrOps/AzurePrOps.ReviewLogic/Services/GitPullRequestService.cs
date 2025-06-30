@@ -1,10 +1,13 @@
 ﻿using AzurePrOps.ReviewLogic.Models;
 using LibGit2Sharp;
+using Microsoft.Extensions.Logging;
+using AzurePrOps.Logging;
 
 namespace AzurePrOps.ReviewLogic.Services;
 
 public class GitPullRequestService : IPullRequestService
 {
+    private static readonly ILogger _logger = AppLogger.CreateLogger<GitPullRequestService>();
     private Action<string>? _errorHandler;
 
     public GitPullRequestService()
@@ -23,7 +26,7 @@ public class GitPullRequestService : IPullRequestService
 
     public (string oldText, string newText) LoadDiff(string repositoryPath, int pullRequestId)
     {
-        Console.WriteLine($"LoadDiff called for repo {repositoryPath}, PR {pullRequestId}");
+        _logger.LogDebug("LoadDiff called for repo {Repo}, PR {Id}", repositoryPath, pullRequestId);
 
         try
         {
@@ -32,7 +35,7 @@ public class GitPullRequestService : IPullRequestService
             Branch? prBranch = repo.Branches.FirstOrDefault(b => b.FriendlyName.EndsWith($"/pr/{pullRequestId}", StringComparison.OrdinalIgnoreCase));
             if (prBranch == null)
             {
-                Console.WriteLine($"PR branch pr/{pullRequestId} not found - looking for alternate formats");
+                _logger.LogDebug("PR branch pr/{Id} not found - looking for alternate formats", pullRequestId);
                 // Try alternate branch naming formats
                 prBranch = repo.Branches.FirstOrDefault(b => 
                     b.FriendlyName.Contains($"PR-{pullRequestId}", StringComparison.OrdinalIgnoreCase) ||
@@ -43,14 +46,14 @@ public class GitPullRequestService : IPullRequestService
                     throw new ArgumentException($"Could not find any branch for PR {pullRequestId}");
             }
 
-            Console.WriteLine($"Found PR branch: {prBranch.FriendlyName}");
+            _logger.LogDebug("Found PR branch: {Branch}", prBranch.FriendlyName);
 
             Commit? headCommit = repo.Head.Tip;
             Commit? prCommit = prBranch.Tip;
-            Console.WriteLine($"Head commit: {headCommit.Sha}, PR commit: {prCommit.Sha}");
+            _logger.LogDebug("Head commit: {Head}, PR commit: {PR}", headCommit.Sha, prCommit.Sha);
 
             TreeChanges? changes = repo.Diff.Compare<TreeChanges>(headCommit.Tree, prCommit.Tree);
-            Console.WriteLine($"Found {changes.Count()} changed files");
+            _logger.LogDebug("Found {Count} changed files", changes.Count());
             Commit parent;
             if (changes.Count() == 0)
             {
@@ -58,20 +61,20 @@ public class GitPullRequestService : IPullRequestService
                 parent = prCommit.Parents.FirstOrDefault();
                 if (parent != null)
                 {
-                    Console.WriteLine($"No changes found with head, trying PR parent: {parent.Sha}");
+                    _logger.LogDebug("No changes found with head, trying PR parent: {Parent}", parent.Sha);
                     changes = repo.Diff.Compare<TreeChanges>(parent.Tree, prCommit.Tree);
-                    Console.WriteLine($"Found {changes.Count()} changed files with parent");
+                    _logger.LogDebug("Found {Count} changed files with parent", changes.Count());
                 }
             }
 
             TreeEntryChanges? firstChange = changes.FirstOrDefault();
             if (firstChange == null)
             {
-                Console.WriteLine("No changes found in the PR");
+                _logger.LogDebug("No changes found in the PR");
                 return ("[No changes found in this PR]\n", "[No changes found in this PR]\n");
             }
 
-            Console.WriteLine($"First changed file: {firstChange.Path}, status: {firstChange.Status}");
+            _logger.LogDebug("First changed file: {Path}, status: {Status}", firstChange.Path, firstChange.Status);
 
             // Get the correct versions based on change type
             string oldText = "[Could not retrieve original content]\n";
@@ -82,7 +85,7 @@ public class GitPullRequestService : IPullRequestService
             // For deleted files
             if (firstChange.Status == ChangeKind.Deleted)
             {
-                Console.WriteLine("File was deleted");
+                _logger.LogDebug("File was deleted");
                 try
                 {
                     // Get content from parent commit
@@ -96,13 +99,13 @@ public class GitPullRequestService : IPullRequestService
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error retrieving deleted file: {ex.Message}");
+                    _logger.LogWarning(ex, "Error retrieving deleted file");
                 }
             }
             // For new files
             else if (firstChange.Status == ChangeKind.Added)
             {
-                Console.WriteLine("File was added");
+                _logger.LogDebug("File was added");
                 try
                 {
                     // Get content from PR commit
@@ -116,13 +119,13 @@ public class GitPullRequestService : IPullRequestService
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error retrieving added file: {ex.Message}");
+                    _logger.LogWarning(ex, "Error retrieving added file");
                 }
             }
             // For modified files
             else
             {
-                Console.WriteLine("File was modified");
+                _logger.LogDebug("File was modified");
                 try
                 {
                     // Get old content from parent commit
@@ -143,16 +146,16 @@ public class GitPullRequestService : IPullRequestService
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error retrieving modified file: {ex.Message}");
+                    _logger.LogWarning(ex, "Error retrieving modified file");
                 }
             }
 
-            Console.WriteLine($"Retrieved content - Old: {oldText.Length} bytes, New: {newText.Length} bytes");
+            _logger.LogDebug("Retrieved content - Old: {OldBytes} bytes, New: {NewBytes} bytes", oldText.Length, newText.Length);
             return (oldText, newText);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error in LoadDiff: {ex.Message}");
+            _logger.LogError(ex, "Error in LoadDiff");
             return ("[Error retrieving diff: " + ex.Message + "]\n", "[Error retrieving diff: " + ex.Message + "]\n");
         }
     }

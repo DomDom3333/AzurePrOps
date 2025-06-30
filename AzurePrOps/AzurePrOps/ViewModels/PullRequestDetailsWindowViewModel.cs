@@ -8,11 +8,14 @@ using ReviewModels = AzurePrOps.ReviewLogic.Models;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using Microsoft.Extensions.Logging;
+using AzurePrOps.Logging;
 
 namespace AzurePrOps.ViewModels;
 
 public class PullRequestDetailsWindowViewModel : ViewModelBase
 {
+    private static readonly ILogger _logger = AppLogger.CreateLogger<PullRequestDetailsWindowViewModel>();
     public ConnectionModels.PullRequestInfo PullRequest { get; }
 
     public ObservableCollection<ConnectionModels.PullRequestComment> Comments { get; }
@@ -31,20 +34,20 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
             : new ObservableCollection<ConnectionModels.PullRequestComment>();
         if (diffs != null)
         {
-            Console.WriteLine($"Processing {diffs.Count()} diffs in PullRequestDetailsWindowViewModel constructor");
+            _logger.LogDebug("Processing {Count} diffs in PullRequestDetailsWindowViewModel constructor", diffs.Count());
             foreach (var d in diffs)
             {
                 // Ensure there's at least some content for the diff viewer to display
                 var fileDiff = d;
-                Console.WriteLine($"Processing diff for {fileDiff.FilePath}");
-                Console.WriteLine($"  Original OldText length: {fileDiff.OldText?.Length ?? 0}");
-                Console.WriteLine($"  Original NewText length: {fileDiff.NewText?.Length ?? 0}");
-                Console.WriteLine($"  Original Diff length: {fileDiff.Diff?.Length ?? 0}");
+                _logger.LogDebug("Processing diff for {Path}", fileDiff.FilePath);
+                _logger.LogDebug("  Original OldText length: {Length}", fileDiff.OldText?.Length ?? 0);
+                _logger.LogDebug("  Original NewText length: {Length}", fileDiff.NewText?.Length ?? 0);
+                _logger.LogDebug("  Original Diff length: {Length}", fileDiff.Diff?.Length ?? 0);
 
                 // If both texts are empty but we have a diff string, create placeholder content
                 if (string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText) && !string.IsNullOrEmpty(fileDiff.Diff))
                 {
-                    Console.WriteLine($"  Creating placeholder content for {fileDiff.FilePath}");
+                    _logger.LogDebug("  Creating placeholder content for {Path}", fileDiff.FilePath);
                     // Parse the diff string to create old and new text representations
                     var (oldContent, newContent) = ParseDiffToContent(fileDiff.Diff);
 
@@ -52,8 +55,8 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
                     bool isNewFile = oldContent.Contains("[FILE ADDED]");
                     bool isDeletedFile = newContent.Contains("[FILE DELETED]");
 
-                    Console.WriteLine($"  Parsed diff content: isNewFile={isNewFile}, isDeletedFile={isDeletedFile}");
-                    Console.WriteLine($"  oldContent length: {oldContent.Length}, newContent length: {newContent.Length}");
+                    _logger.LogDebug("  Parsed diff content: isNewFile={IsNew}, isDeletedFile={IsDeleted}", isNewFile, isDeletedFile);
+                    _logger.LogDebug("  oldContent length: {OldLength}, newContent length: {NewLength}", oldContent.Length, newContent.Length);
 
                     // Check for empty content and provide more meaningful placeholders
                     if (string.IsNullOrWhiteSpace(oldContent) && string.IsNullOrWhiteSpace(newContent))
@@ -138,7 +141,7 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
                 else if (string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText))
                 {
                     // If we have no content at all, provide a meaningful message
-                    Console.WriteLine($"  WARNING: No content available for {fileDiff.FilePath}");
+                    _logger.LogWarning("  WARNING: No content available for {Path}", fileDiff.FilePath);
                     fileDiff = new ReviewModels.FileDiff(
                         fileDiff.FilePath,
                         "No diff content available.",
@@ -150,7 +153,7 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
                 else if (string.IsNullOrEmpty(fileDiff.OldText) && !string.IsNullOrEmpty(fileDiff.NewText))
                 {
                     // This is likely a new file
-                    Console.WriteLine($"  New file detected: {fileDiff.FilePath}");
+                    _logger.LogDebug("  New file detected: {Path}", fileDiff.FilePath);
 
                     // For new files, we'll preserve the empty old text but add a marker
                     // so that the diff viewer can properly recognize it as a new file
@@ -164,7 +167,7 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
                 else if (!string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText))
                 {
                     // This is likely a deleted file
-                    Console.WriteLine($"  Deleted file detected: {fileDiff.FilePath}");
+                    _logger.LogDebug("  Deleted file detected: {Path}", fileDiff.FilePath);
 
                     // For deleted files, we'll preserve the empty new text but add a marker
                     // so that the diff viewer can properly recognize it as a deleted file
@@ -176,8 +179,8 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
                     );
                 }
 
-                Console.WriteLine($"  Final OldText length: {fileDiff.OldText?.Length ?? 0}");
-                Console.WriteLine($"  Final NewText length: {fileDiff.NewText?.Length ?? 0}");
+                _logger.LogDebug("  Final OldText length: {Length}", fileDiff.OldText?.Length ?? 0);
+                _logger.LogDebug("  Final NewText length: {Length}", fileDiff.NewText?.Length ?? 0);
                 FileDiffs.Add(fileDiff);
 
                 // Ensure UI updates
@@ -195,7 +198,7 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
                 string sanitizedUrl = PullRequest.WebUrl.Trim();
                 if (!Uri.IsWellFormedUriString(sanitizedUrl, UriKind.Absolute))
                 {
-                    Console.WriteLine($"Invalid URL format: {sanitizedUrl}");
+                    _logger.LogWarning("Invalid URL format: {Url}", sanitizedUrl);
                     return;
                 }
 
@@ -209,7 +212,7 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
             catch (Exception ex)
             {
                 // Swallow exceptions to avoid crashing the app
-                Console.WriteLine($"Failed to open browser: {ex.Message}");
+                _logger.LogWarning(ex, "Failed to open browser");
             }
         });
             }
@@ -227,17 +230,17 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
             bool isNewFile = diffText.Contains("new file mode") || diffText.Contains("/dev/null") && diffText.Contains("+++ b/");
             bool isDeletedFile = diffText.Contains("deleted file mode") || diffText.Contains("--- a/") && diffText.Contains("+++ /dev/null");
 
-            Console.WriteLine($"ParseDiffToContent - isNewFile: {isNewFile}, isDeletedFile: {isDeletedFile}");
-            Console.WriteLine($"Diff text length: {diffText.Length} bytes");
+            _logger.LogDebug("ParseDiffToContent - isNewFile: {IsNew}, isDeletedFile: {IsDeleted}", isNewFile, isDeletedFile);
+            _logger.LogDebug("Diff text length: {Length} bytes", diffText.Length);
 
             // Log the first few lines of the diff for debugging
             var diffStart = string.Join("\n", diffText.Split('\n').Take(10));
-            Console.WriteLine($"Diff starts with:\n{diffStart}");
+            _logger.LogDebug("Diff starts with:\n{Start}", diffStart);
 
             // Count how many '+' and '-' lines we have
             int addedLineCount = diffText.Split('\n').Count(l => l.StartsWith("+") && !l.StartsWith("+++ "));
             int removedLineCount = diffText.Split('\n').Count(l => l.StartsWith("-") && !l.StartsWith("--- "));
-            Console.WriteLine($"Diff contains {addedLineCount} added lines and {removedLineCount} removed lines");
+            _logger.LogDebug("Diff contains {Added} added lines and {Removed} removed lines", addedLineCount, removedLineCount);
 
         // Skip header lines that start with "diff", "index", "---", "+++", etc.
         var lines = diffText.Split('\n');
@@ -286,18 +289,18 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
         if (isNewFile && string.IsNullOrWhiteSpace(oldContent))
         {
             oldContent = "[FILE ADDED]\n";
-            Console.WriteLine("Added [FILE ADDED] marker to oldContent");
+            _logger.LogDebug("Added [FILE ADDED] marker to oldContent");
         }
         else if (isDeletedFile && string.IsNullOrWhiteSpace(newContent))
         {
             newContent = "[FILE DELETED]\n";
-            Console.WriteLine("Added [FILE DELETED] marker to newContent");
+            _logger.LogDebug("Added [FILE DELETED] marker to newContent");
         }
 
         // If we couldn't extract any content but have the raw diff, show the raw diff
         if (string.IsNullOrWhiteSpace(oldContent) && string.IsNullOrWhiteSpace(newContent) && !string.IsNullOrWhiteSpace(diffText))
         {
-            Console.WriteLine("Using raw diff as content since no content could be extracted");
+            _logger.LogDebug("Using raw diff as content since no content could be extracted");
             if (isNewFile)
             {
                 oldContent = "[FILE ADDED]\n";

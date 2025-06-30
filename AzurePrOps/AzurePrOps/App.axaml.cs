@@ -7,11 +7,14 @@ using AzurePrOps.Models;
 using ReactiveUI;
 using AzurePrOps.ViewModels;
 using AzurePrOps.Views;
+using Microsoft.Extensions.Logging;
+using AzurePrOps.Logging;
 
 namespace AzurePrOps;
 
 public partial class App : Application
 {
+    private static readonly ILogger _logger = AppLogger.CreateLogger<App>();
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -23,7 +26,7 @@ public partial class App : Application
         RxApp.DefaultExceptionHandler = Observer.Create<Exception>(ex =>
         {
             // Log the exception
-            Console.WriteLine($"Unhandled ReactiveUI exception: {ex}");
+            _logger.LogError(ex, "Unhandled ReactiveUI exception");
 
             // Show error dialog
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
