@@ -162,6 +162,10 @@ public class MainWindowViewModel : ViewModelBase
 
         _pullRequestService = PullRequestServiceFactory.Create(
             PullRequestServiceType.AzureDevOps);
+        if (_pullRequestService is AzureDevOpsPullRequestService azService)
+        {
+            azService.UseGitClient = _settings.UseGitDiff;
+        }
         _pullRequestService.SetErrorHandler(message =>
             _ = ShowErrorMessage(message));
 

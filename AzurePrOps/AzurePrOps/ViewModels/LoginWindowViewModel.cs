@@ -81,7 +81,8 @@ public class LoginWindowViewModel : ViewModelBase
                     Project: "",
                     Repository: "",
                     PersonalAccessToken: PersonalAccessToken,
-                    ReviewerId: reviewerId));
+                    ReviewerId: reviewerId,
+                    UseGitDiff: false));
 
                 var loginInfo = new LoginInfo(reviewerId, PersonalAccessToken);
 

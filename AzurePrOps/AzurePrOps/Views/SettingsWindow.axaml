@@ -12,7 +12,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="using:AzurePrOps.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Grid Margin="20" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto">
+    <Grid Margin="20" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*,Auto">
         <TextBlock
             FontSize="18"
             FontWeight="Bold"
@@ -130,7 +130,13 @@
                 TextWrapping="Wrap" />
         </Border>
 
-        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+        <CheckBox
+            Grid.Row="5"
+            Margin="0,0,0,10"
+            Content="Use Git client for diffs"
+            IsChecked="{Binding UseGitDiff}" />
+
+        <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
             <Button
                 Content="Logout"
                 Command="{Binding LogoutCommand}"

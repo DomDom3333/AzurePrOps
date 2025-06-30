@@ -61,11 +61,19 @@ public class SettingsWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, ConnectionSettings> SaveCommand { get; }
     public ReactiveCommand<Unit, Unit> LogoutCommand { get; }
 
+    private bool _useGitDiff;
+    public bool UseGitDiff
+    {
+        get => _useGitDiff;
+        set => this.RaiseAndSetIfChanged(ref _useGitDiff, value);
+    }
+
     public SettingsWindowViewModel(ConnectionSettings currentSettings)
     {
         _initialSettings = currentSettings;
         _personalAccessToken = currentSettings.PersonalAccessToken;
         _reviewerId = currentSettings.ReviewerId;
+        _useGitDiff = currentSettings.UseGitDiff;
 
         SaveCommand = ReactiveCommand.Create(() =>
         {
@@ -74,7 +82,8 @@ public class SettingsWindowViewModel : ViewModelBase
                 SelectedProject?.Name ?? string.Empty,
                 SelectedRepository?.Id ?? string.Empty,
                 _personalAccessToken,
-                _reviewerId);
+                _reviewerId,
+                UseGitDiff);
             ConnectionSettingsStorage.Save(settings);
             ConnectionSettings = settings;
 
