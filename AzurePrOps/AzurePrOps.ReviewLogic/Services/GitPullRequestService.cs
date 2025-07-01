@@ -54,7 +54,7 @@ public class GitPullRequestService : IPullRequestService
 
             TreeChanges? changes = repo.Diff.Compare<TreeChanges>(headCommit.Tree, prCommit.Tree);
             _logger.LogDebug("Found {Count} changed files", changes.Count());
-            Commit parent;
+            Commit? parent;
             if (changes.Count() == 0)
             {
                 // Try comparing with the PR branch's parent instead

@@ -176,7 +176,7 @@ public class MainWindowViewModel : ViewModelBase
             FilterViews.Add(v);
 
         // Add error handling mechanism
-        _client.SetErrorHandler((message) => ShowErrorMessage(message));
+        _client.SetErrorHandler(message => _ = ShowErrorMessage(message));
 
         RefreshCommand = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -271,7 +271,7 @@ public class MainWindowViewModel : ViewModelBase
                 }
 
                 // Always show the window, even if we couldn't get diffs
-                Dispatcher.UIThread.InvokeAsync(() =>
+                _ = Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     var vm = new PullRequestDetailsWindowViewModel(SelectedPullRequest, Comments, diffs);
                     _logger.LogDebug("Created ViewModel with {Count} FileDiffs", vm.FileDiffs.Count);

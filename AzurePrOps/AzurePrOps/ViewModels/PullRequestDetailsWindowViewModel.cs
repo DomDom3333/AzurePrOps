@@ -159,7 +159,7 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
                     // so that the diff viewer can properly recognize it as a new file
                     fileDiff = new ReviewModels.FileDiff(
                         fileDiff.FilePath,
-                        fileDiff.Diff,
+                        fileDiff.Diff ?? string.Empty,
                         "[FILE ADDED]\n", // Marker for new files
                         fileDiff.NewText
                     );
@@ -173,7 +173,7 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
                     // so that the diff viewer can properly recognize it as a deleted file
                     fileDiff = new ReviewModels.FileDiff(
                         fileDiff.FilePath,
-                        fileDiff.Diff,
+                        fileDiff.Diff ?? string.Empty,
                         fileDiff.OldText,
                         "[FILE DELETED]\n" // Marker for deleted files
                     );

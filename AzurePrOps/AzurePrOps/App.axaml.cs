@@ -39,7 +39,8 @@ public partial class App : Application
                     }
                 };
 
-                errorWindow.ShowDialog(desktop.MainWindow);
+                if (desktop.MainWindow != null)
+                    errorWindow.ShowDialog(desktop.MainWindow);
             }
         });
 
@@ -49,7 +50,7 @@ public partial class App : Application
             {
                 desktop.MainWindow = new MainWindow
                 {
-                    DataContext = new MainWindowViewModel(loaded)
+                    DataContext = new MainWindowViewModel(loaded!)
                 };
             }
             else
