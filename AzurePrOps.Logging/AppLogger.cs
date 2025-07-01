@@ -7,7 +7,7 @@ public static class AppLogger
     private static ILoggerFactory _loggerFactory = LoggerFactory.Create(builder =>
     {
         builder.SetMinimumLevel(LogLevel.Information);
-        builder.AddConsole(options =>
+        builder.AddSimpleConsole(options =>
         {
             options.TimestampFormat = "hh:mm:ss ";
         });

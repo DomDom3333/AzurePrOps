@@ -486,12 +486,6 @@ namespace AzurePrOps.Controls
                 _metricsPanel?.Children.Add(new TextBlock { Text = $"{m.Name}: {m.Value}" });
             }
 
-            // NotificationService?.Notify("render", new Notification
-            // {
-            //     Title = "Render Complete",
-            //     Message = $"Diff rendered at {DateTime.Now:T}",
-            //     Type = NotificationType.Info
-            // });
             AuditService?.RecordAction(new AuditRecord
             {
                 Timestamp = DateTime.Now,
@@ -568,17 +562,17 @@ namespace AzurePrOps.Controls
             _codeFoldingEnabled = !_codeFoldingEnabled;
 
     // Make sure we set the documents directly
-    if (!string.IsNullOrEmpty(OldText))
-    {
-        _oldEditor.Text = OldText;
-        _oldEditor.Document.Text = OldText;
-    }
+        if (!string.IsNullOrEmpty(OldText) && _oldEditor != null)
+        {
+            _oldEditor.Text = OldText;
+            _oldEditor.Document.Text = OldText;
+        }
 
-    if (!string.IsNullOrEmpty(NewText))
-    {
-        _newEditor.Text = NewText;
-        _newEditor.Document.Text = NewText;
-    }
+        if (!string.IsNullOrEmpty(NewText) && _newEditor != null)
+        {
+            _newEditor.Text = NewText;
+            _newEditor.Document.Text = NewText;
+        }
 
             if (_oldEditor != null && _newEditor != null)
             {
@@ -618,7 +612,6 @@ namespace AzurePrOps.Controls
             {
                 try
                 {
-                    // TODO: Add clipboard support when available
                     // await Application.Current.Clipboard.SetTextAsync(selectedText);
 
                     NotificationService?.Notify("clipboard", new Notification

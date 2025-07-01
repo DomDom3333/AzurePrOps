@@ -4,10 +4,6 @@ using System.Linq;
 
 namespace AzurePrOps.AzureConnection.Models;
 
-public record ReviewerInfo(string Id, string DisplayName, string Vote);
-
-public record PullRequestComment(string Author, string Content, DateTime PostedDate);
-
 public record PullRequestInfo(
     int Id,
     string Title,
@@ -18,10 +14,9 @@ public record PullRequestInfo(
     string SourceBranch,
     string TargetBranch,
     string Url)
-    {
-    // Ensure URL is valid and well-formed
-    public string WebUrl => !string.IsNullOrWhiteSpace(Url) && Uri.IsWellFormedUriString(Url, UriKind.Absolute) 
-        ? Url 
+{
+    public string WebUrl => !string.IsNullOrWhiteSpace(Url) && Uri.IsWellFormedUriString(Url, UriKind.Absolute)
+        ? Url
         : string.Empty;
 
     public string ReviewersText => string.Join(", ",

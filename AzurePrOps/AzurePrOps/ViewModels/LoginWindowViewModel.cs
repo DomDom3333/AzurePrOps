@@ -12,12 +12,12 @@ namespace AzurePrOps.ViewModels;
 public class LoginWindowViewModel : ViewModelBase
 {
     private readonly AzureDevOpsClient _client = new();
-    private readonly Func<LoginInfo, ViewModelBase>? _navigateToMain;
+    private readonly Func<LoginInfo, ViewModelBase?>? _navigateToMain;
 
     private ReactiveCommand<Unit, LoginInfo>? _loginCommand;
     public ReactiveCommand<Unit, LoginInfo> LoginCommand => _loginCommand ??= CreateLoginCommand();
 
-    public LoginWindowViewModel(Func<LoginInfo, ViewModelBase>? navigateToMain = null)
+    public LoginWindowViewModel(Func<LoginInfo, ViewModelBase?>? navigateToMain = null)
     {
         _navigateToMain = navigateToMain;
 
@@ -99,7 +99,7 @@ public class LoginWindowViewModel : ViewModelBase
                     _ = projectSelectionViewModel.LoadAsync();
 
                     // Handle the connection command result
-                    projectSelectionWindow.Closed += async (_, _) => 
+                    projectSelectionWindow.Closed += (_, _) =>
                     {
                         if (projectSelectionViewModel.ConnectionSettings != null && _navigateToMain != null)
                         {
