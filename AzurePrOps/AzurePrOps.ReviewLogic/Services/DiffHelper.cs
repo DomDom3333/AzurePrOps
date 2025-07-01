@@ -40,7 +40,8 @@ namespace AzurePrOps.ReviewLogic.Services
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                UseShellExecute = false
+                UseShellExecute = false,
+                CreateNoWindow = true
             };
             using var process = Process.Start(psi);
             string diff = process!.StandardOutput.ReadToEnd();
