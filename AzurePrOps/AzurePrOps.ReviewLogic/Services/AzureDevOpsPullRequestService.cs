@@ -501,7 +501,7 @@ namespace AzurePrOps.ReviewLogic.Services
 
             try
             {
-                var encodedPath = Uri.EscapeDataString(filePath);
+                var encodedPath = EncodePath(filePath);
 
                 // Get new content if file wasn't deleted
                 if (changeType.ToLowerInvariant() != "delete" && !string.IsNullOrEmpty(newObjectId))
@@ -511,6 +511,7 @@ namespace AzurePrOps.ReviewLogic.Services
                                        $"&versionDescriptor.version={newObjectId}" +
                                        $"&versionDescriptor.versionType=commit" +
                                        $"&includeContent=true" +
+                                       $"&download=true" +
                                        $"&api-version=7.1";
 
                     using var newRequest = new HttpRequestMessage(HttpMethod.Get, newContentUri);
@@ -532,6 +533,7 @@ namespace AzurePrOps.ReviewLogic.Services
                                       $"&versionDescriptor.version={oldObjectId}" +
                                       $"&versionDescriptor.versionType=commit" +
                                       $"&includeContent=true" +
+                                      $"&download=true" +
                                       $"&api-version=7.1";
 
                     using var oldRequest = new HttpRequestMessage(HttpMethod.Get, oldContentUri);
@@ -556,6 +558,17 @@ namespace AzurePrOps.ReviewLogic.Services
         private string GenerateUnifiedDiff(string filePath, string changeType, string oldContent, string newContent, string? oldId = null, string? newId = null)
         {
             return DiffHelper.GenerateUnifiedDiff(filePath, oldContent, newContent, changeType);
+        }
+
+        private static string EncodePath(string path)
+        {
+            // Ensure a leading slash for the Items API
+            if (!path.StartsWith("/"))
+                path = "/" + path;
+
+            // Azure DevOps expects forward slashes unescaped in the query string
+            var encoded = Uri.EscapeDataString(path);
+            return encoded.Replace("%2F", "/");
         }
 
 
@@ -636,7 +649,7 @@ namespace AzurePrOps.ReviewLogic.Services
 
             try
             {
-                var encodedPath = Uri.EscapeDataString(filePath);
+                var encodedPath = EncodePath(filePath);
 
                 if (changeType.ToLowerInvariant() != "add" && !string.IsNullOrEmpty(baseCommit))
                 {
@@ -645,6 +658,7 @@ namespace AzurePrOps.ReviewLogic.Services
                                       $"&versionDescriptor.version={baseCommit}" +
                                       $"&versionDescriptor.versionType=commit" +
                                       $"&includeContent=true" +
+                                      $"&download=true" +
                                       $"&api-version=7.1";
 
                     using var oldRequest = new HttpRequestMessage(HttpMethod.Get, oldVersionUri);
@@ -664,6 +678,7 @@ namespace AzurePrOps.ReviewLogic.Services
                                       $"&versionDescriptor.version={sourceCommit}" +
                                       $"&versionDescriptor.versionType=commit" +
                                       $"&includeContent=true" +
+                                      $"&download=true" +
                                       $"&api-version=7.1";
 
                     using var newRequest = new HttpRequestMessage(HttpMethod.Get, newVersionUri);
