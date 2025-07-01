@@ -16,6 +16,7 @@ using Avalonia.VisualTree;
 using Avalonia.Input;
 using AzurePrOps.ReviewLogic.Models;
 using AzurePrOps.ReviewLogic.Services;
+using AzurePrOps.Models;
 using DiffPlex;
 using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
@@ -107,7 +108,10 @@ namespace AzurePrOps.Controls
             PatchService       = new FilePatchService();
             FoldingService     = new IndentationFoldingService();
             SearchService      = new SimpleSearchService();
-            IDEService         = new IDEIntegrationService();
+            string editor = ConnectionSettingsStorage.TryLoad(out var s)
+                ? s!.EditorCommand
+                : EditorDetector.GetDefaultEditor();
+            IDEService = new IDEIntegrationService(editor);
 
             InitializeComponent();
             Loaded += (_, __) => SetupEditors();
