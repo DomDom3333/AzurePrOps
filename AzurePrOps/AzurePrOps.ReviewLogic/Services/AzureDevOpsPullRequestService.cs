@@ -40,7 +40,8 @@ namespace AzurePrOps.ReviewLogic.Services
                 WorkingDirectory = workingDirectory,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                UseShellExecute = false
+                UseShellExecute = false,
+                CreateNoWindow = true
             };
             using var process = Process.Start(psi)!;
             string output = process.StandardOutput.ReadToEnd();
@@ -54,7 +55,7 @@ namespace AzurePrOps.ReviewLogic.Services
             Directory.CreateDirectory(tempDir);
             string repoUrl = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_git/{repositoryId}";
             string authUrl = repoUrl.Insert(8, $"pat:{pat}@");
-            RunGit(Path.GetTempPath(), $"clone \"{authUrl}\" \"{tempDir}\"");
+            RunGit(Path.GetTempPath(), $"clone --depth 1 --no-checkout \"{authUrl}\" \"{tempDir}\"");
             return tempDir;
         }
 
@@ -170,7 +171,7 @@ namespace AzurePrOps.ReviewLogic.Services
                     var repoPath = CloneRepository(organization, project, repositoryId, personalAccessToken);
                     try
                     {
-                        RunGit(repoPath, $"fetch origin {targetBranch} {sourceBranch}");
+                        RunGit(repoPath, $"fetch --depth 1 origin {targetBranch} {sourceBranch}");
                         string baseSha = GetCommitSha(repoPath, baseCommit ?? baseCommitId ?? $"origin/{targetBranch}");
                         string sourceSha = GetCommitSha(repoPath, diffCommit ?? sourceCommitId ?? $"origin/{sourceBranch}");
                         var result = ComputeDiffWithGit(repoPath, baseSha, sourceSha);
@@ -259,7 +260,7 @@ namespace AzurePrOps.ReviewLogic.Services
                     var repoPath = CloneRepository(organization, project, repositoryId, personalAccessToken);
                     try
                     {
-                        RunGit(repoPath, $"fetch origin {targetBranch} {sourceBranch}");
+                        RunGit(repoPath, $"fetch --depth 1 origin {targetBranch} {sourceBranch}");
                         string baseSha = GetCommitSha(repoPath, baseCommit ?? baseCommitId ?? $"origin/{targetBranch}");
                         string sourceSha = GetCommitSha(repoPath, diffCommit ?? sourceCommitId ?? $"origin/{sourceBranch}");
                         var result = ComputeDiffWithGit(repoPath, baseSha, sourceSha);
