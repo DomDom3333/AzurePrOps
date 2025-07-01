@@ -90,6 +90,27 @@
                 Spacing="4">
                 <Button
                     Height="32"
+                    ToolTip.Tip="Previous Match"
+                    Width="32"
+                    x:Name="PART_PrevSearchButton">
+                    <PathIcon Data="M10,0 L0,8 L10,16 Z" Height="16" Width="10" />
+                </Button>
+                <Button
+                    Height="32"
+                    ToolTip.Tip="Next Match"
+                    Width="32"
+                    x:Name="PART_NextSearchButton">
+                    <PathIcon Data="M0,0 L10,8 L0,16 Z" Height="16" Width="10" />
+                </Button>
+                <Button
+                    Height="32"
+                    ToolTip.Tip="Open in IDE"
+                    Width="32"
+                    x:Name="PART_OpenInIDEButton">
+                    <PathIcon Data="M0,0 L16,0 L16,6 L14,6 L14,2 L2,2 L2,14 L6,14 L6,16 L0,16 Z M9,7 L16,0 M12,0 L16,4" Height="16" Width="16" />
+                </Button>
+                <Button
+                    Height="32"
                     ToolTip.Tip="Copy Selected Text"
                     Width="32"
                     x:Name="PART_CopyButton">

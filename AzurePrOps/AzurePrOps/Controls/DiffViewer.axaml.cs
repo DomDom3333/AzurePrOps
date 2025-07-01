@@ -11,6 +11,9 @@ using AvaloniaEdit;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Highlighting;
 using AvaloniaEdit.Rendering;
+using AvaloniaEdit.Folding;
+using Avalonia.VisualTree;
+using Avalonia.Input;
 using AzurePrOps.ReviewLogic.Models;
 using AzurePrOps.ReviewLogic.Services;
 using DiffPlex;
@@ -62,6 +65,13 @@ namespace AzurePrOps.Controls
         private List<int> _changedLines = new();
         private int _currentChangeIndex = -1;
         private bool _codeFoldingEnabled = false;
+        private ScrollViewer? _oldScrollViewer;
+        private ScrollViewer? _newScrollViewer;
+        private FoldingManager? _oldFoldingManager;
+        private FoldingManager? _newFoldingManager;
+        private bool _syncScrollInProgress = false;
+        private List<int> _searchMatches = new();
+        private int _currentSearchIndex = -1;
 
         static DiffViewer()
         {
@@ -140,13 +150,22 @@ namespace AzurePrOps.Controls
             var unifiedButton = this.FindControl<ToggleButton>("PART_UnifiedButton");
             var nextChangeButton = this.FindControl<Button>("PART_NextChangeButton");
             var prevChangeButton = this.FindControl<Button>("PART_PrevChangeButton");
+            var nextSearchButton = this.FindControl<Button>("PART_NextSearchButton");
+            var prevSearchButton = this.FindControl<Button>("PART_PrevSearchButton");
+            var openIdeButton = this.FindControl<Button>("PART_OpenInIDEButton");
             var codeFoldingButton = this.FindControl<Button>("PART_CodeFoldingButton");
             var copyButton = this.FindControl<Button>("PART_CopyButton");
 
             // Wire up events
             if (_searchBox != null)
             {
-                _searchBox.KeyUp += (_, __) => Render();
+                _searchBox.KeyUp += (_, e) =>
+                {
+                    if (e.Key == Key.Enter)
+                        NavigateToNextSearchResult();
+                    else
+                        Render();
+                };
                 _searchBox.PropertyChanged += (_, e) =>
                 {
                     if (e.Property.Name == nameof(TextBox.Text))
@@ -182,6 +201,21 @@ namespace AzurePrOps.Controls
                 prevChangeButton.Click += (_, __) => NavigateToPreviousChange();
             }
 
+            if (nextSearchButton != null)
+            {
+                nextSearchButton.Click += (_, __) => NavigateToNextSearchResult();
+            }
+
+            if (prevSearchButton != null)
+            {
+                prevSearchButton.Click += (_, __) => NavigateToPreviousSearchResult();
+            }
+
+            if (openIdeButton != null)
+            {
+                openIdeButton.Click += (_, __) => OpenInIDE();
+            }
+
             if (codeFoldingButton != null)
             {
                 codeFoldingButton.Click += (_, __) => ToggleCodeFolding();
@@ -213,6 +247,9 @@ namespace AzurePrOps.Controls
             // Set explicit height for better visibility
             _oldEditor.MinHeight = 250;
             _newEditor.MinHeight = 250;
+
+            // Hook up synchronized scrolling
+            SetupScrollSync();
 
             // Render initial diff
             Render();
@@ -479,6 +516,21 @@ namespace AzurePrOps.Controls
             _oldEditor.TextArea.TextView.BackgroundRenderers.Add(marginRenderer);
             _newEditor.TextArea.TextView.BackgroundRenderers.Add(marginRenderer);
 
+            // Search highlighting
+            _searchMatches.Clear();
+            _currentSearchIndex = -1;
+            string searchQuery = _searchBox?.Text ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(searchQuery))
+            {
+                var searchSource = _newEditor.Document.TextLength > 0 ? _newEditor.Text : _oldEditor.Text;
+                var results = SearchService?.Search(searchQuery, searchSource) ?? Enumerable.Empty<SearchResult>();
+                _searchMatches = results.Select(r => r.LineNumber).ToList();
+
+                var searchTransformer = new SearchHighlightTransformer(searchQuery);
+                _oldEditor.TextArea.TextView.LineTransformers.Add(searchTransformer);
+                _newEditor.TextArea.TextView.LineTransformers.Add(searchTransformer);
+            }
+
             // Metrics panel
             _metricsPanel?.Children.Clear();
             foreach (var m in MetricsService?.GetMetrics("<repo>") ?? Enumerable.Empty<MetricData>())
@@ -493,6 +545,11 @@ namespace AzurePrOps.Controls
                 Action = "Rendered diff",
                 FilePath = "<current>"
             });
+
+            if (_codeFoldingEnabled)
+                ApplyFolding();
+            else
+                ClearFolding();
         }
 
         private static DiffLineType Map(ChangeType ct) => ct switch
@@ -531,6 +588,58 @@ namespace AzurePrOps.Controls
             }
         }
 
+        private void NavigateToNextSearchResult()
+        {
+            if (_searchMatches.Count == 0 || _newEditor == null)
+                return;
+
+            _currentSearchIndex = (_currentSearchIndex + 1) % _searchMatches.Count;
+            int line = _searchMatches[_currentSearchIndex];
+
+            ScrollToLine(_newEditor, line);
+            if (ViewMode == DiffViewMode.SideBySide && _oldEditor != null)
+                ScrollToLine(_oldEditor, line);
+        }
+
+        private void NavigateToPreviousSearchResult()
+        {
+            if (_searchMatches.Count == 0 || _newEditor == null)
+                return;
+
+            _currentSearchIndex = (_currentSearchIndex - 1 + _searchMatches.Count) % _searchMatches.Count;
+            int line = _searchMatches[_currentSearchIndex];
+
+            ScrollToLine(_newEditor, line);
+            if (ViewMode == DiffViewMode.SideBySide && _oldEditor != null)
+                ScrollToLine(_oldEditor, line);
+        }
+
+        private void OpenInIDE()
+        {
+            if (DataContext is FileDiff diff)
+            {
+                int line = 1;
+                if (_newEditor?.IsFocused == true)
+                    line = _newEditor.TextArea.Caret.Line;
+                else if (_oldEditor?.IsFocused == true)
+                    line = _oldEditor.TextArea.Caret.Line;
+
+                try
+                {
+                    IDEService?.OpenInIDE(diff.FilePath, line);
+                }
+                catch (Exception ex)
+                {
+                    NotificationService?.Notify("ide-error", new Notification
+                    {
+                        Title = "IDE Error",
+                        Message = ex.Message,
+                        Type = NotificationType.Error
+                    });
+                }
+            }
+        }
+
         private void ScrollToLine(TextEditor editor, int lineNumber)
         {
             if (lineNumber <= 0 || lineNumber > editor.Document.LineCount) return;
@@ -557,40 +666,124 @@ namespace AzurePrOps.Controls
             }, null, 1500, System.Threading.Timeout.Infinite);
         }
 
+        private void SetupScrollSync()
+        {
+            _oldEditor?.ApplyTemplate();
+            _newEditor?.ApplyTemplate();
+
+            _oldScrollViewer = FindDescendant<ScrollViewer>(_oldEditor);
+            _newScrollViewer = FindDescendant<ScrollViewer>(_newEditor);
+
+            if (_oldScrollViewer != null && _newScrollViewer != null)
+            {
+                _oldScrollViewer.ScrollChanged += (_, __) => SyncScroll(_oldScrollViewer, _newScrollViewer);
+                _newScrollViewer.ScrollChanged += (_, __) => SyncScroll(_newScrollViewer, _oldScrollViewer);
+            }
+        }
+
+        private void SyncScroll(ScrollViewer source, ScrollViewer target)
+        {
+            if (_syncScrollInProgress)
+                return;
+
+            _syncScrollInProgress = true;
+            target.Offset = target.Offset.WithY(source.Offset.Y);
+            _syncScrollInProgress = false;
+        }
+
+        private static T? FindDescendant<T>(Visual? root) where T : class
+        {
+            return root?.FindDescendantOfType<T>();
+        }
+
         private void ToggleCodeFolding()
         {
             _codeFoldingEnabled = !_codeFoldingEnabled;
-
-    // Make sure we set the documents directly
-        if (!string.IsNullOrEmpty(OldText) && _oldEditor != null)
-        {
-            _oldEditor.Text = OldText;
-            _oldEditor.Document.Text = OldText;
-        }
-
-        if (!string.IsNullOrEmpty(NewText) && _newEditor != null)
-        {
-            _newEditor.Text = NewText;
-            _newEditor.Document.Text = NewText;
-        }
 
             if (_oldEditor != null && _newEditor != null)
             {
                 if (_codeFoldingEnabled)
                 {
-                    // Apply code folding to both editors
-                    var folds = FoldingService?.GetFoldRegions(OldText ?? "") ?? Enumerable.Empty<FoldRegion>();
-
-                    // TODO: Apply folding to the editors
-                    // This would require integrating with AvaloniaEdit's folding manager
+                    ApplyFolding();
                 }
                 else
                 {
-                    // Remove all folding
-                    // TODO: Remove folding from editors
+                    ClearFolding();
                 }
 
                 Render(); // Refresh the view
+            }
+        }
+
+        private void ApplyFolding()
+        {
+            if (_oldEditor is null || _newEditor is null)
+                return;
+
+            _oldFoldingManager ??= FoldingManager.Install(_oldEditor.TextArea);
+            _newFoldingManager ??= FoldingManager.Install(_newEditor.TextArea);
+
+            var folds = GetFoldRegionsAroundChanges();
+            var newFoldingsOld = new List<NewFolding>();
+            var newFoldingsNew = new List<NewFolding>();
+
+            foreach (var (start, end) in folds)
+            {
+                var startOld = _oldEditor.Document.GetLineByNumber(start).Offset;
+                var endOld = _oldEditor.Document.GetLineByNumber(end).EndOffset;
+                newFoldingsOld.Add(new NewFolding(startOld, endOld) { Name = "...", DefaultClosed = true });
+
+                var startNew = _newEditor.Document.GetLineByNumber(start).Offset;
+                var endNew = _newEditor.Document.GetLineByNumber(end).EndOffset;
+                newFoldingsNew.Add(new NewFolding(startNew, endNew) { Name = "...", DefaultClosed = true });
+            }
+
+            _oldFoldingManager.UpdateFoldings(newFoldingsOld, -1);
+            _newFoldingManager.UpdateFoldings(newFoldingsNew, -1);
+        }
+
+        private void ClearFolding()
+        {
+            _oldFoldingManager?.Clear();
+            _newFoldingManager?.Clear();
+        }
+
+        private IEnumerable<(int Start, int End)> GetFoldRegionsAroundChanges(int context = 2)
+        {
+            int lineCount = Math.Max(_oldEditor?.Document.LineCount ?? 0, _newEditor?.Document.LineCount ?? 0);
+            var folds = new List<(int, int)>();
+            int start = -1;
+
+            for (int i = 1; i <= lineCount; i++)
+            {
+                var type = _lineTypes.TryGetValue(i, out var t) ? t : DiffLineType.Unchanged;
+                bool changed = type != DiffLineType.Unchanged;
+
+                if (!changed)
+                {
+                    if (start == -1)
+                        start = i;
+                }
+                else
+                {
+                    if (start != -1)
+                    {
+                        folds.Add((start, i - 1));
+                        start = -1;
+                    }
+                }
+            }
+            if (start != -1)
+                folds.Add((start, lineCount));
+
+            foreach (var (s, e) in folds)
+            {
+                if (e - s + 1 <= context * 2)
+                    continue;
+                int fs = s + context;
+                int fe = e - context;
+                if (fs <= fe)
+                    yield return (fs, fe);
             }
         }
 
