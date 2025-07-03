@@ -124,6 +124,13 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _newCommentText, value);
     }
 
+    private bool _isLoadingDiffs;
+    public bool IsLoadingDiffs
+    {
+        get => _isLoadingDiffs;
+        set => this.RaiseAndSetIfChanged(ref _isLoadingDiffs, value);
+    }
+
     private PullRequestInfo? _selectedPullRequest;
     public PullRequestInfo? SelectedPullRequest
     {
@@ -240,6 +247,8 @@ public class MainWindowViewModel : ViewModelBase
             if (SelectedPullRequest == null)
                 return;
 
+            IsLoadingDiffs = true;
+
             try
             {
                 // First load comments - if this fails, we'll still try to show the window with diffs
@@ -283,6 +292,10 @@ public class MainWindowViewModel : ViewModelBase
             {
                 // If we get here, something really went wrong
                 await ShowErrorMessage($"Failed to open pull request details: {ex.Message}");
+            }
+            finally
+            {
+                IsLoadingDiffs = false;
             }
         });
 
