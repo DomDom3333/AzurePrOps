@@ -7,4 +7,4 @@ public record ConnectionSettings(
     string PersonalAccessToken,
     string ReviewerId,
     string EditorCommand = "code",
-    bool UseGitDiff = false);
+    bool UseGitDiff = true);

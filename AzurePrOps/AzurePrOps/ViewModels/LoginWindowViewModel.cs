@@ -83,7 +83,7 @@ public class LoginWindowViewModel : ViewModelBase
                     PersonalAccessToken: PersonalAccessToken,
                     ReviewerId: reviewerId,
                     EditorCommand: EditorDetector.GetDefaultEditor(),
-                    UseGitDiff: false));
+                    UseGitDiff: true));
 
                 var loginInfo = new LoginInfo(reviewerId, PersonalAccessToken);
 
