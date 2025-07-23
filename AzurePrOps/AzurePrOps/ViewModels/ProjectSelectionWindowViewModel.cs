@@ -72,7 +72,8 @@ public class ProjectSelectionWindowViewModel : ViewModelBase
                 SelectedRepository?.Id ?? string.Empty,
                 _personalAccessToken,
                 _reviewerId,
-                UseGitDiff: false);
+                EditorDetector.GetDefaultEditor(),
+                UseGitDiff: true);
             ConnectionSettingsStorage.Save(settings);
             ConnectionSettings = settings;
 

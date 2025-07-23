@@ -16,6 +16,7 @@ using Avalonia.VisualTree;
 using Avalonia.Input;
 using AzurePrOps.ReviewLogic.Models;
 using AzurePrOps.ReviewLogic.Services;
+using AzurePrOps.Models;
 using DiffPlex;
 using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
@@ -64,7 +65,9 @@ namespace AzurePrOps.Controls
         private Dictionary<int, DiffLineType> _lineTypes = new();
         private List<int> _changedLines = new();
         private int _currentChangeIndex = -1;
-        private bool _codeFoldingEnabled = false;
+        private bool _codeFoldingEnabled = true;
+        private bool _ignoreWhitespace = false;
+        private bool _wrapLines = false;
         private ScrollViewer? _oldScrollViewer;
         private ScrollViewer? _newScrollViewer;
         private FoldingManager? _oldFoldingManager;
@@ -107,7 +110,10 @@ namespace AzurePrOps.Controls
             PatchService       = new FilePatchService();
             FoldingService     = new IndentationFoldingService();
             SearchService      = new SimpleSearchService();
-            IDEService         = new IDEIntegrationService();
+            string editor = ConnectionSettingsStorage.TryLoad(out var s)
+                ? s!.EditorCommand
+                : EditorDetector.GetDefaultEditor();
+            IDEService = new IDEIntegrationService(editor);
 
             InitializeComponent();
             Loaded += (_, __) => SetupEditors();
@@ -153,8 +159,11 @@ namespace AzurePrOps.Controls
             var nextSearchButton = this.FindControl<Button>("PART_NextSearchButton");
             var prevSearchButton = this.FindControl<Button>("PART_PrevSearchButton");
             var openIdeButton = this.FindControl<Button>("PART_OpenInIDEButton");
-            var codeFoldingButton = this.FindControl<Button>("PART_CodeFoldingButton");
+            var codeFoldingButton = this.FindControl<ToggleButton>("PART_CodeFoldingButton");
             var copyButton = this.FindControl<Button>("PART_CopyButton");
+            var ignoreWhitespaceButton = this.FindControl<ToggleButton>("PART_IgnoreWhitespaceButton");
+            var wrapLinesButton = this.FindControl<ToggleButton>("PART_WrapLinesButton");
+            var copyDiffButton = this.FindControl<Button>("PART_CopyDiffButton");
 
             // Wire up events
             if (_searchBox != null)
@@ -218,12 +227,42 @@ namespace AzurePrOps.Controls
 
             if (codeFoldingButton != null)
             {
-                codeFoldingButton.Click += (_, __) => ToggleCodeFolding();
+                codeFoldingButton.IsCheckedChanged += (_, __) =>
+                {
+                    _codeFoldingEnabled = codeFoldingButton.IsChecked == true;
+                    Render();
+                };
             }
 
             if (copyButton != null)
             {
                 copyButton.Click += (_, __) => CopySelectedText();
+            }
+
+            if (ignoreWhitespaceButton != null)
+            {
+                ignoreWhitespaceButton.IsCheckedChanged += (_, __) =>
+                {
+                    _ignoreWhitespace = ignoreWhitespaceButton.IsChecked == true;
+                    Render();
+                };
+            }
+
+            if (wrapLinesButton != null)
+            {
+                wrapLinesButton.IsCheckedChanged += (_, __) =>
+                {
+                    _wrapLines = wrapLinesButton.IsChecked == true;
+                    if (_oldEditor != null)
+                        _oldEditor.WordWrap = _wrapLines;
+                    if (_newEditor != null)
+                        _newEditor.WordWrap = _wrapLines;
+                };
+            }
+
+            if (copyDiffButton != null)
+            {
+                copyDiffButton.Click += (_, __) => CopyDiff();
             }
         }
 
@@ -393,7 +432,7 @@ namespace AzurePrOps.Controls
             
             // Normal case: Build diff model
             var model = new InlineDiffBuilder(new Differ())
-                            .BuildDiffModel(oldTextForDiff, newTextForDiff);
+                            .BuildDiffModel(oldTextForDiff, newTextForDiff, _ignoreWhitespace);
 
             // Check if texts are identical - compare actual content instead of just length
             bool textsAreIdentical = string.Equals(oldTextForDiff, newTextForDiff, StringComparison.Ordinal);
@@ -696,24 +735,6 @@ namespace AzurePrOps.Controls
             return root?.FindDescendantOfType<T>();
         }
 
-        private void ToggleCodeFolding()
-        {
-            _codeFoldingEnabled = !_codeFoldingEnabled;
-
-            if (_oldEditor != null && _newEditor != null)
-            {
-                if (_codeFoldingEnabled)
-                {
-                    ApplyFolding();
-                }
-                else
-                {
-                    ClearFolding();
-                }
-
-                Render(); // Refresh the view
-            }
-        }
 
         private void ApplyFolding()
         {
@@ -823,6 +844,32 @@ namespace AzurePrOps.Controls
                         Type = NotificationType.Error
                     });
                 }
+            }
+        }
+
+        private void CopyDiff()
+        {
+            if (DataContext is not FileDiff diff || string.IsNullOrEmpty(diff.Diff))
+                return;
+
+            try
+            {
+                // Application.Current!.Clipboard?.SetTextAsync(diff.Diff);
+                NotificationService?.Notify("clipboard", new Notification
+                {
+                    Title = "Copied Diff",
+                    Message = $"{diff.Diff.Length} characters copied",
+                    Type = NotificationType.Success
+                });
+            }
+            catch (Exception ex)
+            {
+                NotificationService?.Notify("error", new Notification
+                {
+                    Title = "Clipboard Error",
+                    Message = ex.Message,
+                    Type = NotificationType.Error
+                });
             }
         }
     }

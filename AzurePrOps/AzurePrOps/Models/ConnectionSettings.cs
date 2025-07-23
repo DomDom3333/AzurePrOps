@@ -6,4 +6,5 @@ public record ConnectionSettings(
     string Repository,
     string PersonalAccessToken,
     string ReviewerId,
-    bool UseGitDiff = false);
+    string EditorCommand = "code",
+    bool UseGitDiff = true);

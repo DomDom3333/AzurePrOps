@@ -68,12 +68,26 @@ public class SettingsWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _useGitDiff, value);
     }
 
+    public ObservableCollection<string> Editors { get; } = new();
+
+    private string _selectedEditor = string.Empty;
+    public string SelectedEditor
+    {
+        get => _selectedEditor;
+        set => this.RaiseAndSetIfChanged(ref _selectedEditor, value);
+    }
+
     public SettingsWindowViewModel(ConnectionSettings currentSettings)
     {
         _initialSettings = currentSettings;
         _personalAccessToken = currentSettings.PersonalAccessToken;
         _reviewerId = currentSettings.ReviewerId;
         _useGitDiff = currentSettings.UseGitDiff;
+        foreach (var e in EditorDetector.GetAvailableEditors())
+            Editors.Add(e);
+        _selectedEditor = string.IsNullOrWhiteSpace(currentSettings.EditorCommand)
+            ? EditorDetector.GetDefaultEditor()
+            : currentSettings.EditorCommand;
 
         SaveCommand = ReactiveCommand.Create(() =>
         {
@@ -83,6 +97,7 @@ public class SettingsWindowViewModel : ViewModelBase
                 SelectedRepository?.Id ?? string.Empty,
                 _personalAccessToken,
                 _reviewerId,
+                SelectedEditor,
                 UseGitDiff);
             ConnectionSettingsStorage.Save(settings);
             ConnectionSettings = settings;
