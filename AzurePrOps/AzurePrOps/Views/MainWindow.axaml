@@ -81,7 +81,10 @@
             </ListBox>
             <Button Grid.Row="4" Content="Load Comments" Command="{Binding LoadCommentsCommand}" Width="120"/>
             <Button Grid.Row="5" Content="Approve" Command="{Binding ApproveCommand}" Width="120"/>
-            <Button Grid.Row="6" Content="View Details" Command="{Binding ViewDetailsCommand}" Width="120"/>
+            <StackPanel Grid.Row="6" Orientation="Horizontal" Spacing="4">
+                <Button Content="View Details" Command="{Binding ViewDetailsCommand}" Width="120"/>
+                <ProgressBar Width="120" IsIndeterminate="True" IsVisible="{Binding IsLoadingDiffs}"/>
+            </StackPanel>
             <StackPanel Grid.Row="7" Orientation="Horizontal" Spacing="4">
                 <TextBox Width="300" Text="{Binding NewCommentText}"/>
                 <Button Content="Post" Command="{Binding PostCommentCommand}"/>

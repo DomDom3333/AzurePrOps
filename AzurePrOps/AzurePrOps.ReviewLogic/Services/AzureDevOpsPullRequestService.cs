@@ -51,12 +51,24 @@ namespace AzurePrOps.ReviewLogic.Services
 
         private string CloneRepository(string organization, string project, string repositoryId, string pat)
         {
-            string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
-            Directory.CreateDirectory(tempDir);
+            string cacheRoot = Path.Combine(Path.GetTempPath(), "AzurePrOpsRepoCache");
+            string repoPath = Path.Combine(cacheRoot, $"{organization}_{project}_{repositoryId}");
+
             string repoUrl = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_git/{repositoryId}";
             string authUrl = repoUrl.Insert(8, $"pat:{pat}@");
-            RunGit(Path.GetTempPath(), $"clone --depth 1 --no-checkout \"{authUrl}\" \"{tempDir}\"");
-            return tempDir;
+
+            if (!Directory.Exists(repoPath) || !Directory.Exists(Path.Combine(repoPath, ".git")))
+            {
+                Directory.CreateDirectory(repoPath);
+                RunGit(Path.GetTempPath(), $"clone --filter=blob:none --depth 1 --no-checkout \"{authUrl}\" \"{repoPath}\"");
+            }
+            else
+            {
+                // Update cached repository with latest commits
+                RunGit(repoPath, "fetch --filter=blob:none --depth 1 origin");
+            }
+
+            return repoPath;
         }
 
         private static string GetCommitSha(string repoPath, string refName)
@@ -169,18 +181,11 @@ namespace AzurePrOps.ReviewLogic.Services
                 if (UseGitClient)
                 {
                     var repoPath = CloneRepository(organization, project, repositoryId, personalAccessToken);
-                    try
-                    {
-                        RunGit(repoPath, $"fetch --depth 1 origin {targetBranch} {sourceBranch}");
-                        string baseSha = GetCommitSha(repoPath, baseCommit ?? baseCommitId ?? $"origin/{targetBranch}");
-                        string sourceSha = GetCommitSha(repoPath, diffCommit ?? sourceCommitId ?? $"origin/{sourceBranch}");
-                        var result = ComputeDiffWithGit(repoPath, baseSha, sourceSha);
-                        return await Task.FromResult(result);
-                    }
-                    finally
-                    {
-                        try { Directory.Delete(repoPath, true); } catch { }
-                    }
+                    RunGit(repoPath, $"fetch --filter=blob:none --depth 1 origin {targetBranch} {sourceBranch}");
+                    string baseSha = GetCommitSha(repoPath, baseCommit ?? baseCommitId ?? $"origin/{targetBranch}");
+                    string sourceSha = GetCommitSha(repoPath, diffCommit ?? sourceCommitId ?? $"origin/{sourceBranch}");
+                    var result = ComputeDiffWithGit(repoPath, baseSha, sourceSha);
+                    return await Task.FromResult(result);
                 }
                 else
                 {
@@ -258,18 +263,11 @@ namespace AzurePrOps.ReviewLogic.Services
                 if (UseGitClient)
                 {
                     var repoPath = CloneRepository(organization, project, repositoryId, personalAccessToken);
-                    try
-                    {
-                        RunGit(repoPath, $"fetch --depth 1 origin {targetBranch} {sourceBranch}");
-                        string baseSha = GetCommitSha(repoPath, baseCommit ?? baseCommitId ?? $"origin/{targetBranch}");
-                        string sourceSha = GetCommitSha(repoPath, diffCommit ?? sourceCommitId ?? $"origin/{sourceBranch}");
-                        var result = ComputeDiffWithGit(repoPath, baseSha, sourceSha);
-                        return await Task.FromResult(result);
-                    }
-                    finally
-                    {
-                        try { Directory.Delete(repoPath, true); } catch { }
-                    }
+                    RunGit(repoPath, $"fetch --filter=blob:none --depth 1 origin {targetBranch} {sourceBranch}");
+                    string baseSha = GetCommitSha(repoPath, baseCommit ?? baseCommitId ?? $"origin/{targetBranch}");
+                    string sourceSha = GetCommitSha(repoPath, diffCommit ?? sourceCommitId ?? $"origin/{sourceBranch}");
+                    var result = ComputeDiffWithGit(repoPath, baseSha, sourceSha);
+                    return await Task.FromResult(result);
                 }
                 else
                 {
