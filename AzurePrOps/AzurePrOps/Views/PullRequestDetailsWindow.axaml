@@ -93,13 +93,13 @@
                             HorizontalAlignment="Stretch"
                             HorizontalContentAlignment="Stretch"
                             IsExpanded="True"
-                            Margin="0,0,0,4">
+                            Margin="0,0,0,20">
                             <StackPanel>
                                 <!--  Display the diff in a side by side layout  -->
-                                <Grid HorizontalAlignment="Stretch" MinHeight="300">
+                                <Grid HorizontalAlignment="Stretch" MinHeight="600">
                                     <controls:DiffViewer
                                         HorizontalAlignment="Stretch"
-                                        MinHeight="300"
+                                        MinHeight="600"
                                         NewText="{Binding NewText}"
                                         OldText="{Binding OldText}"
                                         VerticalAlignment="Stretch"

@@ -73,7 +73,7 @@ public class ProjectSelectionWindowViewModel : ViewModelBase
                 _personalAccessToken,
                 _reviewerId,
                 EditorDetector.GetDefaultEditor(),
-                UseGitDiff: false);
+                UseGitDiff: true);
             ConnectionSettingsStorage.Save(settings);
             ConnectionSettings = settings;
 
