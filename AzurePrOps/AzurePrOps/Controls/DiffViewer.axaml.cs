@@ -387,6 +387,11 @@ namespace AzurePrOps.Controls
                     _newEditor.TextArea.TextView.BackgroundRenderers.Add(marginRendererNewEditor);
                 }
 
+                if (_codeFoldingEnabled)
+                    ApplyFolding();
+                else
+                    ClearFolding();
+
                 // Continue rendering with our manual line types
                 return;
             }
@@ -428,6 +433,11 @@ namespace AzurePrOps.Controls
                     var marginRendererOldEditor = new LineStatusMarginRenderer(_lineTypes);
                     _oldEditor.TextArea.TextView.BackgroundRenderers.Add(marginRendererOldEditor);
                 }
+
+                if (_codeFoldingEnabled)
+                    ApplyFolding();
+                else
+                    ClearFolding();
 
                 // Continue rendering with our manual line types
                 return;
