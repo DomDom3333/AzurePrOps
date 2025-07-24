@@ -303,6 +303,9 @@ namespace AzurePrOps.Controls
                 return;
             }
 
+            // Ensure folding managers are recreated for the new document
+            ResetFoldingManagers();
+
             // Load texts
             _logger.LogDebug("DiffViewer.Render(): OldText length={OldLength}, NewText length={NewLength}", OldText?.Length ?? 0, NewText?.Length ?? 0);
 
@@ -750,13 +753,35 @@ namespace AzurePrOps.Controls
 
             foreach (var (start, end) in folds)
             {
-                var startOld = _oldEditor.Document.GetLineByNumber(start).Offset;
-                var endOld = _oldEditor.Document.GetLineByNumber(end).EndOffset;
-                newFoldingsOld.Add(new NewFolding(startOld, endOld) { Name = "...", DefaultClosed = true });
+                // Skip folds that start beyond the document length for either editor
+                if (start > _oldEditor.Document.LineCount && start > _newEditor.Document.LineCount)
+                    continue;
 
-                var startNew = _newEditor.Document.GetLineByNumber(start).Offset;
-                var endNew = _newEditor.Document.GetLineByNumber(end).EndOffset;
-                newFoldingsNew.Add(new NewFolding(startNew, endNew) { Name = "...", DefaultClosed = true });
+                // Clamp end line numbers to each document
+                int endOldLine = Math.Min(end, _oldEditor.Document.LineCount);
+                int endNewLine = Math.Min(end, _newEditor.Document.LineCount);
+
+                if (start <= _oldEditor.Document.LineCount && start <= endOldLine)
+                {
+                    var startOld = _oldEditor.Document.GetLineByNumber(start).Offset;
+                    var endOld = _oldEditor.Document.GetLineByNumber(endOldLine).EndOffset;
+                    newFoldingsOld.Add(new NewFolding(startOld, endOld)
+                    {
+                        Name = "...",
+                        DefaultClosed = true
+                    });
+                }
+
+                if (start <= _newEditor.Document.LineCount && start <= endNewLine)
+                {
+                    var startNew = _newEditor.Document.GetLineByNumber(start).Offset;
+                    var endNew = _newEditor.Document.GetLineByNumber(endNewLine).EndOffset;
+                    newFoldingsNew.Add(new NewFolding(startNew, endNew)
+                    {
+                        Name = "...",
+                        DefaultClosed = true
+                    });
+                }
             }
 
             _oldFoldingManager.UpdateFoldings(newFoldingsOld, -1);
@@ -767,6 +792,23 @@ namespace AzurePrOps.Controls
         {
             _oldFoldingManager?.Clear();
             _newFoldingManager?.Clear();
+        }
+
+        /// <summary>
+        /// Uninstalls folding managers so they can be recreated for a new document.
+        /// </summary>
+        private void ResetFoldingManagers()
+        {
+            if (_oldFoldingManager != null)
+            {
+                FoldingManager.Uninstall(_oldFoldingManager);
+                _oldFoldingManager = null;
+            }
+            if (_newFoldingManager != null)
+            {
+                FoldingManager.Uninstall(_newFoldingManager);
+                _newFoldingManager = null;
+            }
         }
 
         private IEnumerable<(int Start, int End)> GetFoldRegionsAroundChanges(int context = 2)
