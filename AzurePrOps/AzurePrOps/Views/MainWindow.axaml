@@ -55,7 +55,10 @@
             <TextBox Width="120" Watermark="View Name" Text="{Binding NewViewName}"/>
             <Button Content="Save" Command="{Binding SaveViewCommand}" Width="60"/>
             </StackPanel>
-            <ListBox Grid.Row="3" ItemsSource="{Binding PullRequests}" SelectedItem="{Binding SelectedPullRequest}">
+            <ListBox Grid.Row="3"
+                     ItemsSource="{Binding PullRequests}"
+                     SelectedItem="{Binding SelectedPullRequest}"
+                     DoubleTapped="PullRequests_DoubleTapped">
             <ListBox.ItemTemplate>
                 <DataTemplate>
                     <Border Padding="4"
