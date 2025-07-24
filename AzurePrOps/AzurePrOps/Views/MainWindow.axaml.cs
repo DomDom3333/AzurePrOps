@@ -1,6 +1,8 @@
 using System;
+using Avalonia.Interactivity;
 using Avalonia.Controls;
 using AzurePrOps.ViewModels;
+using AzurePrOps.AzureConnection.Models;
 
 namespace AzurePrOps.Views;
 
@@ -18,5 +20,18 @@ public partial class MainWindow : Window
         {
             vm.RefreshCommand.Execute().Subscribe();
         }
+    }
+
+    private void PullRequests_DoubleTapped(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel vm)
+            return;
+
+        if (sender is ListBox listBox && listBox.SelectedItem is PullRequestInfo pr)
+        {
+            vm.SelectedPullRequest = pr;
+        }
+
+        vm.ViewDetailsCommand.Execute().Subscribe();
     }
 }
