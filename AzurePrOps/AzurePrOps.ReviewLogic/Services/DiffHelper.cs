@@ -45,7 +45,13 @@ namespace AzurePrOps.ReviewLogic.Services
             };
             using var process = Process.Start(psi);
             string diff = process!.StandardOutput.ReadToEnd();
+            string err  = process.StandardError.ReadToEnd();
             process.WaitForExit();
+
+            if (!string.IsNullOrWhiteSpace(err))
+            {
+                diff += Environment.NewLine + err;
+            }
 
             Directory.Delete(tempDir, true);
 

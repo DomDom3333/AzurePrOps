@@ -43,9 +43,18 @@ namespace AzurePrOps.ReviewLogic.Services
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+
             using var process = Process.Start(psi)!;
             string output = process.StandardOutput.ReadToEnd();
+            string error  = process.StandardError.ReadToEnd();
             process.WaitForExit();
+
+            if (!string.IsNullOrWhiteSpace(error))
+            {
+                // Include stderr content in the output for better diagnostics
+                output += Environment.NewLine + error;
+            }
+
             return output;
         }
 
