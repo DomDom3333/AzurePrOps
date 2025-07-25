@@ -1,277 +1,576 @@
 <UserControl
-    Height="600"
-    HorizontalAlignment="Stretch"
-    MinHeight="400"
-    VerticalAlignment="Top"
     x:Class="AzurePrOps.Controls.DiffViewer"
     xmlns="https://github.com/avaloniaui"
     xmlns:avaloniaEdit="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
     xmlns:c="using:AzurePrOps.Controls"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <UserControl.Resources>
+        <!--  Modern unified color palette with better contrast  -->
+        <LinearGradientBrush EndPoint="0,1" StartPoint="0,0" x:Key="ToolbarGradient">
+            <GradientStop Color="#FFFFFF" Offset="0" />
+            <GradientStop Color="#F8F9FA" Offset="1" />
+        </LinearGradientBrush>
+
+        <!--  Primary blue palette  -->
+        <SolidColorBrush Color="#0969DA" x:Key="AccentBrush" />
+        <SolidColorBrush Color="#0860CA" x:Key="AccentHoverBrush" />
+        <SolidColorBrush Color="#DDF4FF" x:Key="AccentLightBrush" />
+
+        <!--  Semantic colors with better contrast  -->
+        <SolidColorBrush Color="#1A7F37" x:Key="SuccessBrush" />
+        <SolidColorBrush Color="#DCFFE4" x:Key="SuccessLightBrush" />
+        <SolidColorBrush Color="#CF222E" x:Key="DangerBrush" />
+        <SolidColorBrush Color="#FFEBE9" x:Key="DangerLightBrush" />
+        <SolidColorBrush Color="#BF8700" x:Key="WarningBrush" />
+        <SolidColorBrush Color="#FFF8C5" x:Key="WarningLightBrush" />
+
+        <!--  Neutral grays with proper contrast ratios  -->
+        <SolidColorBrush Color="#D0D7DE" x:Key="BorderBrush" />
+        <SolidColorBrush Color="#FFFFFF" x:Key="SurfaceBrush" />
+        <SolidColorBrush Color="#F6F8FA" x:Key="BackgroundBrush" />
+        <SolidColorBrush Color="#656D76" x:Key="MutedBrush" />
+        <SolidColorBrush Color="#24292F" x:Key="TextPrimaryBrush" />
+        <SolidColorBrush Color="#656D76" x:Key="TextSecondaryBrush" />
+
+        <!--  Interactive states  -->
+        <SolidColorBrush Color="#F3F4F6" x:Key="HoverBrush" />
+        <SolidColorBrush Color="#E7F3FF" x:Key="SelectedBrush" />
+        <SolidColorBrush Color="#0969DA" x:Key="FocusBrush" />
+
+        <!--  Icon colors for better contrast  -->
+        <SolidColorBrush Color="#24292F" x:Key="IconBrush" />
+        <SolidColorBrush Color="#0969DA" x:Key="IconHoverBrush" />
+        <SolidColorBrush Color="#FFFFFF" x:Key="IconSelectedBrush" />
+    </UserControl.Resources>
+
     <UserControl.Styles>
-        <Style Selector="ToggleButton.viewModeButton">
-            <Setter Property="Width" Value="32" />
-            <Setter Property="Height" Value="32" />
+        <!--  Modern button styles with consistent colors and better icon contrast  -->
+        <Style Selector="Button.modern">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="8,6" />
             <Setter Property="Margin" Value="2" />
-            <Setter Property="HorizontalContentAlignment" Value="Center" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
-            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Duration="0:0:0.15" Property="Opacity" />
+                    <BrushTransition Duration="0:0:0.15" Property="Background" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <Style Selector="Button.modern:pointerover">
+            <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style Selector="Button.modern:pressed">
+            <Setter Property="Background" Value="{StaticResource SelectedBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style Selector="Button.primary">
+            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style Selector="Button.primary:pointerover">
+            <Setter Property="Background" Value="{StaticResource AccentHoverBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource AccentHoverBrush}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+
+        <Style Selector="ToggleButton.toolbar">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Margin" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontWeight" Value="Medium" />
+        </Style>
+
+        <Style Selector="ToggleButton.toolbar:pointerover">
+            <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style Selector="ToggleButton.toolbar:checked">
+            <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+        </Style>
+
+        <!--  PathIcon and TextBlock styles for better contrast  -->
+        <Style Selector="ToggleButton.toolbar PathIcon">
+            <Setter Property="Foreground" Value="{StaticResource IconBrush}" />
+        </Style>
+
+        <Style Selector="ToggleButton.toolbar:pointerover PathIcon">
+            <Setter Property="Foreground" Value="{StaticResource IconHoverBrush}" />
+        </Style>
+
+        <Style Selector="ToggleButton.toolbar:checked PathIcon">
+            <Setter Property="Foreground" Value="{StaticResource IconSelectedBrush}" />
+        </Style>
+
+        <Style Selector="ToggleButton.toolbar TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style Selector="ToggleButton.toolbar:pointerover TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style Selector="ToggleButton.toolbar:checked TextBlock">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+
+        <Style Selector="Button.modern PathIcon">
+            <Setter Property="Foreground" Value="{StaticResource IconBrush}" />
+        </Style>
+
+        <Style Selector="Button.modern:pointerover PathIcon">
+            <Setter Property="Foreground" Value="{StaticResource IconHoverBrush}" />
+        </Style>
+
+        <Style Selector="Button.modern TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style Selector="Button.modern:pointerover TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style Selector="Button.primary PathIcon">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+
+        <Style Selector="Button.primary TextBlock">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+
+        <Style Selector="TextBox.search">
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style Selector="TextBox.search:focus">
+            <Setter Property="BorderBrush" Value="{StaticResource FocusBrush}" />
+            <Setter Property="BorderThickness" Value="2" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        </Style>
+
+        <!--  Enhanced TextEditor styles for proper diff visualization  -->
+        <Style Selector="avaloniaEdit|TextEditor">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="LineNumbersForeground" Value="{StaticResource TextSecondaryBrush}" />
+        </Style>
+
+        <Style Selector="avaloniaEdit|TextEditor:focus">
+            <Setter Property="BorderBrush" Value="{StaticResource FocusBrush}" />
         </Style>
     </UserControl.Styles>
-    <Grid
-        ColumnDefinitions="*,5,*,Auto"
-        MinHeight="400"
-        RowDefinitions="Auto,*,Auto,Auto">
-        <!--  Toolbar  -->
-        <Grid
-            ColumnDefinitions="Auto,*,Auto"
-            Grid.ColumnSpan="4"
-            Grid.Row="0"
-            Margin="0,0,0,4">
-            <StackPanel
-                Grid.Column="0"
-                Orientation="Horizontal"
-                Spacing="4">
-                <ToggleButton
-                    Classes="viewModeButton"
-                    IsChecked="True"
-                    ToolTip.Tip="Side-by-Side View"
-                    x:Name="PART_SideBySideButton">
-                    <PathIcon
-                        Data="M0,0 L8,0 L8,16 L0,16 Z M10,0 L18,0 L18,16 L10,16 Z"
-                        Height="16"
-                        Width="18" />
-                </ToggleButton>
-                <ToggleButton
-                    Classes="viewModeButton"
-                    ToolTip.Tip="Unified View"
-                    x:Name="PART_UnifiedButton">
-                    <PathIcon
-                        Data="M0,0 L18,0 L18,16 L0,16 Z"
-                        Height="16"
-                        Width="18" />
-                </ToggleButton>
-                <Separator
-                    Classes="vertical"
-                    Height="24"
-                    Margin="4,0" />
-                <Button
-                    Height="32"
-                    ToolTip.Tip="Next Change"
-                    Width="32"
-                    x:Name="PART_NextChangeButton">
-                    <PathIcon
-                        Data="M0,0 L10,8 L0,16 Z"
-                        Height="16"
-                        Width="10" />
-                </Button>
-                <Button
-                    Height="32"
-                    ToolTip.Tip="Previous Change"
-                    Width="32"
-                    x:Name="PART_PrevChangeButton">
-                    <PathIcon
-                        Data="M10,0 L0,8 L10,16 Z"
-                        Height="16"
-                        Width="10" />
-                </Button>
-            </StackPanel>
 
-            <!--  Search  -->
-            <TextBox
-                Grid.Column="1"
-                Margin="8,0"
-                Watermark="Search..."
-                x:Name="PART_SearchBox" />
+    <Border
+        Background="{StaticResource SurfaceBrush}"
+        BorderBrush="{StaticResource BorderBrush}"
+        BorderThickness="1"
+        CornerRadius="8">
+        <Grid RowDefinitions="Auto,Auto,*,Auto">
 
-            <StackPanel
-                Grid.Column="2"
-                Orientation="Horizontal"
-                Spacing="4">
-                <Button
-                    Height="32"
-                    ToolTip.Tip="Previous Match"
-                    Width="32"
-                    x:Name="PART_PrevSearchButton">
-                    <PathIcon Data="M10,0 L0,8 L10,16 Z" Height="16" Width="10" />
-                </Button>
-                <Button
-                    Height="32"
-                    ToolTip.Tip="Next Match"
-                    Width="32"
-                    x:Name="PART_NextSearchButton">
-                    <PathIcon Data="M0,0 L10,8 L0,16 Z" Height="16" Width="10" />
-                </Button>
-                <Button
-                    Height="32"
-                    ToolTip.Tip="Open in IDE"
-                    Width="32"
-                    x:Name="PART_OpenInIDEButton">
-                    <PathIcon Data="M0,0 L16,0 L16,6 L14,6 L14,2 L2,2 L2,14 L6,14 L6,16 L0,16 Z M9,7 L16,0 M12,0 L16,4" Height="16" Width="16" />
-                </Button>
-                <Button
-                    Height="32"
-                    ToolTip.Tip="Copy Selected Text"
-                    Width="32"
-                    x:Name="PART_CopyButton">
-                    <PathIcon
-                        Data="M2,2 L12,2 L12,14 L2,14 Z M4,0 L14,0 L14,12 L16,12 L16,16 L6,16 L6,14 L4,14 Z"
-                        Height="16"
-                        Width="16" />
-                </Button>
-                <ToggleButton
-                    Classes="viewModeButton"
-                    Height="32"
-                    IsChecked="True"
-                    ToolTip.Tip="Show Only Changes"
-                    Width="32"
-                    x:Name="PART_CodeFoldingButton">
-                    <PathIcon
-                        Data="M0,0 L16,0 L16,4 L0,4 Z M0,6 L16,6 L16,10 L0,10 Z M0,12 L16,12 L16,16 L0,16 Z"
-                        Height="16"
-                        Width="16" />
-                </ToggleButton>
-                <ToggleButton
-                    Classes="viewModeButton"
-                    ToolTip.Tip="Ignore Whitespace"
-                    x:Name="PART_IgnoreWhitespaceButton">
-                    <PathIcon Data="M0,0 L16,0 L16,16 L0,16 Z M4,4 L12,12 M12,4 L4,12" Height="16" Width="16" />
-                </ToggleButton>
-                <ToggleButton
-                    Classes="viewModeButton"
-                    ToolTip.Tip="Wrap Lines"
-                    x:Name="PART_WrapLinesButton">
-                    <PathIcon Data="M0,4 L12,4 M0,8 L12,8 M0,12 L12,12 M12,8 L16,12 L12,16" Height="16" Width="16" />
-                </ToggleButton>
-                <Button
-                    Height="32"
-                    ToolTip.Tip="Copy Diff"
-                    Width="32"
-                    x:Name="PART_CopyDiffButton">
-                    <PathIcon Data="M2,2 L12,2 L12,14 L2,14 Z M14,4 L16,4 L16,16 L6,16 L6,14" Height="16" Width="16" />
-                </Button>
-            </StackPanel>
-        </Grid>
-        <!--  Metrics  -->
-        <StackPanel
-            Grid.ColumnSpan="4"
-            Grid.Row="1"
-            Margin="0,0,0,4"
-            Orientation="Horizontal"
-            x:Name="PART_MetricsPanel" />
-        <!--  Side-by-side Diff  -->
-        <Border
-            BorderBrush="#FFDDDDDD"
-            BorderThickness="1"
-            CornerRadius="4"
-            Grid.Column="0"
-            Grid.Row="2">
-            <Grid RowDefinitions="Auto,*">
+            <!--  Enhanced Toolbar  -->
+            <Border
+                Background="{StaticResource ToolbarGradient}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                CornerRadius="8,8,0,0"
+                Grid.Row="0"
+                Padding="16,12">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+
+                    <!--  View Mode & Navigation  -->
+                    <StackPanel
+                        Grid.Column="0"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="2">
+                            <ToggleButton
+                                Classes="toolbar"
+                                IsChecked="True"
+                                ToolTip.Tip="Side-by-Side View"
+                                x:Name="PART_SideBySideButton">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <PathIcon
+                                        Data="M0,0 L7,0 L7,14 L0,14 Z M9,0 L16,14 L16,14 L9,14 Z"
+                                        Height="14"
+                                        Width="16" />
+                                    <TextBlock FontSize="12" Text="Split" />
+                                </StackPanel>
+                            </ToggleButton>
+                            <ToggleButton
+                                Classes="toolbar"
+                                ToolTip.Tip="Unified View"
+                                x:Name="PART_UnifiedButton">
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <PathIcon
+                                        Data="M0,0 L16,0 L16,14 L0,14 Z"
+                                        Height="14"
+                                        Width="16" />
+                                    <TextBlock FontSize="12" Text="Unified" />
+                                </StackPanel>
+                            </ToggleButton>
+                        </StackPanel>
+
+                        <Border
+                            Background="{StaticResource BorderBrush}"
+                            Height="24"
+                            Width="1" />
+
+                        <StackPanel Orientation="Horizontal" Spacing="2">
+                            <Button
+                                Classes="modern"
+                                ToolTip.Tip="Previous Change"
+                                x:Name="PART_PrevChangeButton">
+                                <PathIcon
+                                    Data="M8,0 L0,6 L8,12 Z"
+                                    Height="12"
+                                    Width="8" />
+                            </Button>
+                            <Button
+                                Classes="modern"
+                                ToolTip.Tip="Next Change"
+                                x:Name="PART_NextChangeButton">
+                                <PathIcon
+                                    Data="M0,0 L8,6 L0,12 Z"
+                                    Height="12"
+                                    Width="8" />
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!--  Search  -->
+                    <Border
+                        Grid.Column="1"
+                        HorizontalAlignment="Center"
+                        MaxWidth="300">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox
+                                Classes="search"
+                                Grid.Column="0"
+                                Watermark="Search in diff..."
+                                x:Name="PART_SearchBox" />
+                            <StackPanel
+                                Grid.Column="1"
+                                Margin="4,0,0,0"
+                                Orientation="Horizontal"
+                                Spacing="1">
+                                <Button
+                                    Classes="modern"
+                                    ToolTip.Tip="Previous Match"
+                                    x:Name="PART_PrevSearchButton">
+                                    <PathIcon
+                                        Data="M8,0 L0,6 L8,12 Z"
+                                        Height="10"
+                                        Width="6" />
+                                </Button>
+                                <Button
+                                    Classes="modern"
+                                    ToolTip.Tip="Next Match"
+                                    x:Name="PART_NextSearchButton">
+                                    <PathIcon
+                                        Data="M0,0 L8,6 L0,12 Z"
+                                        Height="10"
+                                        Width="6" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!--  Actions  -->
+                    <StackPanel
+                        Grid.Column="2"
+                        Orientation="Horizontal"
+                        Spacing="4">
+                        <ToggleButton
+                            Classes="toolbar"
+                            IsChecked="True"
+                            ToolTip.Tip="Show Only Changes"
+                            x:Name="PART_CodeFoldingButton">
+                            <PathIcon
+                                Data="M2,4 L14,4 M2,8 L14,8 M2,12 L14,12"
+                                Height="16"
+                                Width="16" />
+                        </ToggleButton>
+                        <ToggleButton
+                            Classes="toolbar"
+                            ToolTip.Tip="Ignore Whitespace"
+                            x:Name="PART_IgnoreWhitespaceButton">
+                            <PathIcon
+                                Data="M2,2 L14,14 M14,2 L2,14"
+                                Height="16"
+                                Width="16" />
+                        </ToggleButton>
+                        <ToggleButton
+                            Classes="toolbar"
+                            ToolTip.Tip="Wrap Lines"
+                            x:Name="PART_WrapLinesButton">
+                            <PathIcon
+                                Data="M2,4 L12,4 M2,8 L12,8 M2,12 L12,12 M12,8 L16,12 L12,16"
+                                Height="16"
+                                Width="16" />
+                        </ToggleButton>
+
+                        <Border
+                            Background="{StaticResource BorderBrush}"
+                            Height="24"
+                            Width="1" />
+
+                        <Button
+                            Classes="modern"
+                            ToolTip.Tip="Copy Selected"
+                            x:Name="PART_CopyButton">
+                            <PathIcon
+                                Data="M4,2 L4,4 L2,4 L2,14 L10,14 L10,12 L12,12 L12,2 Z M6,0 L14,0 L14,10 L12,10"
+                                Height="14"
+                                Width="14" />
+                        </Button>
+                        <Button
+                            Classes="modern"
+                            ToolTip.Tip="Copy Diff"
+                            x:Name="PART_CopyDiffButton">
+                            <PathIcon
+                                Data="M2,2 L10,2 L10,12 L2,12 Z M12,4 L14,4 L14,14 L6,14 L6,12"
+                                Height="14"
+                                Width="14" />
+                        </Button>
+                        <Button
+                            Classes="primary"
+                            ToolTip.Tip="Open in IDE"
+                            x:Name="PART_OpenInIDEButton">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <PathIcon
+                                    Data="M0,0 L14,0 L14,5 L12,5 L12,2 L2,2 L2,12 L5,12 L5,14 L0,14 Z M8,6 L14,0 M10,0 L14,4"
+                                    Height="14"
+                                    Width="14" />
+                                <TextBlock FontSize="11" Text="IDE" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!--  Metrics Bar  -->
+            <Border
+                Background="#FAFBFC"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Grid.Row="1"
+                Padding="16,8">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <StackPanel
+                        Grid.Column="0"
+                        Orientation="Horizontal"
+                        Spacing="16">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Ellipse
+                                Fill="{StaticResource SuccessBrush}"
+                                Height="8"
+                                VerticalAlignment="Center"
+                                Width="8" />
+                            <TextBlock
+                                FontSize="12"
+                                VerticalAlignment="Center"
+                                x:Name="PART_AddedLinesText">
+                                0 added
+                            </TextBlock>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Ellipse
+                                Fill="{StaticResource DangerBrush}"
+                                Height="8"
+                                VerticalAlignment="Center"
+                                Width="8" />
+                            <TextBlock
+                                FontSize="12"
+                                VerticalAlignment="Center"
+                                x:Name="PART_RemovedLinesText">
+                                0 removed
+                            </TextBlock>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Ellipse
+                                Fill="{StaticResource WarningBrush}"
+                                Height="8"
+                                VerticalAlignment="Center"
+                                Width="8" />
+                            <TextBlock
+                                FontSize="12"
+                                VerticalAlignment="Center"
+                                x:Name="PART_ModifiedLinesText">
+                                0 modified
+                            </TextBlock>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel
+                        Grid.Column="1"
+                        HorizontalAlignment="Center"
+                        Orientation="Horizontal"
+                        x:Name="PART_MetricsPanel" />
+
+                    <TextBlock
+                        FontSize="10"
+                        Foreground="{StaticResource MutedBrush}"
+                        Grid.Column="2"
+                        VerticalAlignment="Center">
+                        Diff Viewer �� AzurePrOps
+                    </TextBlock>
+                </Grid>
+            </Border>
+
+            <!--  Diff Content  -->
+            <Grid
+                ColumnDefinitions="*,1,*"
+                Grid.Row="2"
+                MinHeight="400">
+                <!--  Left Pane (Before)  -->
                 <Border
-                    Background="#FFF0F0F0"
-                    BorderBrush="#FFDDDDDD"
-                    BorderThickness="0,0,0,1"
-                    Padding="8,4">
-                    <TextBlock FontWeight="SemiBold" Text="Before" />
+                    Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="0,0,1,0"
+                    Grid.Column="0">
+                    <Grid RowDefinitions="Auto,*">
+                        <Border
+                            Background="#F8F9FA"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="0,0,0,1"
+                            Grid.Row="0"
+                            Padding="12,8">
+                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                <TextBlock
+                                    FontSize="13"
+                                    FontWeight="SemiBold"
+                                    Grid.Column="0"
+                                    Text="Before"
+                                    VerticalAlignment="Center" />
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="{StaticResource MutedBrush}"
+                                    Grid.Column="2"
+                                    VerticalAlignment="Center"
+                                    x:Name="PART_OldFileInfo" />
+                            </Grid>
+                        </Border>
+                        <avaloniaEdit:TextEditor
+                            Background="{StaticResource SurfaceBrush}"
+                            FontFamily="JetBrains Mono, Consolas, monospace"
+                            FontSize="13"
+                            Grid.Row="1"
+                            HorizontalScrollBarVisibility="Auto"
+                            ShowLineNumbers="True"
+                            VerticalScrollBarVisibility="Auto"
+                            WordWrap="False"
+                            x:Name="OldEditor" />
+                    </Grid>
                 </Border>
-                <avaloniaEdit:TextEditor
-                    FontFamily="Consolas"
-                    Grid.Row="1"
-                    Height="400"
-                    HorizontalScrollBarVisibility="Auto"
-                    MinHeight="400"
-                    VerticalAlignment="Stretch"
-                    VerticalScrollBarVisibility="Visible"
-                    x:Name="OldEditor" />
-            </Grid>
-        </Border>
 
-        <GridSplitter
-            Background="#FFCCCCCC"
-            Grid.Column="1"
-            Grid.Row="2"
-            ResizeDirection="Columns"
-            Width="5" />
-
-        <Border
-            BorderBrush="#FFDDDDDD"
-            BorderThickness="1"
-            CornerRadius="4"
-            Grid.Column="2"
-            Grid.Row="2">
-            <Grid RowDefinitions="Auto,*">
+                <!--  Splitter  -->
                 <Border
-                    Background="#FFF0F0F0"
-                    BorderBrush="#FFDDDDDD"
-                    BorderThickness="0,0,0,1"
-                    Padding="8,4">
-                    <TextBlock FontWeight="SemiBold" Text="After" />
-                </Border>
-                <avaloniaEdit:TextEditor
-                    FontFamily="Consolas"
-                    Grid.Row="1"
-                    Height="400"
-                    HorizontalScrollBarVisibility="Auto"
-                    MinHeight="400"
-                    VerticalAlignment="Stretch"
-                    VerticalScrollBarVisibility="Visible"
-                    x:Name="NewEditor" />
-            </Grid>
-        </Border>
-        <!--  Footer  -->
-        <Grid
-            ColumnDefinitions="Auto,*,Auto"
-            Grid.Column="0"
-            Grid.ColumnSpan="4"
-            Grid.Row="3"
-            Margin="0,8,0,0">
-            <StackPanel
-                Grid.Column="0"
-                Orientation="Horizontal"
-                Spacing="8">
-                <StackPanel Orientation="Horizontal" Spacing="2">
-                    <Border
-                        Background="#D6FFD6"
-                        CornerRadius="2"
-                        Height="14"
-                        VerticalAlignment="Center"
-                        Width="14" />
-                    <TextBlock
-                        Text="0 added"
-                        VerticalAlignment="Center"
-                        x:Name="PART_AddedLinesText" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="2">
-                    <Border
-                        Background="#FFD6D6"
-                        CornerRadius="2"
-                        Height="14"
-                        VerticalAlignment="Center"
-                        Width="14" />
-                    <TextBlock
-                        Text="0 removed"
-                        VerticalAlignment="Center"
-                        x:Name="PART_RemovedLinesText" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="2">
-                    <Border
-                        Background="#FFFFE0"
-                        CornerRadius="2"
-                        Height="14"
-                        VerticalAlignment="Center"
-                        Width="14" />
-                    <TextBlock
-                        Text="0 modified"
-                        VerticalAlignment="Center"
-                        x:Name="PART_ModifiedLinesText" />
-                </StackPanel>
-            </StackPanel>
+                    Background="{StaticResource BorderBrush}"
+                    Grid.Column="1"
+                    Width="1" />
 
-            <TextBlock
-                FontSize="10"
-                Grid.Column="2"
-                HorizontalAlignment="Right"
-                Text="Diff Viewer — AzurePrOps" />
+                <!--  Right Pane (After)  -->
+                <Border Background="{StaticResource SurfaceBrush}" Grid.Column="2">
+                    <Grid RowDefinitions="Auto,*">
+                        <Border
+                            Background="#F8F9FA"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="0,0,0,1"
+                            Grid.Row="0"
+                            Padding="12,8">
+                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                <TextBlock
+                                    FontSize="13"
+                                    FontWeight="SemiBold"
+                                    Grid.Column="0"
+                                    Text="After"
+                                    VerticalAlignment="Center" />
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="{StaticResource MutedBrush}"
+                                    Grid.Column="2"
+                                    VerticalAlignment="Center"
+                                    x:Name="PART_NewFileInfo" />
+                            </Grid>
+                        </Border>
+                        <avaloniaEdit:TextEditor
+                            Background="{StaticResource SurfaceBrush}"
+                            FontFamily="JetBrains Mono, Consolas, monospace"
+                            FontSize="13"
+                            Grid.Row="1"
+                            HorizontalScrollBarVisibility="Auto"
+                            ShowLineNumbers="True"
+                            VerticalScrollBarVisibility="Auto"
+                            WordWrap="False"
+                            x:Name="NewEditor" />
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!--  Status Footer  -->
+            <Border
+                Background="{StaticResource ToolbarGradient}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="0,1,0,0"
+                CornerRadius="0,0,8,8"
+                Grid.Row="3"
+                Padding="16,8">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <StackPanel
+                        Grid.Column="0"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="{StaticResource MutedBrush}"
+                            x:Name="PART_StatusText">
+                            Ready
+                        </TextBlock>
+                    </StackPanel>
+
+                    <StackPanel
+                        Grid.Column="2"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="{StaticResource MutedBrush}"
+                            x:Name="PART_PositionText" />
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="{StaticResource MutedBrush}"
+                            x:Name="PART_SelectionText" />
+                    </StackPanel>
+                </Grid>
+            </Border>
         </Grid>
-    </Grid>
+    </Border>
 </UserControl>

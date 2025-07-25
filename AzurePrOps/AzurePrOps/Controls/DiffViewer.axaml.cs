@@ -22,6 +22,7 @@ using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
 using Microsoft.Extensions.Logging;
 using AzurePrOps.Logging;
+using System.IO;
 
 namespace AzurePrOps.Controls
 {
@@ -30,6 +31,7 @@ namespace AzurePrOps.Controls
     public partial class DiffViewer : UserControl
     {
         private static readonly ILogger _logger = AppLogger.CreateLogger<DiffViewer>();
+        
         // Dependency properties
         public static readonly StyledProperty<string> OldTextProperty =
             AvaloniaProperty.Register<DiffViewer, string>(nameof(OldText));
@@ -52,7 +54,7 @@ namespace AzurePrOps.Controls
         public ISearchService SearchService { get; set; }
         public IIDEIntegrationService IDEService { get; set; }
 
-        // UI elements
+        // Enhanced UI elements
         private TextBox? _searchBox;
         private StackPanel? _metricsPanel;
         private TextEditor? _oldEditor;
@@ -60,6 +62,11 @@ namespace AzurePrOps.Controls
         private TextBlock? _addedLinesText;
         private TextBlock? _removedLinesText;
         private TextBlock? _modifiedLinesText;
+        private TextBlock? _statusText;
+        private TextBlock? _positionText;
+        private TextBlock? _selectionText;
+        private TextBlock? _oldFileInfo;
+        private TextBlock? _newFileInfo;
 
         // Diff tracking
         private Dictionary<int, DiffLineType> _lineTypes = new();
@@ -125,24 +132,89 @@ namespace AzurePrOps.Controls
 
             if (DataContext is FileDiff diff)
             {
-                // Assign bound texts when the DataContext changes so the viewer
-                // renders even if the control is created before data is set.
                 OldText = diff.OldText ?? string.Empty;
                 NewText = diff.NewText ?? string.Empty;
+                UpdateFileInfo(diff);
             }
             else
             {
-                // Clear content when the DataContext is unset or of the wrong type
                 OldText = string.Empty;
                 NewText = string.Empty;
+                UpdateFileInfo(null);
             }
+        }
+
+        private void UpdateFileInfo(FileDiff? diff)
+        {
+            if (diff != null)
+            {
+                var fileName = Path.GetFileName(diff.FilePath);
+                var directory = Path.GetDirectoryName(diff.FilePath);
+                
+                if (_oldFileInfo != null)
+                    _oldFileInfo.Text = $"{fileName} • {directory}";
+                if (_newFileInfo != null)
+                    _newFileInfo.Text = $"{fileName} • {directory}";
+                    
+                UpdateStatus($"Viewing {fileName}");
+            }
+            else
+            {
+                if (_oldFileInfo != null)
+                    _oldFileInfo.Text = "";
+                if (_newFileInfo != null)
+                    _newFileInfo.Text = "";
+                    
+                UpdateStatus("Ready");
+            }
+        }
+
+        private void UpdateStatus(string message)
+        {
+            if (_statusText != null)
+                _statusText.Text = message;
+        }
+
+        private void UpdatePosition()
+        {
+            var activeEditor = GetActiveEditor();
+            if (activeEditor != null && _positionText != null)
+            {
+                var line = activeEditor.TextArea.Caret.Line;
+                var column = activeEditor.TextArea.Caret.Column;
+                _positionText.Text = $"Ln {line}, Col {column}";
+            }
+        }
+
+        private void UpdateSelection()
+        {
+            var activeEditor = GetActiveEditor();
+            if (activeEditor != null && _selectionText != null)
+            {
+                var selection = activeEditor.TextArea.Selection;
+                if (selection.Length > 0)
+                {
+                    _selectionText.Text = $"{selection.Length} chars selected";
+                }
+                else
+                {
+                    _selectionText.Text = "";
+                }
+            }
+        }
+
+        private TextEditor? GetActiveEditor()
+        {
+            if (_newEditor?.IsFocused == true) return _newEditor;
+            if (_oldEditor?.IsFocused == true) return _oldEditor;
+            return _newEditor; // Default to new editor
         }
 
         private void InitializeComponent()
         {
             AvaloniaXamlLoader.Load(this);
 
-            // Find UI elements
+            // Find UI elements with enhanced references
             _oldEditor   = this.FindControl<TextEditor>("OldEditor");
             _newEditor   = this.FindControl<TextEditor>("NewEditor");
             _searchBox   = this.FindControl<TextBox>("PART_SearchBox");
@@ -150,6 +222,11 @@ namespace AzurePrOps.Controls
             _addedLinesText = this.FindControl<TextBlock>("PART_AddedLinesText");
             _removedLinesText = this.FindControl<TextBlock>("PART_RemovedLinesText");
             _modifiedLinesText = this.FindControl<TextBlock>("PART_ModifiedLinesText");
+            _statusText = this.FindControl<TextBlock>("PART_StatusText");
+            _positionText = this.FindControl<TextBlock>("PART_PositionText");
+            _selectionText = this.FindControl<TextBlock>("PART_SelectionText");
+            _oldFileInfo = this.FindControl<TextBlock>("PART_OldFileInfo");
+            _newFileInfo = this.FindControl<TextBlock>("PART_NewFileInfo");
 
             // Find buttons
             var sideBySideButton = this.FindControl<ToggleButton>("PART_SideBySideButton");
@@ -165,20 +242,28 @@ namespace AzurePrOps.Controls
             var wrapLinesButton = this.FindControl<ToggleButton>("PART_WrapLinesButton");
             var copyDiffButton = this.FindControl<Button>("PART_CopyDiffButton");
 
-            // Wire up events
+            // Wire up events with enhanced feedback
             if (_searchBox != null)
             {
                 _searchBox.KeyUp += (_, e) =>
                 {
                     if (e.Key == Key.Enter)
+                    {
                         NavigateToNextSearchResult();
+                    }
                     else
+                    {
                         Render();
+                        UpdateSearchStatus();
+                    }
                 };
                 _searchBox.PropertyChanged += (_, e) =>
                 {
                     if (e.Property.Name == nameof(TextBox.Text))
+                    {
                         Render();
+                        UpdateSearchStatus();
+                    }
                 };
             }
 
@@ -189,6 +274,7 @@ namespace AzurePrOps.Controls
                     if (sideBySideButton.IsChecked == true) {
                         unifiedButton!.IsChecked = false;
                         ViewMode = DiffViewMode.SideBySide;
+                        UpdateStatus("Switched to side-by-side view");
                     }
                 };
 
@@ -196,33 +282,49 @@ namespace AzurePrOps.Controls
                     if (unifiedButton.IsChecked == true) {
                         sideBySideButton!.IsChecked = false;
                         ViewMode = DiffViewMode.Unified;
+                        UpdateStatus("Switched to unified view");
                     }
                 };
             }
 
             if (nextChangeButton != null)
             {
-                nextChangeButton.Click += (_, __) => NavigateToNextChange();
+                nextChangeButton.Click += (_, __) => {
+                    NavigateToNextChange();
+                    UpdateStatus($"Navigated to change {_currentChangeIndex + 1} of {_changedLines.Count}");
+                };
             }
 
             if (prevChangeButton != null)
             {
-                prevChangeButton.Click += (_, __) => NavigateToPreviousChange();
+                prevChangeButton.Click += (_, __) => {
+                    NavigateToPreviousChange();
+                    UpdateStatus($"Navigated to change {_currentChangeIndex + 1} of {_changedLines.Count}");
+                };
             }
 
             if (nextSearchButton != null)
             {
-                nextSearchButton.Click += (_, __) => NavigateToNextSearchResult();
+                nextSearchButton.Click += (_, __) => {
+                    NavigateToNextSearchResult();
+                    UpdateSearchStatus();
+                };
             }
 
             if (prevSearchButton != null)
             {
-                prevSearchButton.Click += (_, __) => NavigateToPreviousSearchResult();
+                prevSearchButton.Click += (_, __) => {
+                    NavigateToPreviousSearchResult();
+                    UpdateSearchStatus();
+                };
             }
 
             if (openIdeButton != null)
             {
-                openIdeButton.Click += (_, __) => OpenInIDE();
+                openIdeButton.Click += (_, __) => {
+                    OpenInIDE();
+                    UpdateStatus("Opened in IDE");
+                };
             }
 
             if (codeFoldingButton != null)
@@ -231,12 +333,16 @@ namespace AzurePrOps.Controls
                 {
                     _codeFoldingEnabled = codeFoldingButton.IsChecked == true;
                     Render();
+                    UpdateStatus(_codeFoldingEnabled ? "Code folding enabled" : "Code folding disabled");
                 };
             }
 
             if (copyButton != null)
             {
-                copyButton.Click += (_, __) => CopySelectedText();
+                copyButton.Click += (_, __) => {
+                    CopySelectedText();
+                    UpdateStatus("Copied selected text");
+                };
             }
 
             if (ignoreWhitespaceButton != null)
@@ -245,6 +351,7 @@ namespace AzurePrOps.Controls
                 {
                     _ignoreWhitespace = ignoreWhitespaceButton.IsChecked == true;
                     Render();
+                    UpdateStatus(_ignoreWhitespace ? "Ignoring whitespace" : "Showing whitespace changes");
                 };
             }
 
@@ -257,12 +364,32 @@ namespace AzurePrOps.Controls
                         _oldEditor.WordWrap = _wrapLines;
                     if (_newEditor != null)
                         _newEditor.WordWrap = _wrapLines;
+                    UpdateStatus(_wrapLines ? "Line wrapping enabled" : "Line wrapping disabled");
                 };
             }
 
             if (copyDiffButton != null)
             {
-                copyDiffButton.Click += (_, __) => CopyDiff();
+                copyDiffButton.Click += (_, __) => {
+                    CopyDiff();
+                    UpdateStatus("Copied diff to clipboard");
+                };
+            }
+        }
+
+        private void UpdateSearchStatus()
+        {
+            if (_searchMatches.Count > 0)
+            {
+                UpdateStatus($"Found {_searchMatches.Count} matches • Match {_currentSearchIndex + 1} of {_searchMatches.Count}");
+            }
+            else if (!string.IsNullOrWhiteSpace(_searchBox?.Text))
+            {
+                UpdateStatus("No matches found");
+            }
+            else
+            {
+                UpdateStatus("Ready");
             }
         }
 
@@ -273,7 +400,7 @@ namespace AzurePrOps.Controls
 
             _logger.LogDebug("Setting up DiffViewer editors");
 
-            // Use AvaloniaEdit's built-in C# highlighting (no TextMate)
+            // Enhanced editor setup
             var highlightDef = HighlightingManager.Instance.GetDefinitionByExtension(".cs");
             _oldEditor.SyntaxHighlighting = highlightDef;
             _newEditor.SyntaxHighlighting = highlightDef;
@@ -283,14 +410,25 @@ namespace AzurePrOps.Controls
             _oldEditor.ShowLineNumbers = true;
             _newEditor.ShowLineNumbers = true;
 
-            // Set explicit height for better visibility
-            _oldEditor.MinHeight = 250;
-            _newEditor.MinHeight = 250;
+            // Enhanced editor appearance
+            _oldEditor.Options.EnableHyperlinks = false;
+            _oldEditor.Options.EnableEmailHyperlinks = false;
+            _newEditor.Options.EnableHyperlinks = false;
+            _newEditor.Options.EnableEmailHyperlinks = false;
 
-            // Hook up synchronized scrolling
+            // Add caret position tracking
+            _oldEditor.TextArea.Caret.PositionChanged += (_, __) => UpdatePosition();
+            _newEditor.TextArea.Caret.PositionChanged += (_, __) => UpdatePosition();
+
+            // Add selection tracking
+            _oldEditor.TextArea.SelectionChanged += (_, __) => UpdateSelection();
+            _newEditor.TextArea.SelectionChanged += (_, __) => UpdateSelection();
+
+            // Add focus tracking
+            _oldEditor.GotFocus += (_, __) => UpdatePosition();
+            _newEditor.GotFocus += (_, __) => UpdatePosition();
+
             SetupScrollSync();
-
-            // Render initial diff
             Render();
         }
 
@@ -303,261 +441,110 @@ namespace AzurePrOps.Controls
                 return;
             }
 
-            // Ensure folding managers are recreated for the new document
+            UpdateStatus("Rendering diff...");
+
             ResetFoldingManagers();
 
-            // Load texts
-            _logger.LogDebug("DiffViewer.Render(): OldText length={OldLength}, NewText length={NewLength}", OldText?.Length ?? 0, NewText?.Length ?? 0);
-
-            // Make sure we explicitly set the Document's text, not just the editor's Text property
             string oldTextValue = OldText ?? "";
             string newTextValue = NewText ?? "";
 
-            // Force text display by setting document text directly
             _oldEditor.Document = new AvaloniaEdit.Document.TextDocument(oldTextValue);
             _newEditor.Document = new AvaloniaEdit.Document.TextDocument(newTextValue);
-
-            // Also set the Text property for consistency
             _oldEditor.Text = oldTextValue;
             _newEditor.Text = newTextValue;
 
-            _logger.LogDebug("Set document text - Old: {OldBytes} bytes, New: {NewBytes} bytes", oldTextValue.Length, newTextValue.Length);
-
-            // Clear previous transformers
             _oldEditor.TextArea.TextView.LineTransformers.Clear();
             _newEditor.TextArea.TextView.LineTransformers.Clear();
-
-            // Clear previous background renderers
             _oldEditor.TextArea.TextView.BackgroundRenderers.Clear();
             _newEditor.TextArea.TextView.BackgroundRenderers.Clear();
 
-            // Compute unified diff
-            _logger.LogDebug("Building diff model with OldText ({OldBytes} bytes) and NewText ({NewBytes} bytes)", OldText?.Length ?? 0, NewText?.Length ?? 0);
-
-            // Add explicit handling for empty string cases
-            string oldTextForDiff = OldText ?? "";
-            string newTextForDiff = NewText ?? "";
-
-            // Handle special case for new files (empty old text)
-            if (string.IsNullOrEmpty(oldTextForDiff) && !string.IsNullOrEmpty(newTextForDiff))
-            {
-                _logger.LogDebug("Special case: New file detected (empty old text)");
-                // For a new file, all lines should be marked as added
-                var newLines = newTextForDiff.Split('\n');
-                _lineTypes = newLines
-                    .Select((_, i) => (Line: i + 1, Type: DiffLineType.Added))
-                    .ToDictionary(t => t.Line, t => t.Type);
-
-                _logger.LogDebug("Created manual _lineTypes with {Count} lines, all marked as added", _lineTypes.Count);
-
-                // Track changed lines for navigation
-                _changedLines = _lineTypes.Keys.OrderBy(k => k).ToList();
-
-                // Update stats
-                int addedLinesRender = newLines.Length;
-                int removedLinesRender = 0;
-                int modifiedLinesRender = 0;
-
-                if (_addedLinesText != null)
-                    _addedLinesText.Text = $"{addedLinesRender} added";
-                if (_removedLinesText != null)
-                    _removedLinesText.Text = $"{removedLinesRender} removed";
-                if (_modifiedLinesText != null)
-                    _modifiedLinesText.Text = $"{modifiedLinesRender} modified";
-
-    // Check for file markers and handle special cases
-    bool isDeletedFile = oldTextForDiff.Contains("[FILE DELETED]");
-    bool isNewFile = oldTextForDiff.Contains("[FILE ADDED]");
-
-    if (isDeletedFile || isNewFile)
-    {
-        // Strip markers before diff processing
-        oldTextForDiff = oldTextForDiff.Replace("[FILE DELETED]\n", "").Replace("[FILE ADDED]\n", "");
-        _logger.LogDebug("Detected special file marker. IsDeleted={IsDeleted}, IsNew={IsNew}", isDeletedFile, isNewFile);
-    }
-
-                // Apply coloring to the editors
-                if (_newEditor != null)
-                {
-                    var transformernewEditor = new DiffLineBackgroundTransformer(_lineTypes);
-                    _newEditor.TextArea.TextView.LineTransformers.Add(transformernewEditor);
-
-                    // Add gutter markers
-                    var marginRendererNewEditor = new LineStatusMarginRenderer(_lineTypes);
-                    _newEditor.TextArea.TextView.BackgroundRenderers.Add(marginRendererNewEditor);
-                }
-
-                if (_codeFoldingEnabled)
-                    ApplyFolding();
-                else
-                    ClearFolding();
-
-                // Continue rendering with our manual line types
-                return;
-            }
-
-            // Handle special case for deleted files (empty new text)
-            if (!string.IsNullOrEmpty(oldTextForDiff) && string.IsNullOrEmpty(newTextForDiff))
-            {
-                _logger.LogDebug("Special case: Deleted file detected (empty new text)");
-                // For a deleted file, all lines should be marked as removed
-                var oldLines = oldTextForDiff.Split('\n');
-                _lineTypes = oldLines
-                    .Select((_, i) => (Line: i + 1, Type: DiffLineType.Removed))
-                    .ToDictionary(t => t.Line, t => t.Type);
-
-                _logger.LogDebug("Created manual _lineTypes with {Count} lines, all marked as removed", _lineTypes.Count);
-
-                // Track changed lines for navigation
-                _changedLines = _lineTypes.Keys.OrderBy(k => k).ToList();
-
-                // Update stats
-                int addedLinesUpdates = 0;
-                int removedLinesUpdates = oldLines.Length;
-                int modifiedLinesUpdates = 0;
-
-                if (_addedLinesText != null)
-                    _addedLinesText.Text = $"{addedLinesUpdates} added";
-                if (_removedLinesText != null)
-                    _removedLinesText.Text = $"{removedLinesUpdates} removed";
-                if (_modifiedLinesText != null)
-                    _modifiedLinesText.Text = $"{modifiedLinesUpdates} modified";
-
-                // Apply coloring to the editors
-                if (_oldEditor != null)
-                {
-                    var transformerOldEditor = new DiffLineBackgroundTransformer(_lineTypes);
-                    _oldEditor.TextArea.TextView.LineTransformers.Add(transformerOldEditor);
-
-                    // Add gutter markers
-                    var marginRendererOldEditor = new LineStatusMarginRenderer(_lineTypes);
-                    _oldEditor.TextArea.TextView.BackgroundRenderers.Add(marginRendererOldEditor);
-                }
-
-                if (_codeFoldingEnabled)
-                    ApplyFolding();
-                else
-                    ClearFolding();
-
-                // Continue rendering with our manual line types
-                return;
-            }
+            // Enhanced diff processing with better feedback
+            ProcessDiffAndUpdateUI(oldTextValue, newTextValue);
             
-            // Normal case: Build diff model
-            var model = new InlineDiffBuilder(new Differ())
-                            .BuildDiffModel(oldTextForDiff, newTextForDiff, _ignoreWhitespace);
+            UpdateStatus("Diff rendered successfully");
+        }
 
-            // Check if texts are identical - compare actual content instead of just length
-            bool textsAreIdentical = string.Equals(oldTextForDiff, newTextForDiff, StringComparison.Ordinal);
-            if (!textsAreIdentical && oldTextForDiff.Length == newTextForDiff.Length)
+        private void ProcessDiffAndUpdateUI(string oldTextValue, string newTextValue)
+        {
+            // Handle special cases for new/deleted files
+            if (string.IsNullOrEmpty(oldTextValue) && !string.IsNullOrEmpty(newTextValue))
             {
-                _logger.LogDebug("Equal length texts with different content detected!");
+                HandleNewFile(newTextValue);
+                return;
             }
 
-            // Map line numbers to change types
+            if (!string.IsNullOrEmpty(oldTextValue) && string.IsNullOrEmpty(newTextValue))
+            {
+                HandleDeletedFile(oldTextValue);
+                return;
+            }
+
+            // Normal diff processing
+            var model = new InlineDiffBuilder(new Differ())
+                            .BuildDiffModel(oldTextValue, newTextValue, _ignoreWhitespace);
+
             var lineMap = model.Lines
                 .Select((l, i) => (Line: i + 1, Type: Map(l.Type)))
                 .ToDictionary(t => t.Line, t => t.Type);
 
-            // Handle edge cases:
-            // 1. Empty diff model but with non-empty content
-            // 2. Same length but different content
-            if ((lineMap.Count == 0 && (oldTextForDiff.Length > 0 || newTextForDiff.Length > 0)) ||
-                (lineMap.Count > 0 && !lineMap.Any(kv => kv.Value != DiffLineType.Unchanged) && !string.Equals(oldTextForDiff, newTextForDiff, StringComparison.Ordinal)))
-            {
-                _logger.LogDebug("Edge case: Empty diff model with non-empty content, creating manual mapping");
-                _lineTypes = new Dictionary<int, DiffLineType>();
-
-                var oldLines = oldTextForDiff.Split('\n').Length;
-                var newLines = newTextForDiff.Split('\n').Length;
-
-                if (oldLines > 0 && newLines == 0)
-                {
-                    // Deleted file case
-                    for (int i = 1; i <= oldLines; i++)
-                    {
-                        _lineTypes[i] = DiffLineType.Removed;
-                    }
-                }
-                else if (oldLines == 0 && newLines > 0)
-                {
-                    // New file case
-                    for (int i = 1; i <= newLines; i++)
-                    {
-                        _lineTypes[i] = DiffLineType.Added;
-                    }
-                }
-                else
-                {
-                    // Check for equal length texts but different content
-                    bool equalLengthButDifferent = oldLines == newLines && !string.Equals(oldTextForDiff, newTextForDiff, StringComparison.Ordinal);
-
-                    if (equalLengthButDifferent)
-                    {
-                        _logger.LogDebug("Equal length but different content detected - creating manual diff");
-
-                        // Mark all lines as modified when we have equal length but different content
-                        for (int i = 1; i <= oldLines; i++)
-                        {
-                            _lineTypes[i] = DiffLineType.Modified;
-                        }
-                    }
-                    else
-                    {
-                        // Modified file with no changes detected
-                        for (int i = 1; i <= Math.Max(oldLines, newLines); i++)
-                        {
-                            _lineTypes[i] = DiffLineType.Unchanged;
-                        }
-                    }
-                }
-
-                _logger.LogDebug("Created manual lineTypes with {Count} lines", _lineTypes.Count);
-                return;
-            }
-
-            _logger.LogDebug("Built diff model with {Lines} lines and {Changes} changes", model.Lines.Count, lineMap.Count(kv => kv.Value != DiffLineType.Unchanged));
-
-            // Store the line types for folding
             _lineTypes = lineMap;
+            ApplyDiffVisualization(lineMap);
+            UpdateStatistics(lineMap);
+            ApplySearchHighlighting();
+            UpdateMetrics();
 
-            // Highlight backgrounds
+            if (_codeFoldingEnabled)
+                ApplyFolding();
+            else
+                ClearFolding();
+        }
+
+        private void HandleNewFile(string newText)
+        {
+            var newLines = newText.Split('\n');
+            _lineTypes = newLines
+                .Select((_, i) => (Line: i + 1, Type: DiffLineType.Added))
+                .ToDictionary(t => t.Line, t => t.Type);
+
+            _changedLines = _lineTypes.Keys.OrderBy(k => k).ToList();
+            UpdateStatistics(_lineTypes);
+            ApplyDiffVisualization(_lineTypes);
+        }
+
+        private void HandleDeletedFile(string oldText)
+        {
+            var oldLines = oldText.Split('\n');
+            _lineTypes = oldLines
+                .Select((_, i) => (Line: i + 1, Type: DiffLineType.Removed))
+                .ToDictionary(t => t.Line, t => t.Type);
+
+            _changedLines = _lineTypes.Keys.OrderBy(k => k).ToList();
+            UpdateStatistics(_lineTypes);
+            ApplyDiffVisualization(_lineTypes);
+        }
+
+        private void ApplyDiffVisualization(Dictionary<int, DiffLineType> lineMap)
+        {
             var transformer = new DiffLineBackgroundTransformer(lineMap);
             _oldEditor.TextArea.TextView.LineTransformers.Add(transformer);
             _newEditor.TextArea.TextView.LineTransformers.Add(transformer);
 
-            // Track changed lines for navigation
+            var marginRenderer = new LineStatusMarginRenderer(lineMap);
+            _oldEditor.TextArea.TextView.BackgroundRenderers.Add(marginRenderer);
+            _newEditor.TextArea.TextView.BackgroundRenderers.Add(marginRenderer);
+
             _changedLines = lineMap
                 .Where(kv => kv.Value != DiffLineType.Unchanged)
                 .Select(kv => kv.Key)
                 .OrderBy(line => line)
                 .ToList();
+        }
 
-            // Update stats
+        private void UpdateStatistics(Dictionary<int, DiffLineType> lineMap)
+        {
             int addedLines = lineMap.Count(kv => kv.Value == DiffLineType.Added);
             int removedLines = lineMap.Count(kv => kv.Value == DiffLineType.Removed);
             int modifiedLines = lineMap.Count(kv => kv.Value == DiffLineType.Modified);
-
-            // Special case for new files (if there's only new content)
-            if (string.IsNullOrWhiteSpace(OldText) && !string.IsNullOrWhiteSpace(NewText))
-            {
-                _logger.LogDebug("Special case for stats: New file detected");
-                addedLines = NewText.Split('\n').Length;
-                removedLines = 0;
-                modifiedLines = 0;
-            }
-
-            // Special case for deleted files (if there's only old content)
-            if (!string.IsNullOrWhiteSpace(OldText) && string.IsNullOrWhiteSpace(NewText))
-            {
-                _logger.LogDebug("Special case for stats: Deleted file detected");
-                addedLines = 0;
-                removedLines = OldText.Split('\n').Length;
-                modifiedLines = 0;
-            }
-
-            // Log line counts for debugging
-            _logger.LogDebug("DiffViewer stats: {Added} added, {Removed} removed, {Modified} modified", addedLines, removedLines, modifiedLines);
 
             if (_addedLinesText != null)
                 _addedLinesText.Text = $"{addedLines} added";
@@ -565,16 +552,14 @@ namespace AzurePrOps.Controls
                 _removedLinesText.Text = $"{removedLines} removed";
             if (_modifiedLinesText != null)
                 _modifiedLinesText.Text = $"{modifiedLines} modified";
+        }
 
-            // Add gutter markers
-            var marginRenderer = new LineStatusMarginRenderer(lineMap);
-            _oldEditor.TextArea.TextView.BackgroundRenderers.Add(marginRenderer);
-            _newEditor.TextArea.TextView.BackgroundRenderers.Add(marginRenderer);
-
-            // Search highlighting
+        private void ApplySearchHighlighting()
+        {
             _searchMatches.Clear();
             _currentSearchIndex = -1;
             string searchQuery = _searchBox?.Text ?? string.Empty;
+            
             if (!string.IsNullOrWhiteSpace(searchQuery))
             {
                 var searchSource = _newEditor.Document.TextLength > 0 ? _newEditor.Text : _oldEditor.Text;
@@ -585,26 +570,19 @@ namespace AzurePrOps.Controls
                 _oldEditor.TextArea.TextView.LineTransformers.Add(searchTransformer);
                 _newEditor.TextArea.TextView.LineTransformers.Add(searchTransformer);
             }
+        }
 
-            // Metrics panel
+        private void UpdateMetrics()
+        {
             _metricsPanel?.Children.Clear();
             foreach (var m in MetricsService?.GetMetrics("<repo>") ?? Enumerable.Empty<MetricData>())
             {
-                _metricsPanel?.Children.Add(new TextBlock { Text = $"{m.Name}: {m.Value}" });
+                _metricsPanel?.Children.Add(new TextBlock { 
+                    Text = $"{m.Name}: {m.Value}",
+                    FontSize = 12,
+                    Margin = new Thickness(8, 0)
+                });
             }
-
-            AuditService?.RecordAction(new AuditRecord
-            {
-                Timestamp = DateTime.Now,
-                User = Environment.UserName,
-                Action = "Rendered diff",
-                FilePath = "<current>"
-            });
-
-            if (_codeFoldingEnabled)
-                ApplyFolding();
-            else
-                ClearFolding();
         }
 
         private static DiffLineType Map(ChangeType ct) => ct switch
@@ -1005,18 +983,47 @@ namespace AzurePrOps.Controls
         {
             if (_lineTypes.TryGetValue(line.LineNumber, out var type))
             {
-                ISolidColorBrush? brush = type switch
+                ISolidColorBrush? backgroundBrush = null;
+                ISolidColorBrush? foregroundBrush = null;
+                
+                switch (type)
                 {
-                    DiffLineType.Added    => new SolidColorBrush(Colors.LightGreen),
-                    DiffLineType.Removed  => new SolidColorBrush(Colors.LightCoral),
-                    DiffLineType.Modified => new SolidColorBrush(Colors.LightGoldenrodYellow),
-                    _                     => null
-                };
-                if (brush != null)
+                    case DiffLineType.Added:
+                        backgroundBrush = new SolidColorBrush(Color.FromRgb(220, 255, 228)); // SuccessLightBrush equivalent
+                        foregroundBrush = new SolidColorBrush(Color.FromRgb(26, 127, 55)); // SuccessBrush equivalent
+                        break;
+                    case DiffLineType.Removed:
+                        backgroundBrush = new SolidColorBrush(Color.FromRgb(255, 235, 233)); // DangerLightBrush equivalent
+                        foregroundBrush = new SolidColorBrush(Color.FromRgb(207, 34, 46)); // DangerBrush equivalent
+                        break;
+                    case DiffLineType.Modified:
+                        backgroundBrush = new SolidColorBrush(Color.FromRgb(255, 248, 197)); // WarningLightBrush equivalent
+                        foregroundBrush = new SolidColorBrush(Color.FromRgb(191, 135, 0)); // WarningBrush equivalent
+                        break;
+                    default:
+                        // Use default text color for unchanged lines
+                        foregroundBrush = new SolidColorBrush(Color.FromRgb(36, 41, 47)); // TextPrimaryBrush equivalent
+                        break;
+                }
+                
+                if (backgroundBrush != null)
                 {
                     ChangeLinePart(line.Offset, line.EndOffset, e =>
-                        e.TextRunProperties.SetBackgroundBrush(brush));
+                        e.TextRunProperties.SetBackgroundBrush(backgroundBrush));
                 }
+                
+                if (foregroundBrush != null)
+                {
+                    ChangeLinePart(line.Offset, line.EndOffset, e =>
+                        e.TextRunProperties.SetForegroundBrush(foregroundBrush));
+                }
+            }
+            else
+            {
+                // Ensure unchanged lines have proper text color
+                var textBrush = new SolidColorBrush(Color.FromRgb(36, 41, 47)); // TextPrimaryBrush equivalent
+                ChangeLinePart(line.Offset, line.EndOffset, e =>
+                    e.TextRunProperties.SetForegroundBrush(textBrush));
             }
         }
     }

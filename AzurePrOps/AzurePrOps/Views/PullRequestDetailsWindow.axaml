@@ -1,141 +1,626 @@
 <Window
-    Height="800"
-    Title="Pull Request Details"
-    Width="1000"
+    Height="900"
+    Title="Pull Request Review"
+    Width="1400"
+    WindowStartupLocation="CenterScreen"
     x:Class="AzurePrOps.Views.PullRequestDetailsWindow"
     x:DataType="vm:PullRequestDetailsWindowViewModel"
     xmlns="https://github.com/avaloniaui"
     xmlns:controls="using:AzurePrOps.Controls"
+    xmlns:converters="using:AzurePrOps.Converters"
     xmlns:model="using:AzurePrOps.AzureConnection.Models"
     xmlns:review="using:AzurePrOps.ReviewLogic.Models"
     xmlns:vm="using:AzurePrOps.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <ScrollViewer Margin="10" VerticalScrollBarVisibility="Auto">
-        <StackPanel Spacing="6">
-            <TextBlock
-                FontSize="16"
-                FontWeight="Bold"
-                Text="{Binding PullRequest.Title}" />
-            <StackPanel Orientation="Horizontal" Spacing="4">
-                <TextBlock Text="👤" />
-                <TextBlock FontStyle="Italic" Text="{Binding PullRequest.Creator}" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="4">
-                <TextBlock Text="📅" />
-                <TextBlock Text="{Binding PullRequest.Created}" />
-            </StackPanel>
-            <StackPanel
-                Orientation="Horizontal"
-                Spacing="4"
-                VerticalAlignment="Center">
-                <TextBlock
-                    FontSize="16"
-                    Foreground="{Binding PullRequest.Status, Converter={StaticResource StatusToBrush}}"
-                    Text="{Binding PullRequest.Status, Converter={StaticResource StatusToIcon}}" />
-                <TextBlock Foreground="{Binding PullRequest.Status, Converter={StaticResource StatusToBrush}}" Text="{Binding PullRequest.Status}" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="4">
-                <TextBlock Text="🔀" />
-                <TextBlock Text="{Binding PullRequest.SourceBranch, StringFormat='Source: {0}'}" TextWrapping="Wrap" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="4">
-                <TextBlock Text="➡" />
-                <TextBlock Text="{Binding PullRequest.TargetBranch, StringFormat='Target: {0}'}" TextWrapping="Wrap" />
-            </StackPanel>
 
-            <TextBlock
-                FontWeight="Bold"
-                Margin="0,10,0,0"
-                Text="Participants" />
-            <ListBox ItemsSource="{Binding PullRequest.Reviewers}">
-                <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="model:ReviewerInfo">
-                        <StackPanel Orientation="Horizontal" Spacing="4">
-                            <TextBlock Text="{Binding Vote, Converter={StaticResource VoteToIcon}}" />
-                            <TextBlock FontWeight="Bold" Text="{Binding DisplayName}" />
-                            <TextBlock Foreground="Gray" Text="({Binding Vote})" />
-                        </StackPanel>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+    <Window.Resources>
+        <!--  Converters  -->
+        <converters:StatusToBrushConverter x:Key="StatusToBrush" />
+        <converters:StatusToIconConverter x:Key="StatusToIcon" />
+        <converters:VoteToIconConverter x:Key="VoteToIcon" />
+        <converters:StringNotEmptyConverter x:Key="StringNotEmptyConverter" />
 
-            <TextBlock
-                FontWeight="Bold"
-                Margin="0,10,0,0"
-                Text="Comments" />
-            <ListBox ItemsSource="{Binding Comments}">
-                <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="model:PullRequestComment">
-                        <StackPanel Margin="0,0,0,4">
-                            <TextBlock FontWeight="Bold" Text="{Binding Author}" />
+        <!--  Unified modern color palette with better contrast  -->
+        <SolidColorBrush Color="#0969DA" x:Key="PrimaryBrush" />
+        <SolidColorBrush Color="#0860CA" x:Key="PrimaryHoverBrush" />
+        <SolidColorBrush Color="#DDF4FF" x:Key="PrimaryLightBrush" />
+
+        <!--  Semantic colors  -->
+        <SolidColorBrush Color="#1A7F37" x:Key="SuccessBrush" />
+        <SolidColorBrush Color="#DCFFE4" x:Key="SuccessLightBrush" />
+        <SolidColorBrush Color="#CF222E" x:Key="DangerBrush" />
+        <SolidColorBrush Color="#FFEBE9" x:Key="DangerLightBrush" />
+        <SolidColorBrush Color="#BF8700" x:Key="WarningBrush" />
+        <SolidColorBrush Color="#FFF8C5" x:Key="WarningLightBrush" />
+
+        <!--  Neutral grays  -->
+        <SolidColorBrush Color="#656D76" x:Key="MutedBrush" />
+        <SolidColorBrush Color="#D0D7DE" x:Key="BorderBrush" />
+        <SolidColorBrush Color="#FFFFFF" x:Key="SurfaceBrush" />
+        <SolidColorBrush Color="#F6F8FA" x:Key="BackgroundBrush" />
+        <SolidColorBrush Color="#24292F" x:Key="TextPrimaryBrush" />
+        <SolidColorBrush Color="#656D76" x:Key="TextSecondaryBrush" />
+
+        <!--  Interactive states  -->
+        <SolidColorBrush Color="#F3F4F6" x:Key="HoverBrush" />
+        <SolidColorBrush Color="#E7F3FF" x:Key="SelectedBrush" />
+        <SolidColorBrush Color="#F8F9FA" x:Key="CardHoverBrush" />
+    </Window.Resources>
+
+    <Window.Styles>
+        <!--  Card style with better contrast  -->
+        <Style Selector="Border.Card">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="Margin" Value="0,0,0,16" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Duration="0:0:0.15" Property="Background" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <Style Selector="Border.Card:pointerover">
+            <Setter Property="Background" Value="{StaticResource CardHoverBrush}" />
+        </Style>
+
+        <!--  Modern button styles  -->
+        <Style Selector="Button.PrimaryButton">
+            <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Duration="0:0:0.15" Property="Background" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <Style Selector="Button.PrimaryButton:pointerover">
+            <Setter Property="Background" Value="{StaticResource PrimaryHoverBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource PrimaryHoverBrush}" />
+        </Style>
+
+        <Style Selector="Button.SecondaryButton">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Duration="0:0:0.15" Property="Background" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <Style Selector="Button.SecondaryButton:pointerover">
+            <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+        </Style>
+
+        <!--  File item styles  -->
+        <Style Selector="Border.file-item">
+            <Setter Property="Background" Value="{StaticResource BackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Duration="0:0:0.15" Property="Background" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <Style Selector="Border.file-item:pointerover">
+            <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        </Style>
+
+        <Style Selector="Border.file-item.selected">
+            <Setter Property="Background" Value="{StaticResource SelectedBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+        </Style>
+
+        <!--  Enhanced Expander styles to fix black background completely  -->
+        <Style Selector="Expander">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+
+        <!--  Target the ToggleButton that acts as the header  -->
+        <Style Selector="Expander /template/ ToggleButton#PART_toggle">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+
+        <Style Selector="Expander /template/ ToggleButton#PART_toggle:pointerover">
+            <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style Selector="Expander /template/ ToggleButton#PART_toggle:pressed">
+            <Setter Property="Background" Value="{StaticResource SelectedBrush}" />
+        </Style>
+
+        <!--  Target the content border  -->
+        <Style Selector="Expander /template/ Border#PART_content">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+
+        <!--  Target any ContentPresenter inside the toggle button - FIXED to use SurfaceBrush  -->
+        <Style Selector="Expander /template/ ToggleButton#PART_toggle ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+        </Style>
+
+        <!--  Target the chevron/arrow icon  -->
+        <Style Selector="Expander /template/ ToggleButton#PART_toggle PathIcon">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style Selector="Expander /template/ ToggleButton#PART_toggle:pointerover PathIcon">
+            <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}" />
+        </Style>
+
+        <!--  Override any default expander template backgrounds - FIXED to use SurfaceBrush  -->
+        <Style Selector="Expander /template/ Grid">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+        </Style>
+
+        <Style Selector="Expander /template/ Border">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+        </Style>
+
+        <!--  Ensure the main expander border uses white background  -->
+        <Style Selector="Expander Border">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+        </Style>
+
+        <!--  Additional template element targeting to catch any remaining black backgrounds  -->
+        <Style Selector="Expander /template/ ToggleButton#PART_toggle ContentPresenter Border">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+        </Style>
+
+        <Style Selector="Expander /template/ ToggleButton#PART_toggle ContentPresenter StackPanel">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+        </Style>
+
+        <Style Selector="Expander /template/ ToggleButton#PART_toggle ContentPresenter Grid">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+        </Style>
+
+        <!--  Force all template panels to use white background  -->
+        <Style Selector="Expander /template/ Panel">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+        </Style>
+
+        <Style Selector="Expander /template/ StackPanel">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+        </Style>
+
+        <Style Selector="Expander /template/ DockPanel">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+        </Style>
+    </Window.Styles>
+
+    <Grid Background="{StaticResource BackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!--  Header Section  -->
+        <Border
+            Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Grid.Row="0"
+            Padding="24,20">
+            <Grid ColumnDefinitions="*,Auto">
+                <!--  PR Info  -->
+                <StackPanel Grid.Column="0" Spacing="12">
+                    <TextBlock
+                        FontSize="24"
+                        FontWeight="Bold"
+                        Text="{Binding PullRequest.Title}"
+                        TextWrapping="Wrap" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <Ellipse
+                                Fill="{StaticResource PrimaryBrush}"
+                                Height="20"
+                                Width="20" />
                             <TextBlock
-                                FontSize="10"
-                                FontStyle="Italic"
-                                Text="{Binding PostedDate}" />
-                            <TextBlock Text="{Binding Content}" TextWrapping="Wrap" />
+                                FontWeight="SemiBold"
+                                Text="{Binding PullRequest.Creator}"
+                                VerticalAlignment="Center" />
                         </StackPanel>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
 
-            <TextBlock
-                FontWeight="Bold"
-                Margin="0,10,0,0"
-                Text="Changes" />
-            <ListBox
-                HorizontalAlignment="Stretch"
-                ItemsSource="{Binding FileDiffs}"
-                x:Name="DiffsList">
-                <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="review:FileDiff">
-                        <Expander
-                            Header="{Binding FilePath}"
-                            HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Stretch"
-                            IsExpanded="True"
-                            Margin="0,0,0,20">
-                            <StackPanel>
-                                <!--  Display the diff in a side by side layout  -->
-                                <Grid HorizontalAlignment="Stretch" MinHeight="600">
-                                    <controls:DiffViewer
-                                        HorizontalAlignment="Stretch"
-                                        MinHeight="600"
-                                        NewText="{Binding NewText}"
-                                        OldText="{Binding OldText}"
-                                        VerticalAlignment="Stretch"
-                                        ViewMode="SideBySide"
-                                        x:Name="Diff" />
-                                    <TextBlock
-                                        FontSize="10"
-                                        HorizontalAlignment="Right"
-                                        IsVisible="{Binding Diff, Converter={StaticResource StringNotEmptyConverter}}"
-                                        Margin="0,5,10,0"
-                                        Text="{Binding FilePath, StringFormat='Viewing diff for: {0}'}"
-                                        VerticalAlignment="Top" />
-                                </Grid>
-                                <!-- Show raw diff text -->
-                                <TextBox
-                                    AcceptsReturn="True"
-                                    FontFamily="Consolas, monospace"
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock
+                                FontSize="14"
+                                Text="📅"
+                                VerticalAlignment="Center" />
+                            <TextBlock
+                                Foreground="{StaticResource MutedBrush}"
+                                Text="{Binding PullRequest.Created}"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+
+                        <Border
+                            Background="{Binding PullRequest.Status, Converter={StaticResource StatusToBrush}}"
+                            CornerRadius="4"
+                            Padding="8,4">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock
                                     FontSize="12"
-                                    IsReadOnly="True"
-                                    IsVisible="{Binding Diff, Converter={StaticResource StringNotEmptyConverter}}"
-                                    Margin="0,5,0,0"
-                                    Text="{Binding Diff}"
-                                    TextWrapping="Wrap" />
+                                    Foreground="White"
+                                    Text="{Binding PullRequest.Status, Converter={StaticResource StatusToIcon}}" />
+                                <TextBlock
+                                    FontSize="12"
+                                    FontWeight="SemiBold"
+                                    Foreground="White"
+                                    Text="{Binding PullRequest.Status}" />
                             </StackPanel>
-                        </Expander>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+                        </Border>
+                    </StackPanel>
 
-            <Button
-                Command="{Binding OpenInBrowserCommand}"
-                Content="Open in Browser"
-                HorizontalAlignment="Right"
-                IsEnabled="{Binding PullRequest.WebUrl, Converter={StaticResource StringNotEmptyConverter}}"
-                Margin="0,10,0,0"
-                Width="150" />
-        </StackPanel>
-    </ScrollViewer>
+                    <!--  Branch Info  -->
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Border
+                            Background="#F3F4F6"
+                            CornerRadius="4"
+                            Padding="8,4">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock FontSize="12" Text="🌿" />
+                                <TextBlock
+                                    FontFamily="JetBrains Mono, Consolas, monospace"
+                                    FontSize="12"
+                                    Text="{Binding PullRequest.SourceBranch}" />
+                            </StackPanel>
+                        </Border>
+                        <TextBlock
+                            FontSize="16"
+                            Foreground="{StaticResource MutedBrush}"
+                            Text="→"
+                            VerticalAlignment="Center" />
+                        <Border
+                            Background="#F3F4F6"
+                            CornerRadius="4"
+                            Padding="8,4">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock FontSize="12" Text="🎯" />
+                                <TextBlock
+                                    FontFamily="JetBrains Mono, Consolas, monospace"
+                                    FontSize="12"
+                                    Text="{Binding PullRequest.TargetBranch}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+
+                <!--  Actions  -->
+                <StackPanel
+                    Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="12">
+                    <Button
+                        Classes="SecondaryButton"
+                        Content="💬 Comments"
+                        ToolTip.Tip="View Comments" />
+                    <Button
+                        Classes="SecondaryButton"
+                        Content="📊 Insights"
+                        ToolTip.Tip="View Analytics" />
+                    <Button
+                        Classes="PrimaryButton"
+                        Command="{Binding OpenInBrowserCommand}"
+                        Content="🌐 Open in Browser"
+                        IsEnabled="{Binding PullRequest.WebUrl, Converter={StaticResource StringNotEmptyConverter}}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!--  Main Content  -->
+        <Grid
+            ColumnDefinitions="300,*"
+            Grid.Row="1"
+            Margin="24,20">
+
+            <!--  Sidebar  -->
+            <ScrollViewer
+                Grid.Column="0"
+                Margin="0,0,16,0"
+                VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="16">
+
+                    <!--  Reviewers Card  -->
+                    <Border Classes="Card">
+                        <StackPanel Spacing="12">
+                            <TextBlock
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Text="👥 Reviewers" />
+                            <ItemsControl ItemsSource="{Binding PullRequest.Reviewers}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="model:ReviewerInfo">
+                                        <Border
+                                            Background="#F8F9FA"
+                                            CornerRadius="6"
+                                            Margin="0,0,0,6"
+                                            Padding="12,8">
+                                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                                <Ellipse
+                                                    Fill="{StaticResource PrimaryBrush}"
+                                                    Grid.Column="0"
+                                                    Height="24"
+                                                    Width="24" />
+                                                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                                    <TextBlock
+                                                        FontSize="13"
+                                                        FontWeight="SemiBold"
+                                                        Text="{Binding DisplayName}" />
+                                                    <TextBlock
+                                                        FontSize="11"
+                                                        Foreground="{StaticResource MutedBrush}"
+                                                        Text="{Binding Vote}" />
+                                                </StackPanel>
+                                                <TextBlock
+                                                    FontSize="16"
+                                                    Grid.Column="2"
+                                                    Text="{Binding Vote, Converter={StaticResource VoteToIcon}}"
+                                                    VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <!--  Comments Summary  -->
+                    <Border Classes="Card">
+                        <StackPanel Spacing="12">
+                            <TextBlock
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Text="💬 Recent Comments" />
+                            <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding Comments}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="model:PullRequestComment">
+                                            <Border
+                                                Background="#F8F9FA"
+                                                CornerRadius="6"
+                                                Margin="0,0,0,8"
+                                                Padding="10,8">
+                                                <StackPanel Spacing="4">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBlock
+                                                            FontSize="12"
+                                                            FontWeight="SemiBold"
+                                                            Grid.Column="0"
+                                                            Text="{Binding Author}" />
+                                                        <TextBlock
+                                                            FontSize="10"
+                                                            Foreground="{StaticResource MutedBrush}"
+                                                            Grid.Column="1"
+                                                            Text="{Binding PostedDate}" />
+                                                    </Grid>
+                                                    <TextBlock
+                                                        FontSize="12"
+                                                        MaxLines="3"
+                                                        Text="{Binding Content}"
+                                                        TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+
+                    <!--  File Tree  -->
+                    <Border Classes="Card">
+                        <StackPanel Spacing="12">
+                            <TextBlock
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Text="📁 Changed Files" />
+                            <ItemsControl ItemsSource="{Binding FileDiffs}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="review:FileDiff">
+                                        <Border
+                                            Background="{StaticResource SurfaceBrush}"
+                                            CornerRadius="4"
+                                            Cursor="Hand"
+                                            Margin="0,0,0,4"
+                                            Padding="8,6">
+                                            <Grid ColumnDefinitions="Auto,*">
+                                                <TextBlock
+                                                    FontSize="12"
+                                                    Grid.Column="0"
+                                                    Text="📄"
+                                                    VerticalAlignment="Center" />
+                                                <TextBlock
+                                                    FontFamily="JetBrains Mono, Consolas, monospace"
+                                                    FontSize="11"
+                                                    Grid.Column="1"
+                                                    Margin="6,0,0,0"
+                                                    Text="{Binding FilePath}"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+
+            <!--  Diff Viewer Area  -->
+            <Border
+                Classes="Card"
+                Grid.Column="1"
+                Padding="0">
+                <Grid RowDefinitions="Auto,*">
+
+                    <!--  Tab Bar for Files  -->
+                    <Border
+                        Background="#F8F9FA"
+                        BorderBrush="{StaticResource BorderBrush}"
+                        BorderThickness="0,0,0,1"
+                        CornerRadius="8,8,0,0"
+                        Grid.Row="0"
+                        Padding="16,12">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel
+                                Grid.Column="0"
+                                Orientation="Horizontal"
+                                Spacing="8">
+                                <TextBlock
+                                    FontSize="14"
+                                    Text="📄"
+                                    VerticalAlignment="Center" />
+                                <TextBlock
+                                    FontSize="14"
+                                    FontWeight="SemiBold"
+                                    Text="File Changes"
+                                    VerticalAlignment="Center" />
+                                <Border
+                                    Background="{StaticResource PrimaryBrush}"
+                                    CornerRadius="10"
+                                    Padding="6,2">
+                                    <TextBlock
+                                        FontSize="11"
+                                        FontWeight="Bold"
+                                        Foreground="White"
+                                        Text="{Binding FileDiffs.Count}" />
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel
+                                Grid.Column="1"
+                                Orientation="Horizontal"
+                                Spacing="8">
+                                <Button
+                                    Classes="SecondaryButton"
+                                    Content="⚙️ Settings"
+                                    ToolTip.Tip="Diff Settings" />
+                                <Button
+                                    Classes="SecondaryButton"
+                                    Content="🔄 Refresh"
+                                    ToolTip.Tip="Refresh Diff" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!--  File Diffs  -->
+                    <ScrollViewer
+                        Background="{StaticResource BackgroundBrush}"
+                        Grid.Row="1"
+                        Padding="0"
+                        VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding FileDiffs}" Margin="0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="review:FileDiff">
+                                    <Border
+                                        Background="{StaticResource SurfaceBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}"
+                                        BorderThickness="0,0,0,1"
+                                        Margin="0">
+
+                                        <Expander
+                                            Background="{StaticResource SurfaceBrush}"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch"
+                                            IsExpanded="True">
+
+                                            <!--  File Header  -->
+                                            <Expander.Header>
+                                                <Border Padding="16,12">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                                        <StackPanel
+                                                            Grid.Column="0"
+                                                            Orientation="Horizontal"
+                                                            Spacing="8">
+                                                            <TextBlock
+                                                                FontSize="14"
+                                                                Text="��"
+                                                                VerticalAlignment="Center" />
+                                                            <TextBlock
+                                                                FontFamily="JetBrains Mono, Consolas, monospace"
+                                                                FontSize="13"
+                                                                FontWeight="SemiBold"
+                                                                Foreground="{StaticResource TextPrimaryBrush}"
+                                                                Text="{Binding FilePath}"
+                                                                VerticalAlignment="Center" />
+                                                        </StackPanel>
+
+                                                        <StackPanel
+                                                            Grid.Column="2"
+                                                            Orientation="Horizontal"
+                                                            Spacing="12">
+                                                            <!--  File stats would go here  -->
+                                                            <TextBlock
+                                                                Cursor="Hand"
+                                                                FontSize="11"
+                                                                Foreground="{StaticResource PrimaryBrush}"
+                                                                Text="View in IDE"
+                                                                VerticalAlignment="Center" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </Expander.Header>
+
+                                            <!--  Diff Content  -->
+                                            <Border
+                                                Background="{StaticResource SurfaceBrush}"
+                                                MinHeight="500"
+                                                Padding="0">
+                                                <controls:DiffViewer
+                                                    HorizontalAlignment="Stretch"
+                                                    NewText="{Binding NewText}"
+                                                    OldText="{Binding OldText}"
+                                                    VerticalAlignment="Stretch"
+                                                    ViewMode="SideBySide" />
+                                            </Border>
+
+                                        </Expander>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                </Grid>
+            </Border>
+
+        </Grid>
+    </Grid>
 </Window>

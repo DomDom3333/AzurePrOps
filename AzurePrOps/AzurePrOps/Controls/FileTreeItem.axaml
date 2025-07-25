@@ -1,0 +1,114 @@
+﻿<UserControl
+    x:Class="AzurePrOps.Controls.FileTreeItem"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <UserControl.Resources>
+        <!--  Unified color palette matching the main interface  -->
+        <SolidColorBrush Color="#F3F4F6" x:Key="HoverBrush" />
+        <SolidColorBrush Color="#E7F3FF" x:Key="SelectedBrush" />
+        <SolidColorBrush Color="#0969DA" x:Key="PrimaryBrush" />
+        <SolidColorBrush Color="#1A7F37" x:Key="SuccessBrush" />
+        <SolidColorBrush Color="#CF222E" x:Key="DangerBrush" />
+        <SolidColorBrush Color="#BF8700" x:Key="WarningBrush" />
+        <SolidColorBrush Color="#656D76" x:Key="TextSecondaryBrush" />
+        <SolidColorBrush Color="#D0D7DE" x:Key="BorderBrush" />
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <Style Selector="Border.file-item">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Duration="0:0:0.15" Property="Background" />
+                    <BrushTransition Duration="0:0:0.15" Property="BorderBrush" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <Style Selector="Border.file-item:pointerover">
+            <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        </Style>
+
+        <Style Selector="Border.file-item.selected">
+            <Setter Property="Background" Value="{StaticResource SelectedBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border Classes="file-item" x:Name="PART_Container">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+            <!--  File Icon  -->
+            <TextBlock
+                FontSize="14"
+                Grid.Column="0"
+                VerticalAlignment="Center"
+                x:Name="PART_FileIcon" />
+
+            <!--  File Path  -->
+            <StackPanel
+                Grid.Column="1"
+                Margin="8,0,0,0"
+                VerticalAlignment="Center">
+                <TextBlock
+                    FontSize="13"
+                    FontWeight="SemiBold"
+                    TextTrimming="CharacterEllipsis"
+                    x:Name="PART_FileName" />
+                <TextBlock
+                    FontSize="11"
+                    Foreground="{StaticResource MutedBrush}"
+                    TextTrimming="CharacterEllipsis"
+                    x:Name="PART_FilePath" />
+            </StackPanel>
+
+            <!--  Change Stats  -->
+            <StackPanel
+                Grid.Column="2"
+                Margin="8,0,0,0"
+                Orientation="Horizontal"
+                Spacing="6"
+                VerticalAlignment="Center">
+                <Border
+                    Background="{StaticResource SuccessBrush}"
+                    CornerRadius="2"
+                    IsVisible="False"
+                    Padding="4,2"
+                    x:Name="PART_AddedLines">
+                    <TextBlock
+                        FontSize="10"
+                        FontWeight="Bold"
+                        Foreground="White"
+                        x:Name="PART_AddedText" />
+                </Border>
+                <Border
+                    Background="{StaticResource DangerBrush}"
+                    CornerRadius="2"
+                    IsVisible="False"
+                    Padding="4,2"
+                    x:Name="PART_RemovedLines">
+                    <TextBlock
+                        FontSize="10"
+                        FontWeight="Bold"
+                        Foreground="White"
+                        x:Name="PART_RemovedText" />
+                </Border>
+            </StackPanel>
+
+            <!--  Status Icon  -->
+            <TextBlock
+                FontSize="12"
+                Grid.Column="3"
+                Margin="8,0,0,0"
+                VerticalAlignment="Center"
+                x:Name="PART_StatusIcon" />
+        </Grid>
+    </Border>
+</UserControl>

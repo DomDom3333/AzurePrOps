@@ -1,19 +1,17 @@
 <Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Styles.Resources>
-        <!-- GitKraken-inspired dark theme colors -->
+        <!--  GitKraken-inspired colors  -->
         <Color x:Key="AccentColor">#31A8FF</Color>
-        <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource AccentColor}" />
+        <SolidColorBrush Color="{DynamicResource AccentColor}" x:Key="AccentBrush" />
 
-        <SolidColorBrush x:Key="BackgroundBrush" Color="#1E2227" />
-        <SolidColorBrush x:Key="PrimaryBrush" Color="#E3E3E3" />
-
-        <SolidColorBrush x:Key="CardBackgroundBrush" Color="#2B3137" />
-        <SolidColorBrush x:Key="BorderBrush" Color="#3C444C" />
-        <SolidColorBrush x:Key="ErrorBrush" Color="#FF5555" />
+        <SolidColorBrush Color="#E3E3E3" x:Key="PrimaryBrush" />
+        <SolidColorBrush Color="#2B3137" x:Key="CardBackgroundBrush" />
+        <SolidColorBrush Color="#3C444C" x:Key="BorderBrush" />
+        <SolidColorBrush Color="#FF5555" x:Key="ErrorBrush" />
     </Styles.Resources>
 
     <Style Selector="Window">
-        <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+        <Setter Property="Background" Value="#1E2227" />
     </Style>
 
     <Style Selector="TextBlock">
@@ -22,7 +20,7 @@
 
     <Style Selector="Button">
         <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-        <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+        <Setter Property="Foreground" Value="White" />
     </Style>
 
     <Style Selector="Button, TextBox, ComboBox, AutoCompleteBox">

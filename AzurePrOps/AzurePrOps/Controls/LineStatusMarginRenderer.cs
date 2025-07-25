@@ -35,9 +35,9 @@ public class LineStatusMarginRenderer : IBackgroundRenderer
 
                 ISolidColorBrush? brush = type switch
                 {
-                    DiffLineType.Added => new SolidColorBrush(Colors.LightGreen),
-                    DiffLineType.Removed => new SolidColorBrush(Colors.LightCoral),
-                    DiffLineType.Modified => new SolidColorBrush(Colors.LightGoldenrodYellow),
+                    DiffLineType.Added => new SolidColorBrush(Color.FromRgb(26, 127, 55)), // SuccessBrush equivalent
+                    DiffLineType.Removed => new SolidColorBrush(Color.FromRgb(207, 34, 46)), // DangerBrush equivalent  
+                    DiffLineType.Modified => new SolidColorBrush(Color.FromRgb(191, 135, 0)), // WarningBrush equivalent
                     _ => null
                 };
 
