@@ -131,6 +131,7 @@
         </Border>
 
         <Button
+            Classes="PrimaryButton"
             Command="{Binding ConnectCommand}"
             Content="Connect"
             Grid.Row="6"

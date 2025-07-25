@@ -3,17 +3,6 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <UserControl.Resources>
-        <!--  Unified color palette matching the main interface  -->
-        <SolidColorBrush Color="#F3F4F6" x:Key="HoverBrush" />
-        <SolidColorBrush Color="#E7F3FF" x:Key="SelectedBrush" />
-        <SolidColorBrush Color="#0969DA" x:Key="PrimaryBrush" />
-        <SolidColorBrush Color="#1A7F37" x:Key="SuccessBrush" />
-        <SolidColorBrush Color="#CF222E" x:Key="DangerBrush" />
-        <SolidColorBrush Color="#BF8700" x:Key="WarningBrush" />
-        <SolidColorBrush Color="#656D76" x:Key="TextSecondaryBrush" />
-        <SolidColorBrush Color="#D0D7DE" x:Key="BorderBrush" />
-    </UserControl.Resources>
 
     <UserControl.Styles>
         <Style Selector="Border.file-item">
