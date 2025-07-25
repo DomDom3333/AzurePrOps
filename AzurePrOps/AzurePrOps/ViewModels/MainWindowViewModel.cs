@@ -11,6 +11,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Threading;
+using Avalonia;
+using System.Diagnostics;
 using AzurePrOps.Views;
 using Microsoft.Extensions.Logging;
 using AzurePrOps.Logging;
@@ -143,6 +145,7 @@ public class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> ApproveCommand { get; }
     public ReactiveCommand<Unit, Unit> PostCommentCommand { get; }
     public ReactiveCommand<Unit, Unit> ViewDetailsCommand { get; }
+    public ReactiveCommand<PullRequestInfo?, Unit> OpenInBrowserCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveViewCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenSettingsCommand { get; }
 
@@ -226,6 +229,27 @@ public class MainWindowViewModel : ViewModelBase
                 _settings.ReviewerId,
                 _settings.PersonalAccessToken);
         });
+
+        OpenInBrowserCommand = ReactiveCommand.Create<PullRequestInfo?>(pr =>
+        {
+            var url = pr?.WebUrl;
+            if (string.IsNullOrWhiteSpace(url))
+                return;
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = url.Trim(),
+                    UseShellExecute = true
+                };
+                Process.Start(psi);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to open browser");
+            }
+        });
+
 
         PostCommentCommand = ReactiveCommand.CreateFromTask(async () =>
         {

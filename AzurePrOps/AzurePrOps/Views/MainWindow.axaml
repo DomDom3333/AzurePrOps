@@ -2,8 +2,8 @@
     Background="{StaticResource BackgroundBrush}"
     Icon="/Assets/avalonia-logo.ico"
     Title="AzurePrOps"
-    d:DesignHeight="450"
-    d:DesignWidth="800"
+    d:DesignHeight="600"
+    d:DesignWidth="1000"
     mc:Ignorable="d"
     x:Class="AzurePrOps.Views.MainWindow"
     x:DataType="vm:MainWindowViewModel"
@@ -11,306 +11,196 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="using:AzurePrOps.ViewModels"
+    xmlns:model="using:AzurePrOps.AzureConnection.Models"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <Design.DataContext>
-        <!--
-            This only sets the DataContext for the previewer in an IDE,
-            to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs)
-        -->
         <vm:MainWindowViewModel />
     </Design.DataContext>
 
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-
-<Grid>
-    <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-
-            <!--  Header Actions  -->
-            <Border
-                Classes="Card"
-                Grid.Row="0"
-                Margin="0,0,0,16">
-                <StackPanel Orientation="Horizontal" Spacing="8">
+        <!-- Header -->
+        <Border
+            Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="24,20">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock
+                    FontSize="24"
+                    FontWeight="Bold"
+                    Text="Pull Requests" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
                     <Button
                         Classes="PrimaryButton"
                         Command="{Binding RefreshCommand}"
-                        Content="Refresh PRs"
-                        Width="120" />
+                        Content="Refresh" />
                     <Button
                         Classes="SecondaryButton"
                         Command="{Binding OpenSettingsCommand}"
-                        Content="Settings"
-                        Width="120" />
+                        Content="Settings" />
                 </StackPanel>
-            </Border>
+            </Grid>
+        </Border>
 
-            <!--  Filters  -->
-            <Border
-                Classes="Card"
-                Grid.Row="1"
-                Margin="0,0,0,16">
-                <StackPanel Spacing="12">
-                    <TextBlock
-                        FontSize="14"
-                        FontWeight="SemiBold"
-                        Foreground="{StaticResource TextPrimaryBrush}"
-                        Text="Filters" />
-                    <StackPanel
-                        HorizontalAlignment="Left"
-                        Orientation="Horizontal"
-                        Spacing="8">
-                        <AutoCompleteBox
-                            ItemsSource="{Binding TitleOptions}"
-                            Text="{Binding TitleFilter}"
-                            Watermark="Title"
-                            Width="150" />
-                        <AutoCompleteBox
-                            ItemsSource="{Binding CreatorOptions}"
-                            Text="{Binding CreatorFilter}"
-                            Watermark="Creator"
-                            Width="120" />
-                        <AutoCompleteBox
-                            ItemsSource="{Binding SourceBranchOptions}"
-                            Text="{Binding SourceBranchFilter}"
-                            Watermark="Source"
-                            Width="120" />
-                        <AutoCompleteBox
-                            ItemsSource="{Binding TargetBranchOptions}"
-                            Text="{Binding TargetBranchFilter}"
-                            Watermark="Target"
-                            Width="120" />
-                        <ComboBox
-                            ItemsSource="{Binding StatusOptions}"
-                            SelectedItem="{Binding StatusFilter}"
-                            Width="120" />
-                    </StackPanel>
+        <!-- Main Content -->
+        <Grid Grid.Row="1" ColumnDefinitions="300,*" Margin="24,20">
+            <!-- Sidebar -->
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="0,0,16,0">
+                <StackPanel Spacing="16">
+                    <!-- Filters -->
+                    <Border Classes="Card">
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="Filters" />
+                            <StackPanel Spacing="8">
+                                <AutoCompleteBox
+                                    ItemsSource="{Binding TitleOptions}"
+                                    Text="{Binding TitleFilter}"
+                                    Watermark="Title" />
+                                <AutoCompleteBox
+                                    ItemsSource="{Binding CreatorOptions}"
+                                    Text="{Binding CreatorFilter}"
+                                    Watermark="Creator" />
+                                <AutoCompleteBox
+                                    ItemsSource="{Binding SourceBranchOptions}"
+                                    Text="{Binding SourceBranchFilter}"
+                                    Watermark="Source" />
+                                <AutoCompleteBox
+                                    ItemsSource="{Binding TargetBranchOptions}"
+                                    Text="{Binding TargetBranchFilter}"
+                                    Watermark="Target" />
+                                <ComboBox
+                                    ItemsSource="{Binding StatusOptions}"
+                                    SelectedItem="{Binding StatusFilter}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Saved Views -->
+                    <Border Classes="Card">
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="Saved Views" />
+                            <StackPanel Spacing="8">
+                                <ComboBox ItemsSource="{Binding FilterViews}" SelectedItem="{Binding SelectedFilterView}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Name}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBox Text="{Binding NewViewName}" Watermark="View Name" Width="120" />
+                                    <Button Classes="SecondaryButton" Command="{Binding SaveViewCommand}" Content="Save" Width="60" />
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Comment Input -->
+                    <Border Classes="Card">
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="Add Comment" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBox Text="{Binding NewCommentText}" Watermark="Enter your comment..." Width="200" />
+                                <Button Classes="PrimaryButton" Command="{Binding PostCommentCommand}" Content="Post" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
-            </Border>
+            </ScrollViewer>
 
-            <!--  Saved Views  -->
-            <Border
-                Classes="Card"
-                Grid.Row="2"
-                Margin="0,0,0,16">
-                <StackPanel Spacing="12">
-                    <TextBlock
-                        FontSize="14"
-                        FontWeight="SemiBold"
-                        Foreground="{StaticResource TextPrimaryBrush}"
-                        Text="Saved Views" />
-                    <StackPanel
-                        HorizontalAlignment="Left"
-                        Orientation="Horizontal"
-                        Spacing="8">
-                        <ComboBox
-                            ItemsSource="{Binding FilterViews}"
-                            SelectedItem="{Binding SelectedFilterView}"
-                            Width="150">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Name}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                        <TextBox
-                            Text="{Binding NewViewName}"
-                            Watermark="View Name"
-                            Width="120" />
-                        <Button
-                            Classes="SecondaryButton"
-                            Command="{Binding SaveViewCommand}"
-                            Content="Save"
-                            Width="60" />
-                    </StackPanel>
+            <!-- Pull Request List and Comments -->
+            <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="16">
+                    <!-- PR List -->
+                    <Border Classes="Card">
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="Pull Requests" />
+                            <ListBox
+                                DoubleTapped="PullRequests_DoubleTapped"
+                                ItemsSource="{Binding PullRequests}"
+                                SelectedItem="{Binding SelectedPullRequest}"
+                                MinHeight="200">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="model:PullRequestInfo">
+                                        <Border Background="Transparent" CornerRadius="6" Margin="0,0,0,4" Padding="12">
+                                            <StackPanel Spacing="4">
+                                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                                    <TextBlock
+                                                        FontSize="16"
+                                                        Foreground="{Binding Status, Converter={StaticResource StatusToBrush}}"
+                                                        Text="{Binding Status, Converter={StaticResource StatusToIcon}}" />
+                                                    <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding Id, StringFormat='PR #{0}'}" />
+                                                    <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding Created, StringFormat='{}{0:yyyy-MM-dd}'}" />
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <TextBlock FontSize="12" Text="👤" />
+                                                    <TextBlock FontSize="12" FontStyle="Italic" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding Creator}" />
+                                                </StackPanel>
+                                                <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding ReviewersText}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Actions and Progress -->
+                    <Border Classes="Card">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Button Classes="SecondaryButton" Command="{Binding LoadCommentsCommand}" Content="Load Comments" Width="120" />
+                            <Button Classes="SuccessButton" Command="{Binding ApproveCommand}" Content="Approve" Width="120" />
+                            <Button Classes="PrimaryButton" Command="{Binding ViewDetailsCommand}" Content="View Details" Width="120" />
+                            <Button Classes="SecondaryButton" Command="{Binding OpenInBrowserCommand}" CommandParameter="{Binding SelectedPullRequest}" Content="Open in Browser" Width="140" />
+                            <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoadingDiffs}" Width="120" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Comments -->
+                    <Border Classes="Card">
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="Comments" />
+                            <ListBox ItemsSource="{Binding Comments}" MinHeight="150">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{StaticResource BackgroundBrush}" CornerRadius="6" Margin="0,0,0,8" Padding="12">
+                                            <StackPanel Spacing="4">
+                                                <TextBlock FontSize="12" FontWeight="SemiBold" Text="{Binding Author}" />
+                                                <TextBlock Text="{Binding Content}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
-            </Border>
-
-            <!--  Pull Requests List  -->
-            <Border
-                Classes="Card"
-                Grid.Row="3"
-                Margin="0,0,0,16">
-                <StackPanel Spacing="12">
-                    <TextBlock
-                        FontSize="14"
-                        FontWeight="SemiBold"
-                        Foreground="{StaticResource TextPrimaryBrush}"
-                        Text="Pull Requests" />
-                    <ListBox
-                        DoubleTapped="PullRequests_DoubleTapped"
-                        ItemsSource="{Binding PullRequests}"
-                        MinHeight="200"
-                        SelectedItem="{Binding SelectedPullRequest}">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Border
-                                    Background="Transparent"
-                                    CornerRadius="6"
-                                    Margin="0,0,0,4"
-                                    Padding="12">
-                                    <StackPanel Spacing="4">
-                                        <StackPanel
-                                            Orientation="Horizontal"
-                                            Spacing="8"
-                                            VerticalAlignment="Center">
-                                            <TextBlock
-                                                FontSize="16"
-                                                Foreground="{Binding Status, Converter={StaticResource StatusToBrush}}"
-                                                Text="{Binding Status, Converter={StaticResource StatusToIcon}}" />
-                                            <TextBlock
-                                                FontWeight="SemiBold"
-                                                Foreground="{StaticResource TextPrimaryBrush}"
-                                                Text="{Binding Title}" />
-                                        </StackPanel>
-                                        <StackPanel Orientation="Horizontal" Spacing="6">
-                                            <TextBlock FontSize="12" Text="👤" />
-                                            <TextBlock
-                                                FontSize="12"
-                                                FontStyle="Italic"
-                                                Foreground="{StaticResource TextSecondaryBrush}"
-                                                Text="{Binding Creator}" />
-                                        </StackPanel>
-                                        <TextBlock
-                                            FontSize="11"
-                                            Foreground="{StaticResource TextSecondaryBrush}"
-                                            Text="{Binding ReviewersText}"
-                                            TextWrapping="Wrap" />
-                                    </StackPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </StackPanel>
-            </Border>
-
-            <!--  Actions  -->
-            <Border
-                Classes="Card"
-                Grid.Row="4"
-                Margin="0,0,0,16">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button
-                        Classes="SecondaryButton"
-                        Command="{Binding LoadCommentsCommand}"
-                        Content="Load Comments"
-                        Width="120" />
-                    <Button
-                        Classes="SuccessButton"
-                        Command="{Binding ApproveCommand}"
-                        Content="Approve"
-                        Width="120" />
-                </StackPanel>
-            </Border>
-
-            <!--  Details and Progress  -->
-            <Border
-                Classes="Card"
-                Grid.Row="5"
-                Margin="0,0,0,16">
-                <StackPanel
-                    Orientation="Horizontal"
-                    Spacing="8"
-                    VerticalAlignment="Center">
-                    <Button
-                        Classes="PrimaryButton"
-                        Command="{Binding ViewDetailsCommand}"
-                        Content="View Details"
-                        Width="120" />
-                    <ProgressBar
-                        IsIndeterminate="True"
-                        IsVisible="{Binding IsLoadingDiffs}"
-                        Width="120" />
-                </StackPanel>
-            </Border>
-
-            <!--  Comment Input  -->
-            <Border
-                Classes="Card"
-                Grid.Row="6"
-                Margin="0,0,0,16">
-                <StackPanel Spacing="12">
-                    <TextBlock
-                        FontSize="14"
-                        FontWeight="SemiBold"
-                        Foreground="{StaticResource TextPrimaryBrush}"
-                        Text="Add Comment" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBox
-                            Text="{Binding NewCommentText}"
-                            Watermark="Enter your comment..."
-                            Width="300" />
-                        <Button
-                            Classes="PrimaryButton"
-                            Command="{Binding PostCommentCommand}"
-                            Content="Post" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <!--  Comments  -->
-            <Border Classes="Card" Grid.Row="7">
-                <StackPanel Spacing="12">
-                    <TextBlock
-                        FontSize="14"
-                        FontWeight="SemiBold"
-                        Foreground="{StaticResource TextPrimaryBrush}"
-                        Text="Comments" />
-                    <ListBox ItemsSource="{Binding Comments}" MinHeight="150">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Border
-                                    Background="{StaticResource BackgroundBrush}"
-                                    CornerRadius="6"
-                                    Margin="0,0,0,8"
-                                    Padding="12">
-                                    <StackPanel Spacing="4">
-                                        <TextBlock
-                                            FontSize="12"
-                                            FontWeight="SemiBold"
-                                            Foreground="{StaticResource TextPrimaryBrush}"
-                                            Text="{Binding Author}" />
-                                        <TextBlock
-                                            Foreground="{StaticResource TextPrimaryBrush}"
-                                            Text="{Binding Content}"
-                                            TextWrapping="Wrap" />
-                                    </StackPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </StackPanel>
-            </Border>
-
+            </ScrollViewer>
         </Grid>
-    </ScrollViewer>
-    <!-- Loading overlay shown while opening PR details -->
-    <Border
-        Background="#80000000"
-        IsHitTestVisible="{Binding IsLoadingDiffs}"
-        IsVisible="{Binding IsLoadingDiffs}"
-        ZIndex="100">
-        <ProgressBar
-            IsIndeterminate="True"
-            Width="160"
-            Height="20"
-            Foreground="{StaticResource PrimaryBrush}"
-            Background="{StaticResource SurfaceBrush}"
-            HorizontalAlignment="Center"
-            VerticalAlignment="Center" />
-    </Border>
-</Grid>
 
+        <!-- Loading overlay while opening PR details -->
+        <Border
+            Background="#80000000"
+            IsHitTestVisible="{Binding IsLoadingDiffs}"
+            IsVisible="{Binding IsLoadingDiffs}"
+            ZIndex="100">
+            <ProgressBar
+                IsIndeterminate="True"
+                Width="160"
+                Height="20"
+                Foreground="{StaticResource PrimaryBrush}"
+                Background="{StaticResource SurfaceBrush}"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center" />
+        </Border>
+    </Grid>
 </Window>
