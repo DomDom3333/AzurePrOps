@@ -1,107 +1,455 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:AzurePrOps.ViewModels"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-        x:Class="AzurePrOps.Views.MainWindow"
-        x:DataType="vm:MainWindowViewModel"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="AzurePrOps">
+<Window
+    Background="{StaticResource BackgroundBrush}"
+    Icon="/Assets/avalonia-logo.ico"
+    Title="AzurePrOps"
+    d:DesignHeight="450"
+    d:DesignWidth="800"
+    mc:Ignorable="d"
+    x:Class="AzurePrOps.Views.MainWindow"
+    x:DataType="vm:MainWindowViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:AzurePrOps.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
-        <vm:MainWindowViewModel/>
+        <!--
+            This only sets the DataContext for the previewer in an IDE,
+            to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs)
+        -->
+        <vm:MainWindowViewModel />
     </Design.DataContext>
 
-    <ScrollViewer Margin="10" VerticalScrollBarVisibility="Auto">
-        <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,*">
-            <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="4">
-                <Button Content="Refresh PRs" Command="{Binding RefreshCommand}" Width="120"/>
-                <Button Content="Settings" Command="{Binding OpenSettingsCommand}" Width="120"/>
-            </StackPanel>
-            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="4">
-            <AutoCompleteBox Width="150"
-                             Watermark="Title"
-                             ItemsSource="{Binding TitleOptions}"
-                             Text="{Binding TitleFilter}"/>
-            <AutoCompleteBox Width="120"
-                             Watermark="Creator"
-                             ItemsSource="{Binding CreatorOptions}"
-                             Text="{Binding CreatorFilter}"/>
-            <AutoCompleteBox Width="120"
-                             Watermark="Source"
-                             ItemsSource="{Binding SourceBranchOptions}"
-                             Text="{Binding SourceBranchFilter}"/>
-            <AutoCompleteBox Width="120"
-                             Watermark="Target"
-                             ItemsSource="{Binding TargetBranchOptions}"
-                             Text="{Binding TargetBranchFilter}"/>
-            <ComboBox Width="120"
-                      ItemsSource="{Binding StatusOptions}"
-                      SelectedItem="{Binding StatusFilter}"/>
-            </StackPanel>
-            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="4">
-            <ComboBox Width="150"
-                      ItemsSource="{Binding FilterViews}"
-                      SelectedItem="{Binding SelectedFilterView}">
-                <ComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Name}" />
-                    </DataTemplate>
-                </ComboBox.ItemTemplate>
-            </ComboBox>
-            <TextBox Width="120" Watermark="View Name" Text="{Binding NewViewName}"/>
-            <Button Content="Save" Command="{Binding SaveViewCommand}" Width="60"/>
-            </StackPanel>
-            <ListBox Grid.Row="3"
-                     ItemsSource="{Binding PullRequests}"
-                     SelectedItem="{Binding SelectedPullRequest}"
-                     DoubleTapped="PullRequests_DoubleTapped">
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <Border Padding="4"
-                           Background="{DynamicResource CardBackgroundBrush}"
-                           BorderBrush="{DynamicResource BorderBrush}"
-                           BorderThickness="0,0,0,1">
-                        <StackPanel Spacing="2">
-                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding Status, Converter={StaticResource StatusToIcon}}"
-                                           Foreground="{Binding Status, Converter={StaticResource StatusToBrush}}"
-                                           FontSize="16"/>
-                                <TextBlock Text="{Binding Title}" FontWeight="Bold"/>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                <TextBlock Text="👤"/>
-                                <TextBlock Text="{Binding Creator}" FontStyle="Italic"/>
-                            </StackPanel>
-                            <TextBlock Text="{Binding ReviewersText}" TextWrapping="Wrap" FontSize="11"/>
-                        </StackPanel>
-                    </Border>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-            </ListBox>
-            <Button Grid.Row="4" Content="Load Comments" Command="{Binding LoadCommentsCommand}" Width="120"/>
-            <Button Grid.Row="5" Content="Approve" Command="{Binding ApproveCommand}" Width="120"/>
-            <StackPanel Grid.Row="6" Orientation="Horizontal" Spacing="4">
-                <Button Content="View Details" Command="{Binding ViewDetailsCommand}" Width="120"/>
-                <ProgressBar Width="120" IsIndeterminate="True" IsVisible="{Binding IsLoadingDiffs}"/>
-            </StackPanel>
-            <StackPanel Grid.Row="7" Orientation="Horizontal" Spacing="4">
-                <TextBox Width="300" Text="{Binding NewCommentText}"/>
-                <Button Content="Post" Command="{Binding PostCommentCommand}"/>
-            </StackPanel>
-            <ListBox Grid.Row="8" ItemsSource="{Binding Comments}">
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <StackPanel Margin="0 0 0 4">
-                        <TextBlock Text="{Binding Author}" FontWeight="Bold"/>
-                        <TextBlock Text="{Binding Content}" TextWrapping="Wrap"/>
+    <Window.Resources>
+        <!--  Unified modern color palette with better contrast  -->
+        <SolidColorBrush Color="#0969DA" x:Key="PrimaryBrush" />
+        <SolidColorBrush Color="#0860CA" x:Key="PrimaryHoverBrush" />
+        <SolidColorBrush Color="#DDF4FF" x:Key="PrimaryLightBrush" />
+
+        <!--  Semantic colors  -->
+        <SolidColorBrush Color="#1A7F37" x:Key="SuccessBrush" />
+        <SolidColorBrush Color="#DCFFE4" x:Key="SuccessLightBrush" />
+        <SolidColorBrush Color="#CF222E" x:Key="DangerBrush" />
+        <SolidColorBrush Color="#FFEBE9" x:Key="DangerLightBrush" />
+        <SolidColorBrush Color="#BF8700" x:Key="WarningBrush" />
+        <SolidColorBrush Color="#FFF8C5" x:Key="WarningLightBrush" />
+
+        <!--  Neutral grays  -->
+        <SolidColorBrush Color="#656D76" x:Key="MutedBrush" />
+        <SolidColorBrush Color="#D0D7DE" x:Key="BorderBrush" />
+        <SolidColorBrush Color="#FFFFFF" x:Key="SurfaceBrush" />
+        <SolidColorBrush Color="#F6F8FA" x:Key="BackgroundBrush" />
+        <SolidColorBrush Color="#24292F" x:Key="TextPrimaryBrush" />
+        <SolidColorBrush Color="#656D76" x:Key="TextSecondaryBrush" />
+
+        <!--  Interactive states  -->
+        <SolidColorBrush Color="#F3F4F6" x:Key="HoverBrush" />
+        <SolidColorBrush Color="#E7F3FF" x:Key="SelectedBrush" />
+        <SolidColorBrush Color="#F8F9FA" x:Key="CardHoverBrush" />
+        <SolidColorBrush Color="#F8F9FA" x:Key="CardBackgroundBrush" />
+    </Window.Resources>
+
+    <Window.Styles>
+        <!--  Card style with better contrast  -->
+        <Style Selector="Border.Card">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="Margin" Value="0,0,0,16" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Duration="0:0:0.15" Property="Background" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <Style Selector="Border.Card:pointerover">
+            <Setter Property="Background" Value="{StaticResource CardHoverBrush}" />
+        </Style>
+
+        <!--  Modern button styles  -->
+        <Style Selector="Button.PrimaryButton">
+            <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Duration="0:0:0.15" Property="Background" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <Style Selector="Button.PrimaryButton:pointerover">
+            <Setter Property="Background" Value="{StaticResource PrimaryHoverBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource PrimaryHoverBrush}" />
+        </Style>
+
+        <Style Selector="Button.SecondaryButton">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Duration="0:0:0.15" Property="Background" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <Style Selector="Button.SecondaryButton:pointerover">
+            <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+        </Style>
+
+        <!--  Success button style  -->
+        <Style Selector="Button.SuccessButton">
+            <Setter Property="Background" Value="{StaticResource SuccessBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="{StaticResource SuccessBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Duration="0:0:0.15" Property="Background" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <Style Selector="Button.SuccessButton:pointerover">
+            <Setter Property="Background" Value="#0F5F2A" />
+            <Setter Property="BorderBrush" Value="#0F5F2A" />
+        </Style>
+
+        <!--  Modern input controls  -->
+        <Style Selector="AutoCompleteBox">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="Padding" Value="8,6" />
+        </Style>
+
+        <Style Selector="ComboBox">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="Padding" Value="8,6" />
+        </Style>
+
+        <Style Selector="TextBox">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="Padding" Value="8,6" />
+        </Style>
+
+        <!--  Modern ListBox item styles  -->
+        <Style Selector="ListBox">
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="4" />
+        </Style>
+
+        <Style Selector="ListBoxItem">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+
+        <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource SelectedBrush}" />
+        </Style>
+
+        <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+        </Style>
+    </Window.Styles>
+
+    <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!--  Header Actions  -->
+            <Border
+                Classes="Card"
+                Grid.Row="0"
+                Margin="0,0,0,16">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button
+                        Classes="PrimaryButton"
+                        Command="{Binding RefreshCommand}"
+                        Content="Refresh PRs"
+                        Width="120" />
+                    <Button
+                        Classes="SecondaryButton"
+                        Command="{Binding OpenSettingsCommand}"
+                        Content="Settings"
+                        Width="120" />
+                </StackPanel>
+            </Border>
+
+            <!--  Filters  -->
+            <Border
+                Classes="Card"
+                Grid.Row="1"
+                Margin="0,0,0,16">
+                <StackPanel Spacing="12">
+                    <TextBlock
+                        FontSize="14"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource TextPrimaryBrush}"
+                        Text="Filters" />
+                    <StackPanel
+                        HorizontalAlignment="Left"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <AutoCompleteBox
+                            ItemsSource="{Binding TitleOptions}"
+                            Text="{Binding TitleFilter}"
+                            Watermark="Title"
+                            Width="150" />
+                        <AutoCompleteBox
+                            ItemsSource="{Binding CreatorOptions}"
+                            Text="{Binding CreatorFilter}"
+                            Watermark="Creator"
+                            Width="120" />
+                        <AutoCompleteBox
+                            ItemsSource="{Binding SourceBranchOptions}"
+                            Text="{Binding SourceBranchFilter}"
+                            Watermark="Source"
+                            Width="120" />
+                        <AutoCompleteBox
+                            ItemsSource="{Binding TargetBranchOptions}"
+                            Text="{Binding TargetBranchFilter}"
+                            Watermark="Target"
+                            Width="120" />
+                        <ComboBox
+                            ItemsSource="{Binding StatusOptions}"
+                            SelectedItem="{Binding StatusFilter}"
+                            Width="120" />
                     </StackPanel>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-            </ListBox>
+                </StackPanel>
+            </Border>
+
+            <!--  Saved Views  -->
+            <Border
+                Classes="Card"
+                Grid.Row="2"
+                Margin="0,0,0,16">
+                <StackPanel Spacing="12">
+                    <TextBlock
+                        FontSize="14"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource TextPrimaryBrush}"
+                        Text="Saved Views" />
+                    <StackPanel
+                        HorizontalAlignment="Left"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <ComboBox
+                            ItemsSource="{Binding FilterViews}"
+                            SelectedItem="{Binding SelectedFilterView}"
+                            Width="150">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Name}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBox
+                            Text="{Binding NewViewName}"
+                            Watermark="View Name"
+                            Width="120" />
+                        <Button
+                            Classes="SecondaryButton"
+                            Command="{Binding SaveViewCommand}"
+                            Content="Save"
+                            Width="60" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!--  Pull Requests List  -->
+            <Border
+                Classes="Card"
+                Grid.Row="3"
+                Margin="0,0,0,16">
+                <StackPanel Spacing="12">
+                    <TextBlock
+                        FontSize="14"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource TextPrimaryBrush}"
+                        Text="Pull Requests" />
+                    <ListBox
+                        DoubleTapped="PullRequests_DoubleTapped"
+                        ItemsSource="{Binding PullRequests}"
+                        MinHeight="200"
+                        SelectedItem="{Binding SelectedPullRequest}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border
+                                    Background="Transparent"
+                                    CornerRadius="6"
+                                    Margin="0,0,0,4"
+                                    Padding="12">
+                                    <StackPanel Spacing="4">
+                                        <StackPanel
+                                            Orientation="Horizontal"
+                                            Spacing="8"
+                                            VerticalAlignment="Center">
+                                            <TextBlock
+                                                FontSize="16"
+                                                Foreground="{Binding Status, Converter={StaticResource StatusToBrush}}"
+                                                Text="{Binding Status, Converter={StaticResource StatusToIcon}}" />
+                                            <TextBlock
+                                                FontWeight="SemiBold"
+                                                Foreground="{StaticResource TextPrimaryBrush}"
+                                                Text="{Binding Title}" />
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <TextBlock FontSize="12" Text="👤" />
+                                            <TextBlock
+                                                FontSize="12"
+                                                FontStyle="Italic"
+                                                Foreground="{StaticResource TextSecondaryBrush}"
+                                                Text="{Binding Creator}" />
+                                        </StackPanel>
+                                        <TextBlock
+                                            FontSize="11"
+                                            Foreground="{StaticResource TextSecondaryBrush}"
+                                            Text="{Binding ReviewersText}"
+                                            TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </StackPanel>
+            </Border>
+
+            <!--  Actions  -->
+            <Border
+                Classes="Card"
+                Grid.Row="4"
+                Margin="0,0,0,16">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button
+                        Classes="SecondaryButton"
+                        Command="{Binding LoadCommentsCommand}"
+                        Content="Load Comments"
+                        Width="120" />
+                    <Button
+                        Classes="SuccessButton"
+                        Command="{Binding ApproveCommand}"
+                        Content="Approve"
+                        Width="120" />
+                </StackPanel>
+            </Border>
+
+            <!--  Details and Progress  -->
+            <Border
+                Classes="Card"
+                Grid.Row="5"
+                Margin="0,0,0,16">
+                <StackPanel
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+                    <Button
+                        Classes="PrimaryButton"
+                        Command="{Binding ViewDetailsCommand}"
+                        Content="View Details"
+                        Width="120" />
+                    <ProgressBar
+                        IsIndeterminate="True"
+                        IsVisible="{Binding IsLoadingDiffs}"
+                        Width="120" />
+                </StackPanel>
+            </Border>
+
+            <!--  Comment Input  -->
+            <Border
+                Classes="Card"
+                Grid.Row="6"
+                Margin="0,0,0,16">
+                <StackPanel Spacing="12">
+                    <TextBlock
+                        FontSize="14"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource TextPrimaryBrush}"
+                        Text="Add Comment" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBox
+                            Text="{Binding NewCommentText}"
+                            Watermark="Enter your comment..."
+                            Width="300" />
+                        <Button
+                            Classes="PrimaryButton"
+                            Command="{Binding PostCommentCommand}"
+                            Content="Post" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!--  Comments  -->
+            <Border Classes="Card" Grid.Row="7">
+                <StackPanel Spacing="12">
+                    <TextBlock
+                        FontSize="14"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource TextPrimaryBrush}"
+                        Text="Comments" />
+                    <ListBox ItemsSource="{Binding Comments}" MinHeight="150">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border
+                                    Background="{StaticResource BackgroundBrush}"
+                                    CornerRadius="6"
+                                    Margin="0,0,0,8"
+                                    Padding="12">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock
+                                            FontSize="12"
+                                            FontWeight="SemiBold"
+                                            Foreground="{StaticResource TextPrimaryBrush}"
+                                            Text="{Binding Author}" />
+                                        <TextBlock
+                                            Foreground="{StaticResource TextPrimaryBrush}"
+                                            Text="{Binding Content}"
+                                            TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </StackPanel>
+            </Border>
         </Grid>
     </ScrollViewer>
 
