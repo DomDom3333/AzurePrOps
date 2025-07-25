@@ -23,6 +23,7 @@
 
 
 
+<Grid>
     <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
         <Grid>
             <Grid.RowDefinitions>
@@ -293,21 +294,23 @@
                 </StackPanel>
             </Border>
 
-            <!-- Loading overlay shown while opening PR details -->
-            <Border
-                Background="#80000000"
-                IsHitTestVisible="{Binding IsLoadingDiffs}"
-                IsVisible="{Binding IsLoadingDiffs}"
-                Grid.RowSpan="9"
-                ZIndex="100">
-                <ProgressBar
-                    IsIndeterminate="True"
-                    Width="160"
-                    Height="20"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center" />
-            </Border>
         </Grid>
     </ScrollViewer>
+    <!-- Loading overlay shown while opening PR details -->
+    <Border
+        Background="#80000000"
+        IsHitTestVisible="{Binding IsLoadingDiffs}"
+        IsVisible="{Binding IsLoadingDiffs}"
+        ZIndex="100">
+        <ProgressBar
+            IsIndeterminate="True"
+            Width="160"
+            Height="20"
+            Foreground="{StaticResource PrimaryBrush}"
+            Background="{StaticResource SurfaceBrush}"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center" />
+    </Border>
+</Grid>
 
 </Window>
