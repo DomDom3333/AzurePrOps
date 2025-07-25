@@ -518,6 +518,9 @@ namespace AzurePrOps.Controls
 
             _logger.LogDebug("Built diff model with {Lines} lines and {Changes} changes", model.Lines.Count, lineMap.Count(kv => kv.Value != DiffLineType.Unchanged));
 
+            // Store the line types for folding
+            _lineTypes = lineMap;
+
             // Highlight backgrounds
             var transformer = new DiffLineBackgroundTransformer(lineMap);
             _oldEditor.TextArea.TextView.LineTransformers.Add(transformer);
@@ -751,8 +754,13 @@ namespace AzurePrOps.Controls
 
         private void ApplyFolding()
         {
+            _logger.LogDebug("ApplyFolding() called. _codeFoldingEnabled={CodeFoldingEnabled}", _codeFoldingEnabled);
+            
             if (_oldEditor is null || _newEditor is null)
+            {
+                _logger.LogDebug("ApplyFolding(): editors are null, aborting");
                 return;
+            }
 
             _oldFoldingManager ??= FoldingManager.Install(_oldEditor.TextArea);
             _newFoldingManager ??= FoldingManager.Install(_newEditor.TextArea);
@@ -794,8 +802,13 @@ namespace AzurePrOps.Controls
                 }
             }
 
+            _logger.LogDebug("ApplyFolding(): Created {OldFoldCount} folds for old editor, {NewFoldCount} folds for new editor", 
+                newFoldingsOld.Count, newFoldingsNew.Count);
+
             _oldFoldingManager.UpdateFoldings(newFoldingsOld, -1);
             _newFoldingManager.UpdateFoldings(newFoldingsNew, -1);
+            
+            _logger.LogDebug("ApplyFolding(): Successfully applied foldings to both editors");
         }
 
         private void ClearFolding()
@@ -824,39 +837,94 @@ namespace AzurePrOps.Controls
         private IEnumerable<(int Start, int End)> GetFoldRegionsAroundChanges(int context = 2)
         {
             int lineCount = Math.Max(_oldEditor?.Document.LineCount ?? 0, _newEditor?.Document.LineCount ?? 0);
-            var folds = new List<(int, int)>();
-            int start = -1;
-
+            
+            _logger.LogDebug("GetFoldRegionsAroundChanges: lineCount={LineCount}, _lineTypes.Count={LineTypesCount}", 
+                lineCount, _lineTypes.Count);
+            
+            if (lineCount == 0)
+            {
+                _logger.LogDebug("GetFoldRegionsAroundChanges: No lines to process");
+                yield break;
+            }
+                
+            // Get all changed line numbers
+            var changedLines = new HashSet<int>();
             for (int i = 1; i <= lineCount; i++)
             {
                 var type = _lineTypes.TryGetValue(i, out var t) ? t : DiffLineType.Unchanged;
-                bool changed = type != DiffLineType.Unchanged;
-
-                if (!changed)
+                if (type != DiffLineType.Unchanged)
                 {
-                    if (start == -1)
-                        start = i;
+                    changedLines.Add(i);
+                }
+            }
+            
+            _logger.LogDebug("GetFoldRegionsAroundChanges: Found {ChangedCount} changed lines: [{ChangedLines}]", 
+                changedLines.Count, string.Join(",", changedLines.OrderBy(x => x)));
+            
+            // If no changes, don't fold anything
+            if (changedLines.Count == 0)
+            {
+                _logger.LogDebug("GetFoldRegionsAroundChanges: No changes found, not folding anything");
+                yield break;
+            }
+            
+            // Calculate which lines should be visible (changed lines + context)
+            var visibleLines = new HashSet<int>();
+            foreach (int changedLine in changedLines)
+            {
+                // Add the changed line and context around it
+                for (int i = Math.Max(1, changedLine - context); 
+                     i <= Math.Min(lineCount, changedLine + context); 
+                     i++)
+                {
+                    visibleLines.Add(i);
+                }
+            }
+            
+            _logger.LogDebug("GetFoldRegionsAroundChanges: {VisibleCount} visible lines with context {Context}: [{VisibleLines}]", 
+                visibleLines.Count, context, string.Join(",", visibleLines.OrderBy(x => x)));
+            
+            // Find consecutive ranges of hidden lines to fold
+            int? foldStart = null;
+            var foldRegions = new List<(int, int)>();
+            
+            for (int i = 1; i <= lineCount; i++)
+            {
+                bool shouldBeVisible = visibleLines.Contains(i);
+                
+                if (!shouldBeVisible)
+                {
+                    // Start a new fold region if we haven't started one
+                    if (foldStart == null)
+                        foldStart = i;
                 }
                 else
                 {
-                    if (start != -1)
+                    // End the current fold region if we have one
+                    if (foldStart.HasValue)
                     {
-                        folds.Add((start, i - 1));
-                        start = -1;
+                        // Only fold if we have at least 1 line to fold
+                        if (i - 1 >= foldStart.Value)
+                        {
+                            foldRegions.Add((foldStart.Value, i - 1));
+                        }
+                        foldStart = null;
                     }
                 }
             }
-            if (start != -1)
-                folds.Add((start, lineCount));
-
-            foreach (var (s, e) in folds)
+            
+            // Handle case where fold region extends to end of file
+            if (foldStart.HasValue)
             {
-                if (e - s + 1 <= context * 2)
-                    continue;
-                int fs = s + context;
-                int fe = e - context;
-                if (fs <= fe)
-                    yield return (fs, fe);
+                foldRegions.Add((foldStart.Value, lineCount));
+            }
+            
+            _logger.LogDebug("GetFoldRegionsAroundChanges: Generated {FoldCount} fold regions: [{FoldRegions}]", 
+                foldRegions.Count, string.Join(", ", foldRegions.Select(r => $"{r.Item1}-{r.Item2}")));
+            
+            foreach (var region in foldRegions)
+            {
+                yield return region;
             }
         }
 
