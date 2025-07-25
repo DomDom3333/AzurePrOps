@@ -8,12 +8,16 @@
         x:DataType="vm:LoginWindowViewModel"
         Title="Login">
     <StackPanel Margin="10" Spacing="6">
-        <TextBox Watermark="Email" Text="{Binding Email}"/>
-        <TextBox Watermark="PAT" Text="{Binding PersonalAccessToken}"/>
-        <Button Content="Login" Command="{Binding LoginCommand}" Width="100" HorizontalAlignment="Right"/>
-        <TextBlock Text="{Binding ErrorMessage}" 
-                   Foreground="Red" 
+        <TextBox Watermark="Email" Text="{Binding Email}" />
+        <TextBox Watermark="PAT" Text="{Binding PersonalAccessToken}" />
+        <Button Classes="PrimaryButton"
+                Content="Login"
+                Command="{Binding LoginCommand}"
+                Width="100"
+                HorizontalAlignment="Right" />
+        <TextBlock Text="{Binding ErrorMessage}"
+                   Foreground="{DynamicResource ErrorBrush}"
                    TextWrapping="Wrap"
-                   IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                   IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
     </StackPanel>
 </Window>

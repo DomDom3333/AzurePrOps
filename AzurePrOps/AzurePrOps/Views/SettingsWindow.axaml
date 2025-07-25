@@ -149,10 +149,12 @@
 
         <StackPanel Grid.Row="8" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
             <Button
+                Classes="SecondaryButton"
                 Content="Logout"
                 Command="{Binding LogoutCommand}"
                 Width="120" />
             <Button
+                Classes="PrimaryButton"
                 Content="Save"
                 Command="{Binding SaveCommand}"
                 IsEnabled="{Binding !!SelectedRepository}"

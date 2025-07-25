@@ -26,9 +26,11 @@
             HorizontalAlignment="Center"
             Text="{Binding ErrorMessage}"
             TextWrapping="Wrap"
-            VerticalAlignment="Center" />
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource TextPrimaryBrush}" />
 
         <Button
+            Classes="PrimaryButton"
             Command="{Binding CloseCommand}"
             Content="OK"
             Grid.Row="1"
