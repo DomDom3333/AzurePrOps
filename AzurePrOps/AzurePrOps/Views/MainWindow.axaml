@@ -292,6 +292,21 @@
                     </ListBox>
                 </StackPanel>
             </Border>
+
+            <!-- Loading overlay shown while opening PR details -->
+            <Border
+                Background="#80000000"
+                IsHitTestVisible="{Binding IsLoadingDiffs}"
+                IsVisible="{Binding IsLoadingDiffs}"
+                Grid.RowSpan="9"
+                ZIndex="100">
+                <ProgressBar
+                    IsIndeterminate="True"
+                    Width="160"
+                    Height="20"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center" />
+            </Border>
         </Grid>
     </ScrollViewer>
 
