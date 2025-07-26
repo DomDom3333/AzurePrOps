@@ -7,6 +7,7 @@ public static class FeatureFlagManager
 {
     private static bool _inlineCommentsEnabled;
     private static bool _lifecycleActionsEnabled;
+    private static bool _autoRefreshEnabled;
 
     public static bool InlineCommentsEnabled
     {
@@ -16,7 +17,7 @@ public static class FeatureFlagManager
             if (_inlineCommentsEnabled != value)
             {
                 _inlineCommentsEnabled = value;
-                FeatureFlagStorage.Save(new FeatureFlags(_inlineCommentsEnabled, _lifecycleActionsEnabled));
+                FeatureFlagStorage.Save(new FeatureFlags(_inlineCommentsEnabled, _lifecycleActionsEnabled, _autoRefreshEnabled));
             }
         }
     }
@@ -29,7 +30,20 @@ public static class FeatureFlagManager
             if (_lifecycleActionsEnabled != value)
             {
                 _lifecycleActionsEnabled = value;
-                FeatureFlagStorage.Save(new FeatureFlags(_inlineCommentsEnabled, _lifecycleActionsEnabled));
+                FeatureFlagStorage.Save(new FeatureFlags(_inlineCommentsEnabled, _lifecycleActionsEnabled, _autoRefreshEnabled));
+            }
+        }
+    }
+
+    public static bool AutoRefreshEnabled
+    {
+        get => _autoRefreshEnabled;
+        set
+        {
+            if (_autoRefreshEnabled != value)
+            {
+                _autoRefreshEnabled = value;
+                FeatureFlagStorage.Save(new FeatureFlags(_inlineCommentsEnabled, _lifecycleActionsEnabled, _autoRefreshEnabled));
             }
         }
     }
@@ -39,5 +53,6 @@ public static class FeatureFlagManager
         var flags = FeatureFlagStorage.Load();
         _inlineCommentsEnabled = flags.InlineCommentsEnabled;
         _lifecycleActionsEnabled = flags.LifecycleActionsEnabled;
+        _autoRefreshEnabled = flags.AutoRefreshEnabled;
     }
 }
