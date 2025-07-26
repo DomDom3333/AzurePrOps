@@ -403,6 +403,7 @@
                                                     HorizontalAlignment="Stretch"
                                                     NewText="{Binding NewText}"
                                                     OldText="{Binding OldText}"
+                                                    PullRequestId="{Binding DataContext.PullRequest.Id, RelativeSource={RelativeSource AncestorType=Window}}"
                                                     VerticalAlignment="Stretch"
                                                     ViewMode="SideBySide" />
                                             </Border>

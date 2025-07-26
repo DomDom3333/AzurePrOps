@@ -14,6 +14,7 @@ using AvaloniaEdit.Rendering;
 using AvaloniaEdit.Folding;
 using Avalonia.VisualTree;
 using Avalonia.Input;
+using System.Threading.Tasks;
 using AzurePrOps.ReviewLogic.Models;
 using AzurePrOps.ReviewLogic.Services;
 using AzurePrOps.Models;
@@ -39,6 +40,8 @@ namespace AzurePrOps.Controls
             AvaloniaProperty.Register<DiffViewer, string>(nameof(NewText));
         public static readonly StyledProperty<DiffViewMode> ViewModeProperty =
             AvaloniaProperty.Register<DiffViewer, DiffViewMode>(nameof(ViewMode), DiffViewMode.SideBySide);
+        public static readonly StyledProperty<int> PullRequestIdProperty =
+            AvaloniaProperty.Register<DiffViewer, int>(nameof(PullRequestId));
 
         // Services (injected via DI)
         public ICommentProvider CommentProvider { get; set; }
@@ -53,6 +56,7 @@ namespace AzurePrOps.Controls
         public ICodeFoldingService FoldingService { get; set; }
         public ISearchService SearchService { get; set; }
         public IIDEIntegrationService IDEService { get; set; }
+        public ICommentsService CommentsService { get; set; }
 
         // Enhanced UI elements
         private TextBox? _searchBox;
@@ -84,6 +88,8 @@ namespace AzurePrOps.Controls
         private bool _syncScrollInProgress = false;
         private List<int> _searchMatches = new();
         private int _currentSearchIndex = -1;
+        private Dictionary<int, CommentThread> _threadsByLine = new();
+        private Popup? _commentPopup;
 
         static DiffViewer()
         {
@@ -104,6 +110,7 @@ namespace AzurePrOps.Controls
         public string OldText { get => GetValue(OldTextProperty); set => SetValue(OldTextProperty, value); }
         public string NewText { get => GetValue(NewTextProperty); set => SetValue(NewTextProperty, value); }
         public DiffViewMode ViewMode { get => GetValue(ViewModeProperty); set => SetValue(ViewModeProperty, value); }
+        public int PullRequestId { get => GetValue(PullRequestIdProperty); set => SetValue(PullRequestIdProperty, value); }
 
         public DiffViewer()
         {
@@ -119,6 +126,7 @@ namespace AzurePrOps.Controls
             PatchService       = new FilePatchService();
             FoldingService     = new IndentationFoldingService();
             SearchService      = new SimpleSearchService();
+            CommentsService    = new CommentsService(new AzureDevOpsClient());
             string editor = ConnectionSettingsStorage.TryLoad(out var s)
                 ? s!.EditorCommand
                 : EditorDetector.GetDefaultEditor();
@@ -161,6 +169,7 @@ namespace AzurePrOps.Controls
                 OldText = diff.OldText ?? string.Empty;
                 NewText = diff.NewText ?? string.Empty;
                 UpdateFileInfo(diff);
+                LoadThreadsAsync(diff);
             }
             else
             {
@@ -458,6 +467,9 @@ namespace AzurePrOps.Controls
             _oldEditor.GotFocus += (_, __) => UpdatePosition();
             _newEditor.GotFocus += (_, __) => UpdatePosition();
 
+            _oldEditor.PointerPressed += EditorPointerPressed;
+            _newEditor.PointerPressed += EditorPointerPressed;
+
             SetupScrollSync();
             Render();
         }
@@ -607,11 +619,201 @@ namespace AzurePrOps.Controls
             _metricsPanel?.Children.Clear();
             foreach (var m in MetricsService?.GetMetrics("<repo>") ?? Enumerable.Empty<MetricData>())
             {
-                _metricsPanel?.Children.Add(new TextBlock { 
+                _metricsPanel?.Children.Add(new TextBlock {
                     Text = $"{m.Name}: {m.Value}",
                     FontSize = 12,
                     Margin = new Thickness(8, 0)
                 });
+            }
+        }
+
+        private async void LoadThreadsAsync(FileDiff diff)
+        {
+            if (!FeatureFlagManager.InlineCommentsEnabled)
+                return;
+
+            _threadsByLine.Clear();
+
+            if (!ConnectionSettingsStorage.TryLoad(out var settings))
+                return;
+
+            try
+            {
+                var threads = await CommentsService.GetThreadsAsync(
+                    settings.Organization,
+                    settings.Project,
+                    settings.Repository,
+                    PullRequestId,
+                    settings.PersonalAccessToken);
+
+                foreach (var t in threads.Where(t => string.Equals(t.FilePath, diff.FilePath, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _threadsByLine[t.LineNumber] = t;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load comment threads");
+            }
+
+            ApplyCommentMarkers();
+        }
+
+        private void ApplyCommentMarkers()
+        {
+            if (_oldEditor == null || _newEditor == null)
+                return;
+
+            RemoveCommentRenderers(_oldEditor);
+            RemoveCommentRenderers(_newEditor);
+
+            if (_threadsByLine.Count == 0)
+                return;
+
+            var renderer = new CommentThreadMarginRenderer(_threadsByLine.Keys);
+            _oldEditor.TextArea.TextView.BackgroundRenderers.Add(renderer);
+            _newEditor.TextArea.TextView.BackgroundRenderers.Add(renderer);
+        }
+
+        private static void RemoveCommentRenderers(TextEditor editor)
+        {
+            for (int i = editor.TextArea.TextView.BackgroundRenderers.Count - 1; i >= 0; i--)
+            {
+                if (editor.TextArea.TextView.BackgroundRenderers[i] is CommentThreadMarginRenderer)
+                {
+                    editor.TextArea.TextView.BackgroundRenderers.RemoveAt(i);
+                }
+            }
+        }
+
+        private void EditorPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            if (!FeatureFlagManager.InlineCommentsEnabled)
+                return;
+
+            if (sender is not TextEditor editor)
+                return;
+
+            var pos = e.GetPosition(editor.TextArea.TextView);
+            if (pos.X > 20) // Only react to clicks in the gutter
+                return;
+
+            var loc = editor.TextArea.TextView.GetPosition(pos);
+            if (loc == null)
+                return;
+
+            ShowThreadPopup(editor, loc.Value.Line);
+            e.Handled = true;
+        }
+
+        private void ShowThreadPopup(TextEditor editor, int line)
+        {
+            _threadsByLine.TryGetValue(line, out var thread);
+
+            var panel = BuildThreadPanel(thread, line);
+
+            _commentPopup?.Close();
+            _commentPopup = new Popup
+            {
+                PlacementTarget = editor,
+                PlacementMode = PlacementMode.Pointer,
+                StaysOpen = false,
+                Child = panel
+            };
+
+            _commentPopup.Open();
+        }
+
+        private Control BuildThreadPanel(CommentThread? thread, int line)
+        {
+            var stack = new StackPanel { Spacing = 4, MaxWidth = 400 };
+
+            if (thread != null)
+            {
+                foreach (var c in thread.Comments)
+                {
+                    stack.Children.Add(new TextBlock
+                    {
+                        Text = $"{c.Author}: {c.Content}",
+                        TextWrapping = TextWrapping.Wrap,
+                        FontSize = 12
+                    });
+                }
+            }
+            else
+            {
+                stack.Children.Add(new TextBlock
+                {
+                    Text = "No comments",
+                    FontStyle = FontStyle.Italic,
+                    FontSize = 12
+                });
+            }
+
+            var box = new TextBox { AcceptsReturn = true, Width = 300, Height = 60 };
+            var btn = new Button { Content = "Post" };
+            btn.Click += async (_, __) =>
+            {
+                await PostCommentAsync(thread, line, box.Text);
+                _commentPopup?.Close();
+            };
+
+            stack.Children.Add(box);
+            stack.Children.Add(btn);
+
+            return new Border
+            {
+                Background = Brushes.White,
+                BorderBrush = Brushes.Gray,
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(8),
+                Child = stack
+            };
+        }
+
+        private async Task PostCommentAsync(CommentThread? thread, int line, string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+
+            if (!ConnectionSettingsStorage.TryLoad(out var settings) || DataContext is not FileDiff diff)
+                return;
+
+            try
+            {
+                if (thread == null)
+                {
+                    var newThread = await CommentsService.CreateThreadAsync(
+                        settings.Organization,
+                        settings.Project,
+                        settings.Repository,
+                        PullRequestId,
+                        diff.FilePath,
+                        line,
+                        text,
+                        settings.PersonalAccessToken);
+                    _threadsByLine[line] = newThread;
+                }
+                else
+                {
+                    var lastId = thread.Comments.Last().Id;
+                    var updated = await CommentsService.ReplyToThreadAsync(
+                        settings.Organization,
+                        settings.Project,
+                        settings.Repository,
+                        PullRequestId,
+                        thread.ThreadId,
+                        lastId,
+                        text,
+                        settings.PersonalAccessToken);
+                    _threadsByLine[line] = updated;
+                }
+
+                ApplyCommentMarkers();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to post comment");
             }
         }
 
