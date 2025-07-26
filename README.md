@@ -22,3 +22,7 @@ When viewing a diff with the feature enabled, click in the gutter beside a line 
 
 Each comment now shows the author and timestamp and includes a **Resolve** button that toggles the thread's status.
 The sidebar lists all threads and can filter to only unresolved items.
+
+## Lifecycle Actions
+
+Enable **Lifecycle actions** in Settings to show additional pull request controls. When enabled, the PR list displays your vote and a badge for draft PRs. Extra buttons allow approving with suggestions, waiting for the author, rejecting and more.

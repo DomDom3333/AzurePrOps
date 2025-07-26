@@ -75,6 +75,13 @@ public class SettingsWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _inlineCommentsEnabled, value);
     }
 
+    private bool _lifecycleActionsEnabled = FeatureFlagManager.LifecycleActionsEnabled;
+    public bool LifecycleActionsEnabled
+    {
+        get => _lifecycleActionsEnabled;
+        set => this.RaiseAndSetIfChanged(ref _lifecycleActionsEnabled, value);
+    }
+
     public ObservableCollection<string> Editors { get; } = new();
 
     private string _selectedEditor = string.Empty;
@@ -108,6 +115,7 @@ public class SettingsWindowViewModel : ViewModelBase
                 UseGitDiff);
             ConnectionSettingsStorage.Save(settings);
             FeatureFlagManager.InlineCommentsEnabled = InlineCommentsEnabled;
+            FeatureFlagManager.LifecycleActionsEnabled = LifecycleActionsEnabled;
             ConnectionSettings = settings;
 
             if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)

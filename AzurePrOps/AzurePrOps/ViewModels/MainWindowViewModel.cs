@@ -38,6 +38,8 @@ public class MainWindowViewModel : ViewModelBase
     public ObservableCollection<string> SourceBranchOptions { get; } = new();
     public ObservableCollection<string> TargetBranchOptions { get; } = new();
 
+    public bool LifecycleActionsEnabled => FeatureFlagManager.LifecycleActionsEnabled;
+
     private FilterView? _selectedFilterView;
     public FilterView? SelectedFilterView
     {
@@ -212,7 +214,9 @@ public class MainWindowViewModel : ViewModelBase
                 _allPullRequests.Clear();
                 foreach (var pr in prs.OrderByDescending(p => p.Created))
                 {
-                    _allPullRequests.Add(pr);
+                    var vote = pr.Reviewers.FirstOrDefault(r => r.Id == _settings.ReviewerId)?.Vote ?? "No vote";
+                    var showDraft = pr.IsDraft && FeatureFlagManager.LifecycleActionsEnabled;
+                    _allPullRequests.Add(pr with { ReviewerVote = vote, ShowDraftBadge = showDraft });
                 }
                 UpdateFilterOptions();
                 ApplyFilters();

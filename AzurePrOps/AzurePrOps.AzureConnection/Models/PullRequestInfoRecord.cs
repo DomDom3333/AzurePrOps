@@ -14,7 +14,9 @@ public record PullRequestInfo(
     string SourceBranch,
     string TargetBranch,
     string Url,
-    bool IsDraft = false)
+    bool IsDraft = false,
+    string ReviewerVote = "No vote",
+    bool ShowDraftBadge = false)
 {
     public string WebUrl => !string.IsNullOrWhiteSpace(Url) && Uri.IsWellFormedUriString(Url, UriKind.Absolute)
         ? Url
@@ -22,6 +24,8 @@ public record PullRequestInfo(
 
     public string ReviewersText => string.Join(", ",
         Reviewers.Select(r => $"{VoteToIcon(r.Vote)} {r.DisplayName} ({r.Vote})"));
+
+    public string ReviewerVoteIcon => VoteToIcon(ReviewerVote);
 
     private static string VoteToIcon(string vote) => vote.ToLowerInvariant() switch
     {
