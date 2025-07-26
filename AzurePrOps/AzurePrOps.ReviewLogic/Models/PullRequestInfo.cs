@@ -17,7 +17,8 @@ public record PullRequestInfo(
     IReadOnlyList<ReviewerInfo> Reviewers,
     string SourceBranch,
     string TargetBranch,
-    string Url)
+    string Url,
+    bool IsDraft = false)
     {
     // Ensure URL is valid and well-formed
     public string WebUrl => !string.IsNullOrWhiteSpace(Url) && Uri.IsWellFormedUriString(Url, UriKind.Absolute) 
