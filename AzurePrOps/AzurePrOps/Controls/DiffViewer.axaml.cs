@@ -931,6 +931,14 @@ namespace AzurePrOps.Controls
             }, null, 1500, System.Threading.Timeout.Infinite);
         }
 
+        public void JumpToLine(int lineNumber)
+        {
+            if (_oldEditor != null)
+                ScrollToLine(_oldEditor, lineNumber);
+            if (_newEditor != null && ViewMode == DiffViewMode.SideBySide)
+                ScrollToLine(_newEditor, lineNumber);
+        }
+
         private void SetupScrollSync()
         {
             _oldEditor?.ApplyTemplate();
