@@ -6,6 +6,7 @@ namespace AzurePrOps.Models;
 public static class FeatureFlagManager
 {
     private static bool _inlineCommentsEnabled;
+    private static bool _lifecycleActionsEnabled;
 
     public static bool InlineCommentsEnabled
     {
@@ -15,7 +16,20 @@ public static class FeatureFlagManager
             if (_inlineCommentsEnabled != value)
             {
                 _inlineCommentsEnabled = value;
-                FeatureFlagStorage.Save(new FeatureFlags(_inlineCommentsEnabled));
+                FeatureFlagStorage.Save(new FeatureFlags(_inlineCommentsEnabled, _lifecycleActionsEnabled));
+            }
+        }
+    }
+
+    public static bool LifecycleActionsEnabled
+    {
+        get => _lifecycleActionsEnabled;
+        set
+        {
+            if (_lifecycleActionsEnabled != value)
+            {
+                _lifecycleActionsEnabled = value;
+                FeatureFlagStorage.Save(new FeatureFlags(_inlineCommentsEnabled, _lifecycleActionsEnabled));
             }
         }
     }
@@ -24,5 +38,6 @@ public static class FeatureFlagManager
     {
         var flags = FeatureFlagStorage.Load();
         _inlineCommentsEnabled = flags.InlineCommentsEnabled;
+        _lifecycleActionsEnabled = flags.LifecycleActionsEnabled;
     }
 }

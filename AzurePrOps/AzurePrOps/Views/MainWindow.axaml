@@ -136,6 +136,9 @@
                                                         Foreground="{Binding Status, Converter={StaticResource StatusToBrush}}"
                                                         Text="{Binding Status, Converter={StaticResource StatusToIcon}}" />
                                                     <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
+                                                    <Border Background="{DynamicResource ErrorBrush}" Padding="2,0" CornerRadius="4" IsVisible="{Binding ShowDraftBadge}">
+                                                        <TextBlock Text="DRAFT" FontSize="10" Foreground="White" />
+                                                    </Border>
                                                 </StackPanel>
                                                 <StackPanel Orientation="Horizontal" Spacing="6">
                                                     <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding Id, StringFormat='PR #{0}'}" />
@@ -146,6 +149,10 @@
                                                     <TextBlock FontSize="12" FontStyle="Italic" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding Creator}" />
                                                 </StackPanel>
                                                 <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding ReviewersText}" TextWrapping="Wrap" />
+                                                <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{x:Static ff:FeatureFlagManager.LifecycleActionsEnabled}">
+                                                    <TextBlock FontSize="11" Text="{Binding ReviewerVoteIcon}" />
+                                                    <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding ReviewerVote}" />
+                                                </StackPanel>
                                             </StackPanel>
                                         </Border>
                                     </DataTemplate>
@@ -159,6 +166,13 @@
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <Button Classes="SecondaryButton" Command="{Binding LoadCommentsCommand}" Content="Load Comments" Width="120" />
                             <Button Classes="SuccessButton" Command="{Binding ApproveCommand}" Content="Approve" Width="120" />
+                            <Button Classes="SecondaryButton" Command="{Binding ApproveWithSuggestionsCommand}" Content="Approve w/ Suggestions" Width="160" IsVisible="{Binding LifecycleActionsEnabled}" />
+                            <Button Classes="SecondaryButton" Command="{Binding WaitForAuthorCommand}" Content="Wait for Author" Width="140" IsVisible="{Binding LifecycleActionsEnabled}" />
+                            <Button Classes="DangerButton" Command="{Binding RejectCommand}" Content="Reject" Width="120" IsVisible="{Binding LifecycleActionsEnabled}" />
+                            <Button Classes="SecondaryButton" Command="{Binding MarkDraftCommand}" Content="Mark Draft" Width="120" IsVisible="{Binding LifecycleActionsEnabled}" />
+                            <Button Classes="SecondaryButton" Command="{Binding MarkReadyCommand}" Content="Mark Ready" Width="120" IsVisible="{Binding LifecycleActionsEnabled}" />
+                            <Button Classes="SecondaryButton" Command="{Binding CompleteCommand}" Content="Complete" Width="120" IsVisible="{Binding LifecycleActionsEnabled}" />
+                            <Button Classes="DangerButton" Command="{Binding AbandonCommand}" Content="Abandon" Width="120" IsVisible="{Binding LifecycleActionsEnabled}" />
                             <Button Classes="PrimaryButton" Command="{Binding ViewDetailsCommand}" Content="View Details" Width="120" />
                             <Button Classes="SecondaryButton" Command="{Binding OpenInBrowserCommand}" CommandParameter="{Binding SelectedPullRequest}" Content="Open in Browser" Width="140" />
                             <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoadingDiffs}" Width="120" />
