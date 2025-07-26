@@ -7,6 +7,7 @@ using ReviewModels = AzurePrOps.ReviewLogic.Models;
 using ReactiveUI;
 using System.Collections.ObjectModel;
 using System.Reactive;
+using System.Reactive.Linq;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -148,6 +149,13 @@ public class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<PullRequestInfo?, Unit> OpenInBrowserCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveViewCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenSettingsCommand { get; }
+    public ReactiveCommand<Unit, Unit> ApproveWithSuggestionsCommand { get; }
+    public ReactiveCommand<Unit, Unit> WaitForAuthorCommand { get; }
+    public ReactiveCommand<Unit, Unit> RejectCommand { get; }
+    public ReactiveCommand<Unit, Unit> MarkDraftCommand { get; }
+    public ReactiveCommand<Unit, Unit> MarkReadyCommand { get; }
+    public ReactiveCommand<Unit, Unit> CompleteCommand { get; }
+    public ReactiveCommand<Unit, Unit> AbandonCommand { get; }
 
     private async Task ShowErrorMessage(string message)
     {
@@ -188,6 +196,9 @@ public class MainWindowViewModel : ViewModelBase
         // Add error handling mechanism
         _client.SetErrorHandler(message => _ = ShowErrorMessage(message));
 
+        var hasSelection = this.WhenAnyValue(x => x.SelectedPullRequest)
+            .Select(pr => pr != null);
+
         RefreshCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             try
@@ -214,7 +225,7 @@ public class MainWindowViewModel : ViewModelBase
             }
         });
 
-        LoadCommentsCommand = ReactiveCommand.CreateFromTask(async () => await LoadCommentsAsync());
+        LoadCommentsCommand = ReactiveCommand.CreateFromTask(async () => await LoadCommentsAsync(), hasSelection);
 
         ApproveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -228,7 +239,106 @@ public class MainWindowViewModel : ViewModelBase
                 SelectedPullRequest.Id,
                 _settings.ReviewerId,
                 _settings.PersonalAccessToken);
-        });
+        }, hasSelection);
+
+        ApproveWithSuggestionsCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (SelectedPullRequest == null)
+                return;
+
+            await _client.ApproveWithSuggestionsAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                SelectedPullRequest.Id,
+                _settings.ReviewerId,
+                _settings.PersonalAccessToken);
+        }, hasSelection);
+
+        WaitForAuthorCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (SelectedPullRequest == null)
+                return;
+
+            await _client.SetPullRequestVoteAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                SelectedPullRequest.Id,
+                _settings.ReviewerId,
+                -5,
+                _settings.PersonalAccessToken);
+        }, hasSelection);
+
+        RejectCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (SelectedPullRequest == null)
+                return;
+
+            await _client.RejectPullRequestAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                SelectedPullRequest.Id,
+                _settings.ReviewerId,
+                _settings.PersonalAccessToken);
+        }, hasSelection);
+
+        MarkDraftCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (SelectedPullRequest == null)
+                return;
+
+            await _client.SetPullRequestDraftAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                SelectedPullRequest.Id,
+                true,
+                _settings.PersonalAccessToken);
+        }, hasSelection);
+
+        MarkReadyCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (SelectedPullRequest == null)
+                return;
+
+            await _client.SetPullRequestDraftAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                SelectedPullRequest.Id,
+                false,
+                _settings.PersonalAccessToken);
+        }, hasSelection);
+
+        CompleteCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (SelectedPullRequest == null)
+                return;
+
+            var options = new ReviewModels.MergeOptions(false, false, string.Empty);
+            await _client.CompletePullRequestAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                SelectedPullRequest.Id,
+                options,
+                _settings.PersonalAccessToken);
+        }, hasSelection);
+
+        AbandonCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (SelectedPullRequest == null)
+                return;
+
+            await _client.AbandonPullRequestAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                SelectedPullRequest.Id,
+                _settings.PersonalAccessToken);
+        }, hasSelection);
 
         OpenInBrowserCommand = ReactiveCommand.Create<PullRequestInfo?>(pr =>
         {
@@ -264,7 +374,9 @@ public class MainWindowViewModel : ViewModelBase
                 NewCommentText,
                 _settings.PersonalAccessToken);
             NewCommentText = string.Empty;
-        });
+        },
+        this.WhenAnyValue(x => x.SelectedPullRequest, x => x.NewCommentText,
+            (pr, text) => pr != null && !string.IsNullOrWhiteSpace(text)));
 
         ViewDetailsCommand = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -327,7 +439,7 @@ public class MainWindowViewModel : ViewModelBase
             {
                 IsLoadingDiffs = false;
             }
-        });
+        }, hasSelection);
 
         SaveViewCommand = ReactiveCommand.Create(() =>
         {
