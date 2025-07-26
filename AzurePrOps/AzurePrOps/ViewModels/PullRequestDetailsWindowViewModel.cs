@@ -22,6 +22,7 @@ namespace AzurePrOps.ViewModels;
 public class PullRequestDetailsWindowViewModel : ViewModelBase
 {
     private static readonly ILogger _logger = AppLogger.CreateLogger<PullRequestDetailsWindowViewModel>();
+    private readonly AzureDevOpsClient _client = new();
     private readonly IPullRequestService _pullRequestService;
     private readonly ConnectionSettings _settings;
     private readonly ICommentsService _commentsService;
@@ -50,6 +51,8 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> ShowCommentsCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenDiffSettingsCommand { get; }
     public ReactiveCommand<Unit, Unit> RefreshDiffsCommand { get; }
+    public ReactiveCommand<Unit, Unit> CompleteCommand { get; }
+    public ReactiveCommand<Unit, Unit> AbandonCommand { get; }
 
     public ObservableCollection<ReviewModels.FileDiff> FileDiffs { get; } = new();
 
@@ -170,6 +173,28 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
             {
                 _logger.LogError(ex, "Failed to refresh diffs");
             }
+        });
+
+        CompleteCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            var options = new ReviewModels.MergeOptions(false, false, string.Empty);
+            await _client.CompletePullRequestAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                PullRequest.Id,
+                options,
+                _settings.PersonalAccessToken);
+        });
+
+        AbandonCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            await _client.AbandonPullRequestAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                PullRequest.Id,
+                _settings.PersonalAccessToken);
         });
     }
 
