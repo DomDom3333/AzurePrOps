@@ -616,4 +616,30 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         -10 => "Rejected",
         _ => "No vote"
     };
+
+    public Task SetPullRequestDraftAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        bool isDraft,
+        string personalAccessToken) =>
+        Task.CompletedTask;
+
+    public Task CompletePullRequestAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        AzurePrOps.ReviewLogic.Models.MergeOptions mergeOptions,
+        string personalAccessToken) =>
+        Task.CompletedTask;
+
+    public Task AbandonPullRequestAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        string personalAccessToken) =>
+        Task.CompletedTask;
 }
