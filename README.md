@@ -13,3 +13,9 @@ The settings window also lets you choose which external editor to open files wit
 Make sure your chosen editor is available on the system `PATH`. The application launches the editor using its command name (e.g. `code` for Visual Studio Code), so the command must be discoverable without specifying a full path.
 
 Opening files works across Linux and Windows for many popular IDEs such as VS Code, JetBrains Rider, Sublime Text and Notepad++. The launch arguments are adjusted automatically for each supported editor so that the specified line number is focused when possible.
+
+## Inline Comments
+
+Enable **Inline comments** from the Settings window to try inline commenting while reviewing diffs. Your Personal Access Token must include the **Code (Read & Write)** scope for posting replies.
+
+When viewing a diff with the feature enabled, click in the gutter beside a line to open a popup showing existing threads. Enter text in the box to add a new comment or reply.
