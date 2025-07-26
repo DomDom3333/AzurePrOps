@@ -8,6 +8,7 @@ using ReviewModels = AzurePrOps.ReviewLogic.Models;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using AzurePrOps.Logging;
 using AzurePrOps.Views;
@@ -22,9 +23,25 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
     private static readonly ILogger _logger = AppLogger.CreateLogger<PullRequestDetailsWindowViewModel>();
     private readonly IPullRequestService _pullRequestService;
     private readonly ConnectionSettings _settings;
+    private readonly ICommentsService _commentsService;
     public ConnectionModels.PullRequestInfo PullRequest { get; }
 
     public ObservableCollection<ConnectionModels.PullRequestComment> Comments { get; }
+    public ObservableCollection<CommentThread> Threads { get; } = new();
+
+    private bool _showUnresolvedOnly = true;
+    public bool ShowUnresolvedOnly
+    {
+        get => _showUnresolvedOnly;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _showUnresolvedOnly, value);
+            this.RaisePropertyChanged(nameof(FilteredThreads));
+        }
+    }
+
+    public IEnumerable<CommentThread> FilteredThreads =>
+        ShowUnresolvedOnly ? Threads.Where(t => !string.Equals(t.Status, "closed", StringComparison.OrdinalIgnoreCase)) : Threads;
 
     public ReactiveCommand<Unit, Unit> OpenInBrowserCommand { get; }
     public ReactiveCommand<Unit, Unit> ShowInsightsCommand { get; }
@@ -39,11 +56,13 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
         IPullRequestService pullRequestService,
         ConnectionSettings settings,
         IEnumerable<ConnectionModels.PullRequestComment>? comments = null,
-        IEnumerable<ReviewModels.FileDiff>? diffs = null)
+        IEnumerable<ReviewModels.FileDiff>? diffs = null,
+        ICommentsService? commentsService = null)
     {
         PullRequest = pullRequest;
         _pullRequestService = pullRequestService;
         _settings = settings;
+        _commentsService = commentsService ?? new CommentsService(new AzureDevOpsClient());
         Comments = comments != null
             ? new ObservableCollection<ConnectionModels.PullRequestComment>(comments)
             : new ObservableCollection<ConnectionModels.PullRequestComment>();
@@ -51,6 +70,8 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
         {
             LoadDiffs(diffs);
         }
+
+        _ = LoadThreadsAsync();
 
         OpenInBrowserCommand = ReactiveCommand.Create(() =>
         {
@@ -279,6 +300,29 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
             FileDiffs.Add(fileDiff);
 
             Dispatcher.UIThread.Post(() => { }, DispatcherPriority.Background);
+        }
+    }
+
+    private async Task LoadThreadsAsync()
+    {
+        try
+        {
+            var threads = await _commentsService.GetThreadsAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                PullRequest.Id,
+                _settings.PersonalAccessToken);
+
+            Threads.Clear();
+            foreach (var t in threads)
+                Threads.Add(t);
+
+            this.RaisePropertyChanged(nameof(FilteredThreads));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load threads");
         }
     }
 

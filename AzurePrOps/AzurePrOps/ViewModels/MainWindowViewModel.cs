@@ -311,7 +311,8 @@ public class MainWindowViewModel : ViewModelBase
                         _pullRequestService,
                         _settings,
                         Comments,
-                        diffs);
+                        diffs,
+                        new CommentsService(_client));
                     _logger.LogDebug("Created ViewModel with {Count} FileDiffs", vm.FileDiffs.Count);
                     var window = new PullRequestDetailsWindow { DataContext = vm };
                     window.Show();
