@@ -95,6 +95,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
 
                     var createdDate = pr.TryGetProperty("creationDate", out var createdDateProp) ? createdDateProp.GetDateTime() : DateTime.Now;
                     var status = pr.TryGetProperty("status", out var statusProp) ? statusProp.GetString() ?? string.Empty : string.Empty;
+                    var isDraft = pr.TryGetProperty("isDraft", out var draftProp) && draftProp.GetBoolean();
 
                     var reviewers = new List<ReviewerInfo>();
                     if (pr.TryGetProperty("reviewers", out var reviewerArray))
@@ -117,7 +118,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
                         }
                     }
 
-                    result.Add(new PullRequestInfo(id, title, createdBy, createdDate, status, reviewers, sourceBranch, targetBranch, url));
+                    result.Add(new PullRequestInfo(id, title, createdBy, createdDate, status, reviewers, sourceBranch, targetBranch, url, isDraft));
                 }
                 catch (Exception ex)
                 {
