@@ -19,3 +19,6 @@ Opening files works across Linux and Windows for many popular IDEs such as VS Co
 Enable **Inline comments** from the Settings window to try inline commenting while reviewing diffs. Your Personal Access Token must include the **Code (Read & Write)** scope for posting replies.
 
 When viewing a diff with the feature enabled, click in the gutter beside a line to open a popup showing existing threads. Enter text in the box to add a new comment or reply.
+
+Each comment now shows the author and timestamp and includes a **Resolve** button that toggles the thread's status.
+The sidebar lists all threads and can filter to only unresolved items.

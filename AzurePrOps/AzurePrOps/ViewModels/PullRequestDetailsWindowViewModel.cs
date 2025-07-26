@@ -15,6 +15,7 @@ using AzurePrOps.Views;
 using AzurePrOps.ReviewLogic.Models;
 using AzurePrOps.ReviewLogic.Services;
 using AzurePrOps.Models;
+using AzurePrOps.AzureConnection.Services;
 
 namespace AzurePrOps.ViewModels;
 
@@ -25,6 +26,7 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
     private readonly ConnectionSettings _settings;
     private readonly ICommentsService _commentsService;
     public ConnectionModels.PullRequestInfo PullRequest { get; }
+    public int PullRequestId => PullRequest.Id;
 
     public ObservableCollection<ConnectionModels.PullRequestComment> Comments { get; }
     public ObservableCollection<CommentThread> Threads { get; } = new();

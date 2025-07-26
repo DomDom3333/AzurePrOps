@@ -45,7 +45,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         {
             throw new ArgumentException("Organization, project, repositoryId, and personalAccessToken must not be null or empty.");
         }
-        
+
         var encodedOrg = Uri.EscapeDataString(organization);
         var encodedProject = Uri.EscapeDataString(project);
         var encodedRepoId = Uri.EscapeDataString(repositoryId);
@@ -54,10 +54,10 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
 
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
 
-            using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+        using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
-            using var response = await _httpClient.SendAsync(request);
+        using var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
 
         using var stream = await response.Content.ReadAsStreamAsync();
@@ -96,34 +96,34 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
                     var createdDate = pr.TryGetProperty("creationDate", out var createdDateProp) ? createdDateProp.GetDateTime() : DateTime.Now;
                     var status = pr.TryGetProperty("status", out var statusProp) ? statusProp.GetString() ?? string.Empty : string.Empty;
 
-                var reviewers = new List<ReviewerInfo>();
-                if (pr.TryGetProperty("reviewers", out var reviewerArray))
-                {
-                    foreach (var rev in reviewerArray.EnumerateArray())
+                    var reviewers = new List<ReviewerInfo>();
+                    if (pr.TryGetProperty("reviewers", out var reviewerArray))
                     {
-                        try
+                        foreach (var rev in reviewerArray.EnumerateArray())
                         {
-                            var idPropLocal = rev.TryGetProperty("id", out var idValue)
-                                ? idValue.GetString() ?? string.Empty
-                                : string.Empty;                            var name = rev.TryGetProperty("displayName", out var nameValue) ? nameValue.GetString() ?? string.Empty : string.Empty;
-                            var vote = rev.TryGetProperty("vote", out var voteValue) ? VoteToString(voteValue.GetInt32()) : "No vote";
-                            reviewers.Add(new ReviewerInfo(idPropLocal, name, vote));
-                        }
-                        catch (Exception ex)
-                        {
-                            // Skip this reviewer if there's an issue with the JSON
-                            _logger.LogWarning(ex, "Error processing reviewer");
-                        }
-                    }
-                }
-
-                result.Add(new PullRequestInfo(id, title, createdBy, createdDate, status, reviewers, sourceBranch, targetBranch, url));
+                            try
+                            {
+                                var idPropLocal = rev.TryGetProperty("id", out var idValue)
+                                    ? idValue.GetString() ?? string.Empty
+                                    : string.Empty; var name = rev.TryGetProperty("displayName", out var nameValue) ? nameValue.GetString() ?? string.Empty : string.Empty;
+                                var vote = rev.TryGetProperty("vote", out var voteValue) ? VoteToString(voteValue.GetInt32()) : "No vote";
+                                reviewers.Add(new ReviewerInfo(idPropLocal, name, vote));
                             }
                             catch (Exception ex)
                             {
-                // Skip this PR if there's an issue with the JSON
-                _logger.LogWarning(ex, "Error processing pull request");
+                                // Skip this reviewer if there's an issue with the JSON
+                                _logger.LogWarning(ex, "Error processing reviewer");
                             }
+                        }
+                    }
+
+                    result.Add(new PullRequestInfo(id, title, createdBy, createdDate, status, reviewers, sourceBranch, targetBranch, url));
+                }
+                catch (Exception ex)
+                {
+                    // Skip this PR if there's an issue with the JSON
+                    _logger.LogWarning(ex, "Error processing pull request");
+                }
             }
         }
 
@@ -248,7 +248,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
             throw new ArgumentException("Personal Access Token must not be null or empty.", nameof(personalAccessToken));
         }
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
-        
+
         // First, try the User Profile REST API endpoint
         using var profileRequest = new HttpRequestMessage(HttpMethod.Get, "https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=6.0");
         profileRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
@@ -524,12 +524,31 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         return ParseThread(json.RootElement);
     }
 
-    public async Task ResolveThreadAsync(
+    public Task ResolveThreadAsync(
         string organization,
         string project,
         string repositoryId,
         int pullRequestId,
         int threadId,
+        string personalAccessToken)
+    {
+        return UpdateThreadStatusAsync(
+            organization,
+            project,
+            repositoryId,
+            pullRequestId,
+            threadId,
+            "closed",
+            personalAccessToken);
+    }
+
+    public async Task UpdateThreadStatusAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        int threadId,
+        string status,
         string personalAccessToken)
     {
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
@@ -541,7 +560,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
 
         using var request = new HttpRequestMessage(HttpMethod.Patch, requestUri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
-        request.Content = new StringContent(JsonSerializer.Serialize(new { status = "closed" }), System.Text.Encoding.UTF8, "application/json");
+        request.Content = new StringContent(JsonSerializer.Serialize(new { status }), System.Text.Encoding.UTF8, "application/json");
 
         using var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();

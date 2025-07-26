@@ -39,5 +39,14 @@ public interface ICommentsService
         int threadId,
         string personalAccessToken);
 
+    Task UpdateThreadStatusAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        int threadId,
+        bool resolved,
+        string personalAccessToken);
+
     void SetErrorHandler(Action<string> handler);
 }

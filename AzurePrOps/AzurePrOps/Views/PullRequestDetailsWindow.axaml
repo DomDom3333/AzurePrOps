@@ -1,4 +1,4 @@
-<Window
+<Window x:Name="Root"
     Height="900"
     Title="Pull Request Review"
     Width="1400"
@@ -249,7 +249,7 @@
                                     IsChecked="{Binding ShowUnresolvedOnly}" />
                             </StackPanel>
                             <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
-                                <ListBox Items="{Binding FilteredThreads}" SelectionChanged="ThreadSelectionChanged">
+                                <ListBox ItemsSource="{Binding FilteredThreads}" SelectionChanged="ThreadSelectionChanged">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate x:DataType="review:CommentThread">
                                             <StackPanel Spacing="2">
@@ -430,7 +430,6 @@
                                                     HorizontalAlignment="Stretch"
                                                     NewText="{Binding NewText}"
                                                     OldText="{Binding OldText}"
-                                                    PullRequestId="{Binding DataContext.PullRequest.Id, RelativeSource={RelativeSource AncestorType=Window}}"
                                                     VerticalAlignment="Stretch"
                                                     ViewMode="SideBySide"
                                                     Loaded="DiffViewer_Loaded" />

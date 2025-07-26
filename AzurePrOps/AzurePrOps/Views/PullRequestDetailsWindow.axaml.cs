@@ -48,6 +48,11 @@ public partial class PullRequestDetailsWindow : Window
         if (sender is DiffViewer dv && dv.DataContext is FileDiff diff)
         {
             _diffViewerMap[diff.FilePath] = dv;
+
+            if (DataContext is PullRequestDetailsWindowViewModel vm)
+            {
+                dv.PullRequestId = vm.PullRequestId;
+            }
         }
     }
 

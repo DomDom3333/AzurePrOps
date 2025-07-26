@@ -76,5 +76,15 @@ public class CommentsService : ICommentsService
         => ExecuteWithRetry(() => _client.AddCommentToThreadAsync(organization, project, repositoryId, pullRequestId, threadId, parentCommentId, content, personalAccessToken));
 
     public Task ResolveThreadAsync(string organization, string project, string repositoryId, int pullRequestId, int threadId, string personalAccessToken)
-        => ExecuteWithRetry(() => _client.ResolveThreadAsync(organization, project, repositoryId, pullRequestId, threadId, personalAccessToken));
+        => UpdateThreadStatusAsync(organization, project, repositoryId, pullRequestId, threadId, true, personalAccessToken);
+
+    public Task UpdateThreadStatusAsync(string organization, string project, string repositoryId, int pullRequestId, int threadId, bool resolved, string personalAccessToken)
+        => ExecuteWithRetry(() => _client.UpdateThreadStatusAsync(
+            organization,
+            project,
+            repositoryId,
+            pullRequestId,
+            threadId,
+            resolved ? "closed" : "active",
+            personalAccessToken));
 }
