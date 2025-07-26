@@ -120,6 +120,7 @@
                     <Button
                         Classes="SecondaryButton"
                         Content="💬 Comments"
+                        Command="{Binding ShowCommentsCommand}"
                         ToolTip.Tip="View Comments" />
                     <Button
                         Classes="SecondaryButton"

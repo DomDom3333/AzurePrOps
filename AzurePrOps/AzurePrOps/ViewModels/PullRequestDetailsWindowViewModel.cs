@@ -24,6 +24,7 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
 
     public ReactiveCommand<Unit, Unit> OpenInBrowserCommand { get; }
     public ReactiveCommand<Unit, Unit> ShowInsightsCommand { get; }
+    public ReactiveCommand<Unit, Unit> ShowCommentsCommand { get; }
 
     public ObservableCollection<ReviewModels.FileDiff> FileDiffs { get; } = new();
 
@@ -217,6 +218,14 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
                 // Swallow exceptions to avoid crashing the app
                 _logger.LogWarning(ex, "Failed to open browser");
             }
+        });
+
+        ShowCommentsCommand = ReactiveCommand.Create(() =>
+        {
+            string title = $"Comments for PR #{PullRequest.Id}";
+            var vm = new CommentsWindowViewModel(title, Comments);
+            var window = new CommentsWindow { DataContext = vm };
+            window.Show();
         });
 
         ShowInsightsCommand = ReactiveCommand.Create(() =>

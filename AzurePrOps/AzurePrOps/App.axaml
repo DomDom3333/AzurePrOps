@@ -17,6 +17,7 @@
         <converters:StatusToIconConverter x:Key="StatusToIcon" />
         <converters:VoteToIconConverter x:Key="VoteToIcon" />
         <converters:StringNotEmptyConverter x:Key="StringNotEmptyConverter" />
+        <converters:CollectionNotEmptyConverter x:Key="CollectionNotEmptyConverter" />
     </Application.Resources>
 
     <Application.Styles>
