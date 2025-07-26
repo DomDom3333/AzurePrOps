@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AzurePrOps.ReviewLogic", "A
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AzurePrOps.Logging", "..\AzurePrOps.Logging\AzurePrOps.Logging.csproj", "{5AB56C2C-8DA7-4C0E-91E7-FE50E89ED50B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AzurePrOps.Tests", "AzurePrOps.Tests\AzurePrOps.Tests.csproj", "{D3ABB1F7-588C-4F08-B17C-0D984B34422C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -31,5 +33,9 @@ Global
 		{5AB56C2C-8DA7-4C0E-91E7-FE50E89ED50B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5AB56C2C-8DA7-4C0E-91E7-FE50E89ED50B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5AB56C2C-8DA7-4C0E-91E7-FE50E89ED50B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D3ABB1F7-588C-4F08-B17C-0D984B34422C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D3ABB1F7-588C-4F08-B17C-0D984B34422C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D3ABB1F7-588C-4F08-B17C-0D984B34422C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D3ABB1F7-588C-4F08-B17C-0D984B34422C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

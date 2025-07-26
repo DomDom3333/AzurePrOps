@@ -7,10 +7,11 @@ using ReviewCommentThread = AzurePrOps.ReviewLogic.Models.CommentThread;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 using AzurePrOps.Logging;
+using AzurePrOps.ReviewLogic.Services;
 
 namespace AzurePrOps.AzureConnection.Services;
 
-public partial class AzureDevOpsClient
+public partial class AzureDevOpsClient : IAzureDevOpsClient
 {
     private static readonly ILogger _logger = AppLogger.CreateLogger<AzureDevOpsClient>();
     private const string AzureDevOpsBaseUrl = "https://dev.azure.com";
