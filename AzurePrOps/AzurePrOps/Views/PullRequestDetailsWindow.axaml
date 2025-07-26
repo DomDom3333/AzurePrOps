@@ -330,6 +330,7 @@
                                 <Button
                                     Classes="SecondaryButton"
                                     Content="🔄 Refresh"
+                                    Command="{Binding RefreshDiffsCommand}"
                                     ToolTip.Tip="Refresh Diff" />
                             </StackPanel>
                         </Grid>
