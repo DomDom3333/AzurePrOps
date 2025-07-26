@@ -7,12 +7,13 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
-    <ItemGroup>
+  <ItemGroup>
       <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.6" />
-    </ItemGroup>
+  </ItemGroup>
 
-    <ItemGroup>
+  <ItemGroup>
       <ProjectReference Include="..\..\AzurePrOps.Logging\AzurePrOps.Logging.csproj" />
-    </ItemGroup>
+      <ProjectReference Include="..\AzurePrOps.ReviewLogic\AzurePrOps.ReviewLogic.csproj" />
+  </ItemGroup>
 
 </Project>
