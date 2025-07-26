@@ -47,4 +47,36 @@ public interface IAzureDevOpsClient
         int threadId,
         string status,
         string personalAccessToken);
+
+    Task SetPullRequestVoteAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        string reviewerId,
+        int vote,
+        string personalAccessToken);
+
+    Task SetPullRequestDraftAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        bool isDraft,
+        string personalAccessToken);
+
+    Task CompletePullRequestAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        MergeOptions mergeOptions,
+        string personalAccessToken);
+
+    Task AbandonPullRequestAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        string personalAccessToken);
 }
