@@ -209,7 +209,46 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         int pullRequestId,
         string reviewerId,
         string personalAccessToken) =>
-        SetPullRequestVoteAsync(organization, project, repositoryId, pullRequestId, reviewerId, 10, personalAccessToken);
+        SetPullRequestVoteAsync(
+            organization,
+            project,
+            repositoryId,
+            pullRequestId,
+            reviewerId,
+            10,
+            personalAccessToken);
+
+    public Task ApproveWithSuggestionsAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        string reviewerId,
+        string personalAccessToken) =>
+        SetPullRequestVoteAsync(
+            organization,
+            project,
+            repositoryId,
+            pullRequestId,
+            reviewerId,
+            5,
+            personalAccessToken);
+
+    public Task RejectPullRequestAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        string reviewerId,
+        string personalAccessToken) =>
+        SetPullRequestVoteAsync(
+            organization,
+            project,
+            repositoryId,
+            pullRequestId,
+            reviewerId,
+            -10,
+            personalAccessToken);
 
     public async Task PostPullRequestCommentAsync(
         string organization,
@@ -617,29 +656,82 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         _ => "No vote"
     };
 
-    public Task SetPullRequestDraftAsync(
+    public async Task SetPullRequestDraftAsync(
         string organization,
         string project,
         string repositoryId,
         int pullRequestId,
         bool isDraft,
-        string personalAccessToken) =>
-        Task.CompletedTask;
+        string personalAccessToken)
+    {
+        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
 
-    public Task CompletePullRequestAsync(
+        var encodedOrg = Uri.EscapeDataString(organization);
+        var encodedProject = Uri.EscapeDataString(project);
+        var encodedRepoId = Uri.EscapeDataString(repositoryId);
+        var requestUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}?api-version={ApiVersion}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Patch, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+        request.Content = new StringContent(JsonSerializer.Serialize(new { isDraft }), System.Text.Encoding.UTF8, "application/json");
+
+        using var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task CompletePullRequestAsync(
         string organization,
         string project,
         string repositoryId,
         int pullRequestId,
         AzurePrOps.ReviewLogic.Models.MergeOptions mergeOptions,
-        string personalAccessToken) =>
-        Task.CompletedTask;
+        string personalAccessToken)
+    {
+        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
 
-    public Task AbandonPullRequestAsync(
+        var encodedOrg = Uri.EscapeDataString(organization);
+        var encodedProject = Uri.EscapeDataString(project);
+        var encodedRepoId = Uri.EscapeDataString(repositoryId);
+        var requestUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}?api-version={ApiVersion}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Patch, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+        var body = new
+        {
+            status = "completed",
+            completionOptions = new
+            {
+                deleteSourceBranch = mergeOptions.DeleteSourceBranch,
+                squashMerge = mergeOptions.Squash,
+                mergeCommitMessage = mergeOptions.CommitMessage
+            }
+        };
+        request.Content = new StringContent(JsonSerializer.Serialize(body), System.Text.Encoding.UTF8, "application/json");
+
+        using var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task AbandonPullRequestAsync(
         string organization,
         string project,
         string repositoryId,
         int pullRequestId,
-        string personalAccessToken) =>
-        Task.CompletedTask;
+        string personalAccessToken)
+    {
+        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+
+        var encodedOrg = Uri.EscapeDataString(organization);
+        var encodedProject = Uri.EscapeDataString(project);
+        var encodedRepoId = Uri.EscapeDataString(repositoryId);
+        var requestUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}?api-version={ApiVersion}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Patch, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+        request.Content = new StringContent(JsonSerializer.Serialize(new { status = "abandoned" }), System.Text.Encoding.UTF8, "application/json");
+
+        using var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+    }
 }
