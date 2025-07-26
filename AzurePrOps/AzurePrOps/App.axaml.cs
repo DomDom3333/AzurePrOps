@@ -44,6 +44,9 @@ public partial class App : Application
             }
         });
 
+        // Load feature flags so they are available throughout the app
+        FeatureFlagManager.Load();
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             if (ConnectionSettingsStorage.TryLoad(out var loaded))
