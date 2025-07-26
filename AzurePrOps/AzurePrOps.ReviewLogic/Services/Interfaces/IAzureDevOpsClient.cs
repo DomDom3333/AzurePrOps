@@ -38,4 +38,13 @@ public interface IAzureDevOpsClient
         int pullRequestId,
         int threadId,
         string personalAccessToken);
+
+    Task UpdateThreadStatusAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        int threadId,
+        string status,
+        string personalAccessToken);
 }

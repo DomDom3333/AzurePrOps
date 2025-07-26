@@ -27,7 +27,7 @@ public class CommentsServiceTests
     {
         var callCount = 0;
         var mockClient = new Mock<IAzureDevOpsClient>();
-        mockClient.Setup(c => c.ResolveThreadAsync("org", "proj", "repo", 1, 2, "pat"))
+        mockClient.Setup(c => c.UpdateThreadStatusAsync("org", "proj", "repo", 1, 2, "closed", "pat"))
                   .Returns(() =>
                   {
                       callCount++;
@@ -35,9 +35,32 @@ public class CommentsServiceTests
                       return Task.CompletedTask;
                   });
 
+        mockClient.Setup(c => c.UpdateThreadStatusAsync("org", "proj", "repo", 1, 2, "active", "pat"))
+                  .Returns(() =>
+                  {
+                      callCount++;
+                      if (callCount == 2) throw new Exception("fail2");
+                      return Task.CompletedTask;
+                  });
+
         var service = new CommentsService(mockClient.Object);
         await service.ResolveThreadAsync("org", "proj", "repo", 1, 2, "pat");
+        await service.UpdateThreadStatusAsync("org", "proj", "repo", 1, 2, false, "pat");
 
-        Assert.Equal(2, callCount);
+        Assert.Equal(3, callCount);
+    }
+
+    [Fact]
+    public async Task UpdateThreadStatusAsync_ForwardsCall()
+    {
+        var mockClient = new Mock<IAzureDevOpsClient>();
+        mockClient.Setup(c => c.UpdateThreadStatusAsync("org", "proj", "repo", 1, 2, "active", "pat"))
+                  .Returns(Task.CompletedTask)
+                  .Verifiable();
+
+        var service = new CommentsService(mockClient.Object);
+        await service.UpdateThreadStatusAsync("org", "proj", "repo", 1, 2, false, "pat");
+
+        mockClient.VerifyAll();
     }
 }

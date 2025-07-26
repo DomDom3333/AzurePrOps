@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Avalonia.Media;
+using Avalonia;
 using AvaloniaEdit.Rendering;
 using AvaloniaEdit.Document;
 

@@ -18,6 +18,7 @@ using System.Threading.Tasks;
 using AzurePrOps.ReviewLogic.Models;
 using AzurePrOps.ReviewLogic.Services;
 using AzurePrOps.Models;
+using AzurePrOps.AzureConnection.Services;
 using DiffPlex;
 using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
@@ -32,7 +33,7 @@ namespace AzurePrOps.Controls
     public partial class DiffViewer : UserControl
     {
         private static readonly ILogger _logger = AppLogger.CreateLogger<DiffViewer>();
-        
+
         // Dependency properties
         public static readonly StyledProperty<string> OldTextProperty =
             AvaloniaProperty.Register<DiffViewer, string>(nameof(OldText));
@@ -48,15 +49,15 @@ namespace AzurePrOps.Controls
         public IPullRequestService PullRequestService { get; set; }
         public ILintingService LintingService { get; set; }
         public IBlameService BlameService { get; set; }
-        public IAuditTrailService AuditService { get; set; }
-        public INotificationService NotificationService { get; set; }
-        public IMetricsService MetricsService { get; set; }
-        public ISuggestionService SuggestionService { get; set; }
-        public IPatchService PatchService { get; set; }
-        public ICodeFoldingService FoldingService { get; set; }
-        public ISearchService SearchService { get; set; }
-        public IIDEIntegrationService IDEService { get; set; }
-        public ICommentsService CommentsService { get; set; }
+        public IAuditTrailService AuditService { get; set; } = default!;
+        public INotificationService NotificationService { get; set; } = default!;
+        public IMetricsService MetricsService { get; set; } = default!;
+        public ISuggestionService SuggestionService { get; set; } = default!;
+        public IPatchService PatchService { get; set; } = default!;
+        public ICodeFoldingService FoldingService { get; set; } = default!;
+        public ISearchService SearchService { get; set; } = default!;
+        public IIDEIntegrationService IDEService { get; set; } = default!;
+        public ICommentsService CommentsService { get; set; } = default!;
 
         // Enhanced UI elements
         private TextBox? _searchBox;
@@ -93,15 +94,18 @@ namespace AzurePrOps.Controls
 
         static DiffViewer()
         {
-            ViewModeProperty.Changed.AddClassHandler<DiffViewer>((x, e) => {
+            ViewModeProperty.Changed.AddClassHandler<DiffViewer>((x, e) =>
+            {
                 _logger.LogDebug("DiffViewer ViewMode changed: {Old} -> {New}", e.OldValue, e.NewValue);
                 x.Render();
             });
-            OldTextProperty.Changed.AddClassHandler<DiffViewer>((x, e) => {
+            OldTextProperty.Changed.AddClassHandler<DiffViewer>((x, e) =>
+            {
                 _logger.LogDebug("DiffViewer OldText changed: Length = {Length}", (e.NewValue as string)?.Length ?? 0);
                 x.Render();
             });
-            NewTextProperty.Changed.AddClassHandler<DiffViewer>((x, e) => {
+            NewTextProperty.Changed.AddClassHandler<DiffViewer>((x, e) =>
+            {
                 _logger.LogDebug("DiffViewer NewText changed: Length = {Length}", (e.NewValue as string)?.Length ?? 0);
                 x.Render();
             });
@@ -115,18 +119,18 @@ namespace AzurePrOps.Controls
         public DiffViewer()
         {
             // Provide simple default implementations so the control works
-            CommentProvider    = new InMemoryCommentProvider();
+            CommentProvider = new InMemoryCommentProvider();
             PullRequestService = PullRequestServiceFactory.Create(PullRequestServiceType.AzureDevOps);
-            LintingService     = new RoslynLintingService();
-            BlameService       = new GitBlameService(Environment.CurrentDirectory);
-            AuditService       = new FileAuditTrailService();
-            NotificationService= new AvaloniaNotificationService();
-            MetricsService     = new SimpleMetricsService();
-            SuggestionService  = new SimpleSuggestionService();
-            PatchService       = new FilePatchService();
-            FoldingService     = new IndentationFoldingService();
-            SearchService      = new SimpleSearchService();
-            CommentsService    = new CommentsService(new AzureDevOpsClient());
+            LintingService = new RoslynLintingService();
+            BlameService = new GitBlameService(Environment.CurrentDirectory);
+            AuditService = new FileAuditTrailService();
+            NotificationService = new AvaloniaNotificationService();
+            MetricsService = new SimpleMetricsService();
+            SuggestionService = new SimpleSuggestionService();
+            PatchService = new FilePatchService();
+            FoldingService = new IndentationFoldingService();
+            SearchService = new SimpleSearchService();
+            CommentsService = new CommentsService(new AzureDevOpsClient());
             string editor = ConnectionSettingsStorage.TryLoad(out var s)
                 ? s!.EditorCommand
                 : EditorDetector.GetDefaultEditor();
@@ -185,12 +189,12 @@ namespace AzurePrOps.Controls
             {
                 var fileName = Path.GetFileName(diff.FilePath);
                 var directory = Path.GetDirectoryName(diff.FilePath);
-                
+
                 if (_oldFileInfo != null)
                     _oldFileInfo.Text = $"{fileName} • {directory}";
                 if (_newFileInfo != null)
                     _newFileInfo.Text = $"{fileName} • {directory}";
-                    
+
                 UpdateStatus($"Viewing {fileName}");
             }
             else
@@ -199,7 +203,7 @@ namespace AzurePrOps.Controls
                     _oldFileInfo.Text = "";
                 if (_newFileInfo != null)
                     _newFileInfo.Text = "";
-                    
+
                 UpdateStatus("Ready");
             }
         }
@@ -250,10 +254,10 @@ namespace AzurePrOps.Controls
             AvaloniaXamlLoader.Load(this);
 
             // Find UI elements with enhanced references
-            _oldEditor   = this.FindControl<TextEditor>("OldEditor");
-            _newEditor   = this.FindControl<TextEditor>("NewEditor");
-            _searchBox   = this.FindControl<TextBox>("PART_SearchBox");
-            _metricsPanel= this.FindControl<StackPanel>("PART_MetricsPanel");
+            _oldEditor = this.FindControl<TextEditor>("OldEditor");
+            _newEditor = this.FindControl<TextEditor>("NewEditor");
+            _searchBox = this.FindControl<TextBox>("PART_SearchBox");
+            _metricsPanel = this.FindControl<StackPanel>("PART_MetricsPanel");
             _addedLinesText = this.FindControl<TextBlock>("PART_AddedLinesText");
             _removedLinesText = this.FindControl<TextBlock>("PART_RemovedLinesText");
             _modifiedLinesText = this.FindControl<TextBlock>("PART_ModifiedLinesText");
@@ -305,16 +309,20 @@ namespace AzurePrOps.Controls
             if (sideBySideButton != null && unifiedButton != null)
             {
                 // Set up view mode toggle buttons
-                sideBySideButton.IsCheckedChanged += (_, _) => {
-                    if (sideBySideButton.IsChecked == true) {
+                sideBySideButton.IsCheckedChanged += (_, _) =>
+                {
+                    if (sideBySideButton.IsChecked == true)
+                    {
                         unifiedButton!.IsChecked = false;
                         ViewMode = DiffViewMode.SideBySide;
                         UpdateStatus("Switched to side-by-side view");
                     }
                 };
 
-                unifiedButton.IsCheckedChanged += (_, _) => {
-                    if (unifiedButton.IsChecked == true) {
+                unifiedButton.IsCheckedChanged += (_, _) =>
+                {
+                    if (unifiedButton.IsChecked == true)
+                    {
                         sideBySideButton!.IsChecked = false;
                         ViewMode = DiffViewMode.Unified;
                         UpdateStatus("Switched to unified view");
@@ -324,7 +332,8 @@ namespace AzurePrOps.Controls
 
             if (nextChangeButton != null)
             {
-                nextChangeButton.Click += (_, __) => {
+                nextChangeButton.Click += (_, __) =>
+                {
                     NavigateToNextChange();
                     UpdateStatus($"Navigated to change {_currentChangeIndex + 1} of {_changedLines.Count}");
                 };
@@ -332,7 +341,8 @@ namespace AzurePrOps.Controls
 
             if (prevChangeButton != null)
             {
-                prevChangeButton.Click += (_, __) => {
+                prevChangeButton.Click += (_, __) =>
+                {
                     NavigateToPreviousChange();
                     UpdateStatus($"Navigated to change {_currentChangeIndex + 1} of {_changedLines.Count}");
                 };
@@ -340,7 +350,8 @@ namespace AzurePrOps.Controls
 
             if (nextSearchButton != null)
             {
-                nextSearchButton.Click += (_, __) => {
+                nextSearchButton.Click += (_, __) =>
+                {
                     NavigateToNextSearchResult();
                     UpdateSearchStatus();
                 };
@@ -348,7 +359,8 @@ namespace AzurePrOps.Controls
 
             if (prevSearchButton != null)
             {
-                prevSearchButton.Click += (_, __) => {
+                prevSearchButton.Click += (_, __) =>
+                {
                     NavigateToPreviousSearchResult();
                     UpdateSearchStatus();
                 };
@@ -356,7 +368,8 @@ namespace AzurePrOps.Controls
 
             if (openIdeButton != null)
             {
-                openIdeButton.Click += (_, __) => {
+                openIdeButton.Click += (_, __) =>
+                {
                     OpenInIDE();
                     UpdateStatus("Opened in IDE");
                 };
@@ -374,7 +387,8 @@ namespace AzurePrOps.Controls
 
             if (copyButton != null)
             {
-                copyButton.Click += (_, __) => {
+                copyButton.Click += (_, __) =>
+                {
                     CopySelectedText();
                     UpdateStatus("Copied selected text");
                 };
@@ -409,7 +423,8 @@ namespace AzurePrOps.Controls
 
             if (copyDiffButton != null)
             {
-                copyDiffButton.Click += (_, __) => {
+                copyDiffButton.Click += (_, __) =>
+                {
                     CopyDiff();
                     UpdateStatus("Copied diff to clipboard");
                 };
@@ -502,7 +517,7 @@ namespace AzurePrOps.Controls
 
             // Enhanced diff processing with better feedback
             ProcessDiffAndUpdateUI(oldTextValue, newTextValue);
-            
+
             UpdateStatus("Diff rendered successfully");
         }
 
@@ -601,7 +616,7 @@ namespace AzurePrOps.Controls
             _searchMatches.Clear();
             _currentSearchIndex = -1;
             string searchQuery = _searchBox?.Text ?? string.Empty;
-            
+
             if (!string.IsNullOrWhiteSpace(searchQuery))
             {
                 var searchSource = _newEditor?.Document.TextLength > 0 ? _newEditor!.Text : _oldEditor?.Text ?? string.Empty;
@@ -619,7 +634,8 @@ namespace AzurePrOps.Controls
             _metricsPanel?.Children.Clear();
             foreach (var m in MetricsService?.GetMetrics("<repo>") ?? Enumerable.Empty<MetricData>())
             {
-                _metricsPanel?.Children.Add(new TextBlock {
+                _metricsPanel?.Children.Add(new TextBlock
+                {
                     Text = $"{m.Name}: {m.Value}",
                     FontSize = 12,
                     Margin = new Thickness(8, 0)
@@ -634,8 +650,9 @@ namespace AzurePrOps.Controls
 
             _threadsByLine.Clear();
 
-            if (!ConnectionSettingsStorage.TryLoad(out var settings))
+            if (!ConnectionSettingsStorage.TryLoad(out var settingsNullable) || settingsNullable is null)
                 return;
+            var settings = settingsNullable;
 
             try
             {
@@ -716,8 +733,7 @@ namespace AzurePrOps.Controls
             _commentPopup = new Popup
             {
                 PlacementTarget = editor,
-                PlacementMode = PlacementMode.Pointer,
-                StaysOpen = false,
+                Placement = PlacementMode.Pointer,
                 Child = panel
             };
 
@@ -732,13 +748,32 @@ namespace AzurePrOps.Controls
             {
                 foreach (var c in thread.Comments)
                 {
-                    stack.Children.Add(new TextBlock
+                    var commentStack = new StackPanel { Spacing = 2 };
+                    commentStack.Children.Add(new TextBlock
                     {
-                        Text = $"{c.Author}: {c.Content}",
+                        Text = $"{c.Author} • {c.PublishedDate:g}",
+                        FontSize = 11,
+                        FontWeight = FontWeight.SemiBold
+                    });
+                    commentStack.Children.Add(new TextBlock
+                    {
+                        Text = c.Content,
                         TextWrapping = TextWrapping.Wrap,
                         FontSize = 12
                     });
+                    stack.Children.Add(commentStack);
                 }
+
+                var resolveBtn = new Button
+                {
+                    Content = string.Equals(thread.Status, "closed", StringComparison.OrdinalIgnoreCase) ? "Unresolve" : "Resolve"
+                };
+                resolveBtn.Click += async (_, __) =>
+                {
+                    await ToggleResolveAsync(thread);
+                    _commentPopup?.Close();
+                };
+                stack.Children.Add(resolveBtn);
             }
             else
             {
@@ -776,8 +811,9 @@ namespace AzurePrOps.Controls
             if (string.IsNullOrWhiteSpace(text))
                 return;
 
-            if (!ConnectionSettingsStorage.TryLoad(out var settings) || DataContext is not FileDiff diff)
+            if (!ConnectionSettingsStorage.TryLoad(out var settingsNullable) || settingsNullable is null || DataContext is not FileDiff diff)
                 return;
+            var settings = settingsNullable;
 
             try
             {
@@ -817,12 +853,40 @@ namespace AzurePrOps.Controls
             }
         }
 
+        private async Task ToggleResolveAsync(CommentThread thread)
+        {
+            if (!ConnectionSettingsStorage.TryLoad(out var settingsNullable) || settingsNullable is null)
+                return;
+            var settings = settingsNullable;
+
+            bool newState = !string.Equals(thread.Status, "closed", StringComparison.OrdinalIgnoreCase);
+            try
+            {
+                await CommentsService.UpdateThreadStatusAsync(
+                    settings.Organization,
+                    settings.Project,
+                    settings.Repository,
+                    PullRequestId,
+                    thread.ThreadId,
+                    newState,
+                    settings.PersonalAccessToken);
+
+                thread.Status = newState ? "closed" : "active";
+                _threadsByLine[thread.LineNumber] = thread;
+                ApplyCommentMarkers();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to update thread status");
+            }
+        }
+
         private static DiffLineType Map(ChangeType ct) => ct switch
         {
             ChangeType.Inserted => DiffLineType.Added,
-            ChangeType.Deleted  => DiffLineType.Removed,
+            ChangeType.Deleted => DiffLineType.Removed,
             ChangeType.Modified => DiffLineType.Modified,
-            _                   => DiffLineType.Unchanged
+            _ => DiffLineType.Unchanged
         };
 
         private void NavigateToNextChange()
@@ -917,8 +981,10 @@ namespace AzurePrOps.Controls
                 new TemporaryHighlightTransformer(line.LineNumber));
 
             // Remove highlight after a delay
-            var timer = new System.Threading.Timer(_ => {
-                Dispatcher.UIThread.Post(() => {
+            var timer = new System.Threading.Timer(_ =>
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
                     var transformers = editor.TextArea.TextView.LineTransformers;
                     for (int i = transformers.Count - 1; i >= 0; i--)
                     {
@@ -973,7 +1039,7 @@ namespace AzurePrOps.Controls
         private void ApplyFolding()
         {
             _logger.LogDebug("ApplyFolding() called. _codeFoldingEnabled={CodeFoldingEnabled}", _codeFoldingEnabled);
-            
+
             if (_oldEditor is null || _newEditor is null)
             {
                 _logger.LogDebug("ApplyFolding(): editors are null, aborting");
@@ -1020,12 +1086,12 @@ namespace AzurePrOps.Controls
                 }
             }
 
-            _logger.LogDebug("ApplyFolding(): Created {OldFoldCount} folds for old editor, {NewFoldCount} folds for new editor", 
+            _logger.LogDebug("ApplyFolding(): Created {OldFoldCount} folds for old editor, {NewFoldCount} folds for new editor",
                 newFoldingsOld.Count, newFoldingsNew.Count);
 
             _oldFoldingManager.UpdateFoldings(newFoldingsOld, -1);
             _newFoldingManager.UpdateFoldings(newFoldingsNew, -1);
-            
+
             _logger.LogDebug("ApplyFolding(): Successfully applied foldings to both editors");
         }
 
@@ -1055,16 +1121,16 @@ namespace AzurePrOps.Controls
         private IEnumerable<(int Start, int End)> GetFoldRegionsAroundChanges(int context = 2)
         {
             int lineCount = Math.Max(_oldEditor?.Document.LineCount ?? 0, _newEditor?.Document.LineCount ?? 0);
-            
-            _logger.LogDebug("GetFoldRegionsAroundChanges: lineCount={LineCount}, _lineTypes.Count={LineTypesCount}", 
+
+            _logger.LogDebug("GetFoldRegionsAroundChanges: lineCount={LineCount}, _lineTypes.Count={LineTypesCount}",
                 lineCount, _lineTypes.Count);
-            
+
             if (lineCount == 0)
             {
                 _logger.LogDebug("GetFoldRegionsAroundChanges: No lines to process");
                 yield break;
             }
-                
+
             // Get all changed line numbers
             var changedLines = new HashSet<int>();
             for (int i = 1; i <= lineCount; i++)
@@ -1075,41 +1141,41 @@ namespace AzurePrOps.Controls
                     changedLines.Add(i);
                 }
             }
-            
-            _logger.LogDebug("GetFoldRegionsAroundChanges: Found {ChangedCount} changed lines: [{ChangedLines}]", 
+
+            _logger.LogDebug("GetFoldRegionsAroundChanges: Found {ChangedCount} changed lines: [{ChangedLines}]",
                 changedLines.Count, string.Join(",", changedLines.OrderBy(x => x)));
-            
+
             // If no changes, don't fold anything
             if (changedLines.Count == 0)
             {
                 _logger.LogDebug("GetFoldRegionsAroundChanges: No changes found, not folding anything");
                 yield break;
             }
-            
+
             // Calculate which lines should be visible (changed lines + context)
             var visibleLines = new HashSet<int>();
             foreach (int changedLine in changedLines)
             {
                 // Add the changed line and context around it
-                for (int i = Math.Max(1, changedLine - context); 
-                     i <= Math.Min(lineCount, changedLine + context); 
+                for (int i = Math.Max(1, changedLine - context);
+                     i <= Math.Min(lineCount, changedLine + context);
                      i++)
                 {
                     visibleLines.Add(i);
                 }
             }
-            
-            _logger.LogDebug("GetFoldRegionsAroundChanges: {VisibleCount} visible lines with context {Context}: [{VisibleLines}]", 
+
+            _logger.LogDebug("GetFoldRegionsAroundChanges: {VisibleCount} visible lines with context {Context}: [{VisibleLines}]",
                 visibleLines.Count, context, string.Join(",", visibleLines.OrderBy(x => x)));
-            
+
             // Find consecutive ranges of hidden lines to fold
             int? foldStart = null;
             var foldRegions = new List<(int, int)>();
-            
+
             for (int i = 1; i <= lineCount; i++)
             {
                 bool shouldBeVisible = visibleLines.Contains(i);
-                
+
                 if (!shouldBeVisible)
                 {
                     // Start a new fold region if we haven't started one
@@ -1130,16 +1196,16 @@ namespace AzurePrOps.Controls
                     }
                 }
             }
-            
+
             // Handle case where fold region extends to end of file
             if (foldStart.HasValue)
             {
                 foldRegions.Add((foldStart.Value, lineCount));
             }
-            
-            _logger.LogDebug("GetFoldRegionsAroundChanges: Generated {FoldCount} fold regions: [{FoldRegions}]", 
+
+            _logger.LogDebug("GetFoldRegionsAroundChanges: Generated {FoldCount} fold regions: [{FoldRegions}]",
                 foldRegions.Count, string.Join(", ", foldRegions.Select(r => $"{r.Item1}-{r.Item2}")));
-            
+
             foreach (var region in foldRegions)
             {
                 yield return region;
@@ -1225,7 +1291,7 @@ namespace AzurePrOps.Controls
             {
                 ISolidColorBrush? backgroundBrush = null;
                 ISolidColorBrush? foregroundBrush = null;
-                
+
                 switch (type)
                 {
                     case DiffLineType.Added:
@@ -1245,13 +1311,13 @@ namespace AzurePrOps.Controls
                         foregroundBrush = new SolidColorBrush(Color.FromRgb(36, 41, 47)); // TextPrimaryBrush equivalent
                         break;
                 }
-                
+
                 if (backgroundBrush != null)
                 {
                     ChangeLinePart(line.Offset, line.EndOffset, e =>
                         e.TextRunProperties.SetBackgroundBrush(backgroundBrush));
                 }
-                
+
                 if (foregroundBrush != null)
                 {
                     ChangeLinePart(line.Offset, line.EndOffset, e =>
