@@ -12,12 +12,16 @@ using Microsoft.Extensions.Logging;
 using AzurePrOps.Logging;
 using AzurePrOps.Views;
 using AzurePrOps.ReviewLogic.Models;
+using AzurePrOps.ReviewLogic.Services;
+using AzurePrOps.Models;
 
 namespace AzurePrOps.ViewModels;
 
 public class PullRequestDetailsWindowViewModel : ViewModelBase
 {
     private static readonly ILogger _logger = AppLogger.CreateLogger<PullRequestDetailsWindowViewModel>();
+    private readonly IPullRequestService _pullRequestService;
+    private readonly ConnectionSettings _settings;
     public ConnectionModels.PullRequestInfo PullRequest { get; }
 
     public ObservableCollection<ConnectionModels.PullRequestComment> Comments { get; }
@@ -26,171 +30,26 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> ShowInsightsCommand { get; }
     public ReactiveCommand<Unit, Unit> ShowCommentsCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenDiffSettingsCommand { get; }
+    public ReactiveCommand<Unit, Unit> RefreshDiffsCommand { get; }
 
     public ObservableCollection<ReviewModels.FileDiff> FileDiffs { get; } = new();
 
-    public PullRequestDetailsWindowViewModel(ConnectionModels.PullRequestInfo pullRequest,
+    public PullRequestDetailsWindowViewModel(
+        ConnectionModels.PullRequestInfo pullRequest,
+        IPullRequestService pullRequestService,
+        ConnectionSettings settings,
         IEnumerable<ConnectionModels.PullRequestComment>? comments = null,
         IEnumerable<ReviewModels.FileDiff>? diffs = null)
     {
         PullRequest = pullRequest;
+        _pullRequestService = pullRequestService;
+        _settings = settings;
         Comments = comments != null
             ? new ObservableCollection<ConnectionModels.PullRequestComment>(comments)
             : new ObservableCollection<ConnectionModels.PullRequestComment>();
         if (diffs != null)
         {
-            _logger.LogDebug("Processing {Count} diffs in PullRequestDetailsWindowViewModel constructor", diffs.Count());
-            foreach (var d in diffs)
-            {
-                // Ensure there's at least some content for the diff viewer to display
-                var fileDiff = d;
-                _logger.LogDebug("Processing diff for {Path}", fileDiff.FilePath);
-                _logger.LogDebug("  Original OldText length: {Length}", fileDiff.OldText?.Length ?? 0);
-                _logger.LogDebug("  Original NewText length: {Length}", fileDiff.NewText?.Length ?? 0);
-                _logger.LogDebug("  Original Diff length: {Length}", fileDiff.Diff?.Length ?? 0);
-
-                // If both texts are empty but we have a diff string, create placeholder content
-                if (string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText) && !string.IsNullOrEmpty(fileDiff.Diff))
-                {
-                    _logger.LogDebug("  Creating placeholder content for {Path}", fileDiff.FilePath);
-                    // Parse the diff string to create old and new text representations
-                    var (oldContent, newContent) = ParseDiffToContent(fileDiff.Diff);
-
-                    // Check for special file statuses
-                    bool isNewFile = oldContent.Contains("[FILE ADDED]");
-                    bool isDeletedFile = newContent.Contains("[FILE DELETED]");
-
-                    _logger.LogDebug("  Parsed diff content: isNewFile={IsNew}, isDeletedFile={IsDeleted}", isNewFile, isDeletedFile);
-                    _logger.LogDebug("  oldContent length: {OldLength}, newContent length: {NewLength}", oldContent.Length, newContent.Length);
-
-                    // Check for empty content and provide more meaningful placeholders
-                    if (string.IsNullOrWhiteSpace(oldContent) && string.IsNullOrWhiteSpace(newContent))
-                    {
-                        // If ParseDiffToContent couldn't extract anything useful, try to determine the file type
-                        if (fileDiff.Diff.Contains("new file mode") || fileDiff.Diff.Contains("/dev/null") && fileDiff.Diff.Contains("+++ b/"))
-                        {
-                            oldContent = "[FILE ADDED]\n";
-                            // Extract file content from the diff by looking for lines starting with '+'
-                            var addedLines = new List<string>();
-                            foreach (var line in fileDiff.Diff.Split('\n'))
-                            {
-                                if (line.StartsWith("+") && !line.StartsWith("+++ "))
-                                {
-                                    addedLines.Add(line.Substring(1));
-                                }
-                            }
-                            newContent = string.Join("\n", addedLines);
-                            if (string.IsNullOrWhiteSpace(newContent))
-                            {
-                                newContent = "[Added file content not available]\n";
-                            }
-                        }
-                        else if (fileDiff.Diff.Contains("deleted file mode") || fileDiff.Diff.Contains("--- a/") && fileDiff.Diff.Contains("+++ /dev/null"))
-                        {
-                            // Extract file content from the diff by looking for lines starting with '-'
-                            var removedLines = new List<string>();
-                            foreach (var line in fileDiff.Diff.Split('\n'))
-                            {
-                                if (line.StartsWith("-") && !line.StartsWith("--- "))
-                                {
-                                    removedLines.Add(line.Substring(1));
-                                }
-                            }
-                            oldContent = string.Join("\n", removedLines);
-                            if (string.IsNullOrWhiteSpace(oldContent))
-                            {
-                                oldContent = "[Deleted file content not available]\n";
-                            }
-                            newContent = "[FILE DELETED]\n";
-                        }
-                        else
-                        {
-                            // For modified files
-                            oldContent = "[No original content could be extracted]\n";
-                            newContent = "[No modified content could be extracted]\n";
-
-                            // Try to show the actual diff content in the 'After' view
-                            if (!string.IsNullOrEmpty(fileDiff.Diff))
-                            {
-                                newContent = fileDiff.Diff;
-                            }
-                        }
-                    }
-
-                    // Ensure we have at least some content for the diff viewer
-                    string oldText = !string.IsNullOrEmpty(oldContent) ? oldContent : isNewFile ? "[FILE ADDED]\n" : "[Original content not available]";
-                    string newText = !string.IsNullOrEmpty(newContent) ? newContent : isDeletedFile ? "[FILE DELETED]\n" : "[Modified content not available]";
-
-                    // Add diff string to text content if it's still empty - helps when actual content can't be extracted
-                    if ((string.IsNullOrWhiteSpace(oldText) || oldText.StartsWith("[")) && 
-                        (string.IsNullOrWhiteSpace(newText) || newText.StartsWith("[")) && 
-                        !string.IsNullOrEmpty(fileDiff.Diff))
-                    {
-                        // Add the raw diff to both sides to ensure something is displayed
-                        string diffHeader = "Showing raw diff content:\n\n";
-                        oldText = "[Original content]\n" + diffHeader + fileDiff.Diff;
-                        newText = "[Modified content]\n" + diffHeader + fileDiff.Diff;
-                    }
-
-                    // Ensure the content has multiple lines for proper display
-                    if (!oldText.Contains('\n')) oldText += "\n \n ";
-                    if (!newText.Contains('\n')) newText += "\n \n ";
-
-                    fileDiff = new ReviewModels.FileDiff(
-                        fileDiff.FilePath,
-                        fileDiff.Diff,
-                        oldText,
-                        newText
-                    );
-                }
-                else if (string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText))
-                {
-                    // If we have no content at all, provide a meaningful message
-                    _logger.LogWarning("  WARNING: No content available for {Path}", fileDiff.FilePath);
-                    fileDiff = new ReviewModels.FileDiff(
-                        fileDiff.FilePath,
-                        "No diff content available.",
-                        "[No original content available]\n \n ",  // Add extra lines for proper display
-                        "[No new content available]\n \n "     // Add extra lines for proper display
-                    );
-                }
-                // Ensure we always have at least minimal content
-                else if (string.IsNullOrEmpty(fileDiff.OldText) && !string.IsNullOrEmpty(fileDiff.NewText))
-                {
-                    // This is likely a new file
-                    _logger.LogDebug("  New file detected: {Path}", fileDiff.FilePath);
-
-                    // For new files, we'll preserve the empty old text but add a marker
-                    // so that the diff viewer can properly recognize it as a new file
-                    fileDiff = new ReviewModels.FileDiff(
-                        fileDiff.FilePath,
-                        fileDiff.Diff ?? string.Empty,
-                        "[FILE ADDED]\n", // Marker for new files
-                        fileDiff.NewText
-                    );
-                }
-                else if (!string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText))
-                {
-                    // This is likely a deleted file
-                    _logger.LogDebug("  Deleted file detected: {Path}", fileDiff.FilePath);
-
-                    // For deleted files, we'll preserve the empty new text but add a marker
-                    // so that the diff viewer can properly recognize it as a deleted file
-                    fileDiff = new ReviewModels.FileDiff(
-                        fileDiff.FilePath,
-                        fileDiff.Diff ?? string.Empty,
-                        fileDiff.OldText,
-                        "[FILE DELETED]\n" // Marker for deleted files
-                    );
-                }
-
-                _logger.LogDebug("  Final OldText length: {Length}", fileDiff.OldText?.Length ?? 0);
-                _logger.LogDebug("  Final NewText length: {Length}", fileDiff.NewText?.Length ?? 0);
-                FileDiffs.Add(fileDiff);
-
-                // Ensure UI updates
-                Dispatcher.UIThread.Post(() => {}, DispatcherPriority.Background);
-            }
+            LoadDiffs(diffs);
         }
 
         OpenInBrowserCommand = ReactiveCommand.Create(() =>
@@ -268,6 +127,159 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
             var window = new DiffSettingsWindow { DataContext = vm };
             window.Show();
         });
+
+        RefreshDiffsCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            try
+            {
+                var diffs = await _pullRequestService.GetPullRequestDiffAsync(
+                    _settings.Organization,
+                    _settings.Project,
+                    _settings.Repository,
+                    PullRequest.Id,
+                    _settings.PersonalAccessToken,
+                    null,
+                    null);
+
+                LoadDiffs(diffs);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to refresh diffs");
+            }
+        });
+    }
+
+    private void LoadDiffs(IEnumerable<ReviewModels.FileDiff> diffs)
+    {
+        FileDiffs.Clear();
+        _logger.LogDebug("Processing {Count} diffs", diffs.Count());
+        foreach (var d in diffs)
+        {
+            var fileDiff = d;
+            _logger.LogDebug("Processing diff for {Path}", fileDiff.FilePath);
+            _logger.LogDebug("  Original OldText length: {Length}", fileDiff.OldText?.Length ?? 0);
+            _logger.LogDebug("  Original NewText length: {Length}", fileDiff.NewText?.Length ?? 0);
+            _logger.LogDebug("  Original Diff length: {Length}", fileDiff.Diff?.Length ?? 0);
+
+            if (string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText) && !string.IsNullOrEmpty(fileDiff.Diff))
+            {
+                _logger.LogDebug("  Creating placeholder content for {Path}", fileDiff.FilePath);
+                var (oldContent, newContent) = ParseDiffToContent(fileDiff.Diff);
+
+                bool isNewFile = oldContent.Contains("[FILE ADDED]");
+                bool isDeletedFile = newContent.Contains("[FILE DELETED]");
+
+                _logger.LogDebug("  Parsed diff content: isNewFile={IsNew}, isDeletedFile={IsDeleted}", isNewFile, isDeletedFile);
+                _logger.LogDebug("  oldContent length: {OldLength}, newContent length: {NewLength}", oldContent.Length, newContent.Length);
+
+                if (string.IsNullOrWhiteSpace(oldContent) && string.IsNullOrWhiteSpace(newContent))
+                {
+                    if (fileDiff.Diff.Contains("new file mode") || fileDiff.Diff.Contains("/dev/null") && fileDiff.Diff.Contains("+++ b/"))
+                    {
+                        oldContent = "[FILE ADDED]\n";
+                        var addedLines = new List<string>();
+                        foreach (var line in fileDiff.Diff.Split('\n'))
+                        {
+                            if (line.StartsWith("+") && !line.StartsWith("+++ "))
+                            {
+                                addedLines.Add(line.Substring(1));
+                            }
+                        }
+                        newContent = string.Join("\n", addedLines);
+                        if (string.IsNullOrWhiteSpace(newContent))
+                        {
+                            newContent = "[Added file content not available]\n";
+                        }
+                    }
+                    else if (fileDiff.Diff.Contains("deleted file mode") || fileDiff.Diff.Contains("--- a/") && fileDiff.Diff.Contains("+++ /dev/null"))
+                    {
+                        var removedLines = new List<string>();
+                        foreach (var line in fileDiff.Diff.Split('\n'))
+                        {
+                            if (line.StartsWith("-") && !line.StartsWith("--- "))
+                            {
+                                removedLines.Add(line.Substring(1));
+                            }
+                        }
+                        oldContent = string.Join("\n", removedLines);
+                        if (string.IsNullOrWhiteSpace(oldContent))
+                        {
+                            oldContent = "[Deleted file content not available]\n";
+                        }
+                        newContent = "[FILE DELETED]\n";
+                    }
+                    else
+                    {
+                        oldContent = "[No original content could be extracted]\n";
+                        newContent = "[No modified content could be extracted]\n";
+
+                        if (!string.IsNullOrEmpty(fileDiff.Diff))
+                        {
+                            newContent = fileDiff.Diff;
+                        }
+                    }
+                }
+
+                string oldText = !string.IsNullOrEmpty(oldContent) ? oldContent : isNewFile ? "[FILE ADDED]\n" : "[Original content not available]";
+                string newText = !string.IsNullOrEmpty(newContent) ? newContent : isDeletedFile ? "[FILE DELETED]\n" : "[Modified content not available]";
+
+                if ((string.IsNullOrWhiteSpace(oldText) || oldText.StartsWith("[")) &&
+                    (string.IsNullOrWhiteSpace(newText) || newText.StartsWith("[")) &&
+                    !string.IsNullOrEmpty(fileDiff.Diff))
+                {
+                    string diffHeader = "Showing raw diff content:\n\n";
+                    oldText = "[Original content]\n" + diffHeader + fileDiff.Diff;
+                    newText = "[Modified content]\n" + diffHeader + fileDiff.Diff;
+                }
+
+                if (!oldText.Contains('\n')) oldText += "\n \n ";
+                if (!newText.Contains('\n')) newText += "\n \n ";
+
+                fileDiff = new ReviewModels.FileDiff(
+                    fileDiff.FilePath,
+                    fileDiff.Diff,
+                    oldText,
+                    newText
+                );
+            }
+            else if (string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText))
+            {
+                _logger.LogWarning("  WARNING: No content available for {Path}", fileDiff.FilePath);
+                fileDiff = new ReviewModels.FileDiff(
+                    fileDiff.FilePath,
+                    "No diff content available.",
+                    "[No original content available]\n \n ",
+                    "[No new content available]\n \n "
+                );
+            }
+            else if (string.IsNullOrEmpty(fileDiff.OldText) && !string.IsNullOrEmpty(fileDiff.NewText))
+            {
+                _logger.LogDebug("  New file detected: {Path}", fileDiff.FilePath);
+                fileDiff = new ReviewModels.FileDiff(
+                    fileDiff.FilePath,
+                    fileDiff.Diff ?? string.Empty,
+                    "[FILE ADDED]\n",
+                    fileDiff.NewText
+                );
+            }
+            else if (!string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText))
+            {
+                _logger.LogDebug("  Deleted file detected: {Path}", fileDiff.FilePath);
+                fileDiff = new ReviewModels.FileDiff(
+                    fileDiff.FilePath,
+                    fileDiff.Diff ?? string.Empty,
+                    fileDiff.OldText,
+                    "[FILE DELETED]\n"
+                );
+            }
+
+            _logger.LogDebug("  Final OldText length: {Length}", fileDiff.OldText?.Length ?? 0);
+            _logger.LogDebug("  Final NewText length: {Length}", fileDiff.NewText?.Length ?? 0);
+            FileDiffs.Add(fileDiff);
+
+            Dispatcher.UIThread.Post(() => { }, DispatcherPriority.Background);
+        }
     }
 
             // Helper method to parse a unified diff format into old and new content

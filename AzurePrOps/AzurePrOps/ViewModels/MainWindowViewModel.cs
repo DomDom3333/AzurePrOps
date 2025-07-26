@@ -306,7 +306,12 @@ public class MainWindowViewModel : ViewModelBase
                 // Always show the window, even if we couldn't get diffs
                 _ = Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    var vm = new PullRequestDetailsWindowViewModel(SelectedPullRequest, Comments, diffs);
+                    var vm = new PullRequestDetailsWindowViewModel(
+                        SelectedPullRequest,
+                        _pullRequestService,
+                        _settings,
+                        Comments,
+                        diffs);
                     _logger.LogDebug("Created ViewModel with {Count} FileDiffs", vm.FileDiffs.Count);
                     var window = new PullRequestDetailsWindow { DataContext = vm };
                     window.Show();
