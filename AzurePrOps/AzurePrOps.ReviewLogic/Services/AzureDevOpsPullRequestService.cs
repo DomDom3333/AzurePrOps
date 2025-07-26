@@ -94,8 +94,8 @@ namespace AzurePrOps.ReviewLogic.Services
                 string diff = RunGit(repoPath, $"diff {baseCommit} {sourceCommit} -- \"{file}\"");
                 string oldContent = string.Empty;
                 string newContent = string.Empty;
-                try { oldContent = RunGit(repoPath, $"show {baseCommit}:{file}"); } catch { }
-                try { newContent = RunGit(repoPath, $"show {sourceCommit}:{file}"); } catch { }
+                try { oldContent = RunGit(repoPath, $"show {baseCommit}:\"{file}\""); } catch { }
+                try { newContent = RunGit(repoPath, $"show {sourceCommit}:\"{file}\""); } catch { }
                 fileDiffs.Add(new FileDiff(file, diff, oldContent, newContent));
             }
             return fileDiffs;
@@ -364,10 +364,10 @@ namespace AzurePrOps.ReviewLogic.Services
         }
 
         private async Task<IReadOnlyList<FileDiff>> ProcessGitDiffsResponse(
-            System.Text.Json.JsonDocument jsonDoc, 
-            string encodedOrg, 
-            string encodedProject, 
-            string encodedRepoId, 
+            System.Text.Json.JsonDocument jsonDoc,
+            string encodedOrg,
+            string encodedProject,
+            string encodedRepoId,
             string authToken)
         {
             var fileDiffs = new List<FileDiff>();
@@ -378,120 +378,132 @@ namespace AzurePrOps.ReviewLogic.Services
                 return fileDiffs;
             }
 
+            var semaphore = new SemaphoreSlim(4);
+            var tasks = new List<Task<FileDiff?>>();
+
             foreach (var change in changesArray.EnumerateArray())
             {
-                try
-                {
-                    if (!change.TryGetProperty("item", out var item) ||
-                        !item.TryGetProperty("path", out var pathProp))
-                    {
-                        continue;
-                    }
+                tasks.Add(ProcessChangeAsync(change, encodedOrg, encodedProject, encodedRepoId, authToken, semaphore));
+            }
 
-                    var filePath = pathProp.GetString() ?? string.Empty;
-                    if (string.IsNullOrEmpty(filePath))
-                    {
-                        continue;
-                    }
+            var results = await Task.WhenAll(tasks);
 
-                    var changeType = change.TryGetProperty("changeType", out var changeTypeProp) ? 
-                        changeTypeProp.GetString() ?? "edit" : "edit";
-
-                    // Get the blob objectIds
-                    var newObjectId = item.TryGetProperty("objectId", out var newIdProp) ? 
-                        newIdProp.GetString() : null;
-
-                    var oldObjectId = change.TryGetProperty("originalObjectId", out var oldIdProp)
-                        ? oldIdProp.GetString()
-                        : null;
-
-                    // Fetch the content of both versions
-                    var (oldContent, newContent) = await GetFileContents(
-                        encodedOrg, encodedProject, encodedRepoId, filePath, oldObjectId, newObjectId, changeType, authToken);
-
-                    // Ensure we have valid content
-                    if (string.IsNullOrEmpty(oldContent) && string.IsNullOrEmpty(newContent))
-                    {
-                        // Log this case for debugging
-                        //ReportError($"No content retrieved for {filePath} - attempting to parse content from raw diff");
-
-                        // For empty content, try to get at least the unified diff
-                        var unifiedDiff = GenerateUnifiedDiff(filePath, changeType, oldContent, newContent, oldObjectId, newObjectId);
-
-                        // For new files, provide at least a minimal placeholder
-                        if (changeType.ToLowerInvariant() == "add")
-                        {
-                            oldContent = "[This is a new file]\n";
-                            // Try to extract content from the diff
-                            var newLines = new List<string>();
-                            foreach (var line in unifiedDiff.Split('\n'))
-                            {
-                                if (line.StartsWith("+") && !line.StartsWith("+++ "))
-                                    newLines.Add(line.Substring(1));
-                            }
-                            newContent = string.Join("\n", newLines);
-                            if (string.IsNullOrWhiteSpace(newContent))
-                                newContent = "[Content could not be retrieved for this new file]\n";
-                        }
-                        // For deleted files, provide at least a minimal placeholder
-                        else if (changeType.ToLowerInvariant() == "delete")
-                        {
-                            newContent = "[This file was deleted]\n";
-                            // Try to extract content from the diff
-                            var oldLines = new List<string>();
-                            foreach (var line in unifiedDiff.Split('\n'))
-                            {
-                                if (line.StartsWith("-") && !line.StartsWith("--- "))
-                                    oldLines.Add(line.Substring(1));
-                            }
-                            oldContent = string.Join("\n", oldLines);
-                            if (string.IsNullOrWhiteSpace(oldContent))
-                                oldContent = "[Content could not be retrieved for this deleted file]\n";
-                        }
-                        else if (changeType.ToLowerInvariant() == "edit")
-                        {
-                            var oldLines = new List<string>();
-                            var newLines = new List<string>();
-
-                            foreach (var line in unifiedDiff.Split('\n'))
-                            {
-                                if (line.StartsWith("-") && !line.StartsWith("--- "))
-                                    oldLines.Add(line.Substring(1));
-                                else if (line.StartsWith("+") && !line.StartsWith("+++ "))
-                                    newLines.Add(line.Substring(1));
-                                else if (line.StartsWith(" "))
-                                {
-                                    // Context lines - add to both old and new
-                                    var contextLine = line.Substring(1);
-                                    oldLines.Add(contextLine);
-                                    newLines.Add(contextLine);
-                                }
-                            }
-                        }
-                        else
-                        {
-                            // For modified files, show the raw diff in both views for debugging
-                            oldContent = $"[Could not retrieve original content for {filePath}]\n\n{unifiedDiff}";
-                            newContent = $"[Could not retrieve modified content for {filePath}]\n\n{unifiedDiff}";
-                        }
-                    }
-
-                    // Add to our collection
-                    string diffText = GenerateUnifiedDiff(filePath, changeType, oldContent, newContent, oldObjectId, newObjectId);
-                    // Ensure we have non-empty strings for display
-                    oldContent = string.IsNullOrEmpty(oldContent) ? "[No content available]\n" : oldContent;
-                    newContent = string.IsNullOrEmpty(newContent) ? "[No content available]\n" : newContent;
-
-                    fileDiffs.Add(new FileDiff(filePath, diffText, oldContent, newContent));
-                }
-                catch (Exception ex)
-                {
-                    ReportError($"Error processing change: {ex.Message}");
-                    continue;
-                }
+            foreach (var diff in results)
+            {
+                if (diff != null)
+                    fileDiffs.Add(diff);
             }
 
             return fileDiffs;
+        }
+
+        private async Task<FileDiff?> ProcessChangeAsync(
+            System.Text.Json.JsonElement change,
+            string encodedOrg,
+            string encodedProject,
+            string encodedRepoId,
+            string authToken,
+            SemaphoreSlim semaphore)
+        {
+            await semaphore.WaitAsync();
+            try
+            {
+                if (!change.TryGetProperty("item", out var item) ||
+                    !item.TryGetProperty("path", out var pathProp))
+                {
+                    return null;
+                }
+
+                var filePath = pathProp.GetString() ?? string.Empty;
+                if (string.IsNullOrEmpty(filePath))
+                {
+                    return null;
+                }
+
+                var changeType = change.TryGetProperty("changeType", out var changeTypeProp) ?
+                    changeTypeProp.GetString() ?? "edit" : "edit";
+
+                var newObjectId = item.TryGetProperty("objectId", out var newIdProp) ?
+                    newIdProp.GetString() : null;
+
+                var oldObjectId = change.TryGetProperty("originalObjectId", out var oldIdProp)
+                    ? oldIdProp.GetString()
+                    : null;
+
+                var (oldContent, newContent) = await GetFileContents(
+                    encodedOrg, encodedProject, encodedRepoId, filePath, oldObjectId, newObjectId, changeType, authToken);
+
+                if (string.IsNullOrEmpty(oldContent) && string.IsNullOrEmpty(newContent))
+                {
+                    var unifiedDiff = GenerateUnifiedDiff(filePath, changeType, oldContent, newContent, oldObjectId, newObjectId);
+
+                    if (changeType.ToLowerInvariant() == "add")
+                    {
+                        oldContent = "[This is a new file]\n";
+                        var newLines = new List<string>();
+                        foreach (var line in unifiedDiff.Split('\n'))
+                        {
+                            if (line.StartsWith("+") && !line.StartsWith("+++ "))
+                                newLines.Add(line.Substring(1));
+                        }
+                        newContent = string.Join("\n", newLines);
+                        if (string.IsNullOrWhiteSpace(newContent))
+                            newContent = "[Content could not be retrieved for this new file]\n";
+                    }
+                    else if (changeType.ToLowerInvariant() == "delete")
+                    {
+                        newContent = "[This file was deleted]\n";
+                        var oldLines = new List<string>();
+                        foreach (var line in unifiedDiff.Split('\n'))
+                        {
+                            if (line.StartsWith("-") && !line.StartsWith("--- "))
+                                oldLines.Add(line.Substring(1));
+                        }
+                        oldContent = string.Join("\n", oldLines);
+                        if (string.IsNullOrWhiteSpace(oldContent))
+                            oldContent = "[Content could not be retrieved for this deleted file]\n";
+                    }
+                    else if (changeType.ToLowerInvariant() == "edit")
+                    {
+                        var oldLines = new List<string>();
+                        var newLines = new List<string>();
+
+                        foreach (var line in unifiedDiff.Split('\n'))
+                        {
+                            if (line.StartsWith("-") && !line.StartsWith("--- "))
+                                oldLines.Add(line.Substring(1));
+                            else if (line.StartsWith("+") && !line.StartsWith("+++ "))
+                                newLines.Add(line.Substring(1));
+                            else if (line.StartsWith(" "))
+                            {
+                                var contextLine = line.Substring(1);
+                                oldLines.Add(contextLine);
+                                newLines.Add(contextLine);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        oldContent = $"[Could not retrieve original content for {filePath}]\n\n{unifiedDiff}";
+                        newContent = $"[Could not retrieve modified content for {filePath}]\n\n{unifiedDiff}";
+                    }
+                }
+
+                string diffText = GenerateUnifiedDiff(filePath, changeType, oldContent, newContent, oldObjectId, newObjectId);
+                oldContent = string.IsNullOrEmpty(oldContent) ? "[No content available]\n" : oldContent;
+                newContent = string.IsNullOrEmpty(newContent) ? "[No content available]\n" : newContent;
+
+                return new FileDiff(filePath, diffText, oldContent, newContent);
+            }
+            catch (Exception ex)
+            {
+                ReportError($"Error processing change: {ex.Message}");
+                return null;
+            }
+            finally
+            {
+                semaphore.Release();
+            }
         }
 
         private async Task<(string oldContent, string newContent)> GetFileContents(
