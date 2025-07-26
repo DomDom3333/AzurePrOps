@@ -1,0 +1,60 @@
+<Window
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:AzurePrOps.ViewModels"
+    xmlns:model="using:AzurePrOps.AzureConnection.Models"
+    x:Class="AzurePrOps.Views.CommentsWindow"
+    x:DataType="vm:CommentsWindowViewModel"
+    mc:Ignorable="d"
+    Title="{Binding Title}"
+    Width="400"
+    Height="500"
+    WindowStartupLocation="CenterOwner">
+    <Design.DataContext>
+        <vm:CommentsWindowViewModel Title="Comments">
+            <vm:CommentsWindowViewModel.Comments>
+                <model:PullRequestComment Author="Jane" Content="Looks good" PostedDate="2024-01-01" />
+            </vm:CommentsWindowViewModel.Comments>
+        </vm:CommentsWindowViewModel>
+    </Design.DataContext>
+    <StackPanel Margin="20" Spacing="12">
+        <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="Bold" />
+        <ScrollViewer VerticalScrollBarVisibility="Auto"
+                      IsVisible="{Binding Comments, Converter={StaticResource CollectionNotEmptyConverter}}">
+            <ItemsControl ItemsSource="{Binding Comments}" Margin="0,0,0,8">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="model:PullRequestComment">
+                        <Border
+                            Background="{StaticResource CardBackgroundBrush}"
+                            CornerRadius="6"
+                            Margin="0,0,0,8"
+                            Padding="10,8">
+                            <StackPanel Spacing="4">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <TextBlock Grid.Column="0"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding Author}" />
+                                    <TextBlock Grid.Column="1"
+                                               FontSize="10"
+                                               Foreground="{StaticResource MutedBrush}"
+                                               Text="{Binding PostedDate}" />
+                                </Grid>
+                                <TextBlock FontSize="12"
+                                           Text="{Binding Content}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+        <TextBlock Text="No comments found"
+                   Foreground="{StaticResource MutedBrush}"
+                   HorizontalAlignment="Center"
+                   IsVisible="{Binding Comments, Converter={StaticResource CollectionNotEmptyConverter}, ConverterParameter=invert}" />
+        <Button Classes="PrimaryButton" Content="Close" Command="{Binding CloseCommand}" HorizontalAlignment="Right" Width="100" />
+    </StackPanel>
+</Window>
