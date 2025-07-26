@@ -2,6 +2,8 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using AzurePrOps.AzureConnection.Models;
+using ReviewComment = AzurePrOps.ReviewLogic.Models.Comment;
+using ReviewCommentThread = AzurePrOps.ReviewLogic.Models.CommentThread;
 using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
 using AzurePrOps.Logging;
@@ -406,6 +408,182 @@ public partial class AzureDevOpsClient
             }
         }
         return list;
+    }
+
+    public async Task<IReadOnlyList<ReviewCommentThread>> GetPullRequestThreadsAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        string personalAccessToken)
+    {
+        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+
+        var encodedOrg = Uri.EscapeDataString(organization);
+        var encodedProject = Uri.EscapeDataString(project);
+        var encodedRepoId = Uri.EscapeDataString(repositoryId);
+        var requestUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}/threads?api-version={ApiVersion}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+        using var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        using var stream = await response.Content.ReadAsStreamAsync();
+        var json = await JsonDocument.ParseAsync(stream);
+
+        var list = new List<ReviewCommentThread>();
+        if (json.RootElement.TryGetProperty("value", out var threads))
+        {
+            foreach (var t in threads.EnumerateArray())
+            {
+                try
+                {
+                    list.Add(ParseThread(t));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error processing comment thread");
+                }
+            }
+        }
+        return list;
+    }
+
+    public async Task<ReviewCommentThread> CreatePullRequestThreadAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        string filePath,
+        int lineNumber,
+        string content,
+        string personalAccessToken)
+    {
+        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+
+        var encodedOrg = Uri.EscapeDataString(organization);
+        var encodedProject = Uri.EscapeDataString(project);
+        var encodedRepoId = Uri.EscapeDataString(repositoryId);
+        var requestUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}/threads?api-version={ApiVersion}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+        var body = new
+        {
+            comments = new[] { new { parentCommentId = 0, content, commentType = 1 } },
+            status = "active",
+            threadContext = new
+            {
+                filePath,
+                rightFileStart = new { line = lineNumber, offset = 1 },
+                rightFileEnd = new { line = lineNumber, offset = 1 }
+            }
+        };
+
+        request.Content = new StringContent(JsonSerializer.Serialize(body), System.Text.Encoding.UTF8, "application/json");
+        using var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        using var stream = await response.Content.ReadAsStreamAsync();
+        var json = await JsonDocument.ParseAsync(stream);
+        return ParseThread(json.RootElement);
+    }
+
+    public async Task<ReviewCommentThread> AddCommentToThreadAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        int threadId,
+        int parentCommentId,
+        string content,
+        string personalAccessToken)
+    {
+        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+
+        var encodedOrg = Uri.EscapeDataString(organization);
+        var encodedProject = Uri.EscapeDataString(project);
+        var encodedRepoId = Uri.EscapeDataString(repositoryId);
+        var requestUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}/threads/{threadId}/comments?api-version={ApiVersion}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+        var body = new { parentCommentId, content, commentType = 1 };
+        request.Content = new StringContent(JsonSerializer.Serialize(body), System.Text.Encoding.UTF8, "application/json");
+
+        using var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        using var stream = await response.Content.ReadAsStreamAsync();
+        var json = await JsonDocument.ParseAsync(stream);
+        return ParseThread(json.RootElement);
+    }
+
+    public async Task ResolveThreadAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        int threadId,
+        string personalAccessToken)
+    {
+        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+
+        var encodedOrg = Uri.EscapeDataString(organization);
+        var encodedProject = Uri.EscapeDataString(project);
+        var encodedRepoId = Uri.EscapeDataString(repositoryId);
+        var requestUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}/threads/{threadId}?api-version={ApiVersion}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Patch, requestUri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+        request.Content = new StringContent(JsonSerializer.Serialize(new { status = "closed" }), System.Text.Encoding.UTF8, "application/json");
+
+        using var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+    }
+
+    private static ReviewCommentThread ParseThread(JsonElement threadJson)
+    {
+        var thread = new ReviewCommentThread
+        {
+            ThreadId = threadJson.GetProperty("id").GetInt32(),
+            Status = threadJson.TryGetProperty("status", out var statusProp) ? statusProp.GetString() ?? string.Empty : string.Empty
+        };
+
+        if (threadJson.TryGetProperty("threadContext", out var ctx))
+        {
+            thread.FilePath = ctx.TryGetProperty("filePath", out var fp) ? fp.GetString() ?? string.Empty : string.Empty;
+            if (ctx.TryGetProperty("rightFileStart", out var start) && start.TryGetProperty("line", out var lineProp))
+                thread.LineNumber = lineProp.GetInt32();
+        }
+
+        if (threadJson.TryGetProperty("comments", out var comments))
+        {
+            foreach (var c in comments.EnumerateArray())
+            {
+                try
+                {
+                    var comment = new ReviewComment
+                    {
+                        Id = c.TryGetProperty("id", out var idProp) ? idProp.GetInt32() : 0,
+                        Content = c.TryGetProperty("content", out var contentProp) ? contentProp.GetString() ?? string.Empty : string.Empty,
+                        Author = c.TryGetProperty("author", out var authorProp) && authorProp.TryGetProperty("displayName", out var displayName) ? displayName.GetString() ?? string.Empty : string.Empty,
+                        PublishedDate = c.TryGetProperty("publishedDate", out var dateProp) ? dateProp.GetDateTime() : DateTime.Now
+                    };
+                    thread.Comments.Add(comment);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error processing comment");
+                }
+            }
+        }
+
+        return thread;
     }
 
     // These methods have been moved to the partial class implementation
