@@ -1,0 +1,40 @@
+<Window
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:review="using:AzurePrOps.ReviewLogic.Models"
+    xmlns:vm="using:AzurePrOps.ViewModels"
+    x:Class="AzurePrOps.Views.InsightsWindow"
+    x:DataType="vm:InsightsWindowViewModel"
+    mc:Ignorable="d"
+    Title="{Binding Title}"
+    Width="400"
+    Height="500"
+    WindowStartupLocation="CenterOwner">
+    <Design.DataContext>
+        <vm:InsightsWindowViewModel Title="Pull Request Insights">
+            <vm:InsightsWindowViewModel.Metrics>
+                <review:MetricData Name="Comments" Value="5" />
+                <review:MetricData Name="LintWarnings" Value="2" />
+                <review:MetricData Name="ReviewTimeMin" Value="12.5" />
+            </vm:InsightsWindowViewModel.Metrics>
+        </vm:InsightsWindowViewModel>
+    </Design.DataContext>
+    <StackPanel Margin="20" Spacing="16">
+        <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="Bold" />
+        <ItemsControl ItemsSource="{Binding Metrics}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="review:MetricData">
+                    <Border Classes="Card">
+                        <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                            <TextBlock Grid.Column="0" FontWeight="SemiBold" Text="{Binding Name}" />
+                            <TextBlock Grid.Column="1" FontSize="14" Foreground="{StaticResource MutedBrush}" Text="{Binding Value}" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Button Classes="PrimaryButton" Content="Close" Command="{Binding CloseCommand}" HorizontalAlignment="Right" Width="100" />
+    </StackPanel>
+</Window>

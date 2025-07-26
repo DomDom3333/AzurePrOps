@@ -10,6 +10,8 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using AzurePrOps.Logging;
+using AzurePrOps.Views;
+using AzurePrOps.ReviewLogic.Models;
 
 namespace AzurePrOps.ViewModels;
 
@@ -21,6 +23,7 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
     public ObservableCollection<ConnectionModels.PullRequestComment> Comments { get; }
 
     public ReactiveCommand<Unit, Unit> OpenInBrowserCommand { get; }
+    public ReactiveCommand<Unit, Unit> ShowInsightsCommand { get; }
 
     public ObservableCollection<ReviewModels.FileDiff> FileDiffs { get; } = new();
 
@@ -214,6 +217,39 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
                 // Swallow exceptions to avoid crashing the app
                 _logger.LogWarning(ex, "Failed to open browser");
             }
+        });
+
+        ShowInsightsCommand = ReactiveCommand.Create(() =>
+        {
+            var metrics = new List<MetricData>
+            {
+                new MetricData { Name = "Files Changed", Value = FileDiffs.Count },
+                new MetricData { Name = "Comments",     Value = Comments.Count }
+            };
+
+            int added = 0;
+            int removed = 0;
+            foreach (var diff in FileDiffs)
+            {
+                if (string.IsNullOrWhiteSpace(diff.Diff))
+                    continue;
+
+                foreach (var line in diff.Diff.Split('\n'))
+                {
+                    if (line.StartsWith("+") && !line.StartsWith("+++ "))
+                        added++;
+                    else if (line.StartsWith("-") && !line.StartsWith("--- "))
+                        removed++;
+                }
+            }
+
+            metrics.Add(new MetricData { Name = "Lines Added",   Value = added });
+            metrics.Add(new MetricData { Name = "Lines Removed", Value = removed });
+
+            string title = $"Insights for PR #{PullRequest.Id}";
+            var vm = new InsightsWindowViewModel(title, metrics);
+            var window = new InsightsWindow { DataContext = vm };
+            window.Show();
         });
             }
 
