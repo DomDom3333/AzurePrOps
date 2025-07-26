@@ -25,6 +25,7 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> OpenInBrowserCommand { get; }
     public ReactiveCommand<Unit, Unit> ShowInsightsCommand { get; }
     public ReactiveCommand<Unit, Unit> ShowCommentsCommand { get; }
+    public ReactiveCommand<Unit, Unit> OpenDiffSettingsCommand { get; }
 
     public ObservableCollection<ReviewModels.FileDiff> FileDiffs { get; } = new();
 
@@ -260,7 +261,14 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
             var window = new InsightsWindow { DataContext = vm };
             window.Show();
         });
-            }
+
+        OpenDiffSettingsCommand = ReactiveCommand.Create(() =>
+        {
+            var vm = new DiffSettingsWindowViewModel();
+            var window = new DiffSettingsWindow { DataContext = vm };
+            window.Show();
+        });
+    }
 
             // Helper method to parse a unified diff format into old and new content
             public (string oldContent, string newContent) ParseDiffToContent(string diffText)

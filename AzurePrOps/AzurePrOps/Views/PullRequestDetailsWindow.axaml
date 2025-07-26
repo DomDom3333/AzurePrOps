@@ -325,6 +325,7 @@
                                 <Button
                                     Classes="SecondaryButton"
                                     Content="⚙️ Settings"
+                                    Command="{Binding OpenDiffSettingsCommand}"
                                     ToolTip.Tip="Diff Settings" />
                                 <Button
                                     Classes="SecondaryButton"
