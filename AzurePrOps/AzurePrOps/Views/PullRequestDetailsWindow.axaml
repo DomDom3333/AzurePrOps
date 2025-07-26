@@ -124,6 +124,7 @@
                     <Button
                         Classes="SecondaryButton"
                         Content="📊 Insights"
+                        Command="{Binding ShowInsightsCommand}"
                         ToolTip.Tip="View Analytics" />
                     <Button
                         Classes="PrimaryButton"
