@@ -9,7 +9,9 @@ namespace AzurePrOps.Models;
 /// </summary>
 public static class FeatureFlagStorage
 {
-    private static readonly string FilePath = Path.Combine(
+    public static string? OverrideFilePath;
+
+    private static string FilePath => OverrideFilePath ?? Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "AzurePrOps",
         "featureflags.json");
@@ -19,15 +21,15 @@ public static class FeatureFlagStorage
         try
         {
             if (!File.Exists(FilePath))
-                return new FeatureFlags(false, false, false);
+                return new FeatureFlags(false, false);
 
             var json = File.ReadAllText(FilePath);
             var data = JsonSerializer.Deserialize<FeatureFlags>(json);
-            return data ?? new FeatureFlags(false, false, false);
+            return data ?? new FeatureFlags(false, false);
         }
         catch
         {
-            return new FeatureFlags(false, false, false);
+            return new FeatureFlags(false, false);
         }
     }
 

@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\AzurePrOps.ReviewLogic\AzurePrOps.ReviewLogic.csproj" />
     <ProjectReference Include="..\AzurePrOps.AzureConnection\AzurePrOps.AzureConnection.csproj" />
+    <ProjectReference Include="..\AzurePrOps\AzurePrOps.csproj" />
   </ItemGroup>
 
 </Project>
