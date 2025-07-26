@@ -73,8 +73,10 @@ namespace AzurePrOps.Controls
         private List<int> _changedLines = new();
         private int _currentChangeIndex = -1;
         private bool _codeFoldingEnabled = true;
-        private bool _ignoreWhitespace = false;
-        private bool _wrapLines = false;
+        private bool _ignoreWhitespace = DiffPreferences.IgnoreWhitespace;
+        private bool _wrapLines = DiffPreferences.WrapLines;
+        private ToggleButton? _ignoreWhitespaceButton;
+        private ToggleButton? _wrapLinesButton;
         private ScrollViewer? _oldScrollViewer;
         private ScrollViewer? _newScrollViewer;
         private FoldingManager? _oldFoldingManager;
@@ -122,8 +124,32 @@ namespace AzurePrOps.Controls
                 : EditorDetector.GetDefaultEditor();
             IDEService = new IDEIntegrationService(editor);
 
+            // Apply persisted preferences
+            _ignoreWhitespace = DiffPreferences.IgnoreWhitespace;
+            _wrapLines = DiffPreferences.WrapLines;
+            DiffPreferences.PreferencesChanged += OnPreferencesChanged;
+
             InitializeComponent();
             Loaded += (_, __) => SetupEditors();
+            Unloaded += (_, __) => DiffPreferences.PreferencesChanged -= OnPreferencesChanged;
+        }
+
+        private void OnPreferencesChanged(object? sender, EventArgs e)
+        {
+            _ignoreWhitespace = DiffPreferences.IgnoreWhitespace;
+            _wrapLines = DiffPreferences.WrapLines;
+
+            if (_ignoreWhitespaceButton != null)
+                _ignoreWhitespaceButton.IsChecked = _ignoreWhitespace;
+            if (_wrapLinesButton != null)
+                _wrapLinesButton.IsChecked = _wrapLines;
+
+            if (_oldEditor != null)
+                _oldEditor.WordWrap = _wrapLines;
+            if (_newEditor != null)
+                _newEditor.WordWrap = _wrapLines;
+
+            Render();
         }
 
         protected override void OnDataContextChanged(EventArgs e)
@@ -238,8 +264,8 @@ namespace AzurePrOps.Controls
             var openIdeButton = this.FindControl<Button>("PART_OpenInIDEButton");
             var codeFoldingButton = this.FindControl<ToggleButton>("PART_CodeFoldingButton");
             var copyButton = this.FindControl<Button>("PART_CopyButton");
-            var ignoreWhitespaceButton = this.FindControl<ToggleButton>("PART_IgnoreWhitespaceButton");
-            var wrapLinesButton = this.FindControl<ToggleButton>("PART_WrapLinesButton");
+            _ignoreWhitespaceButton = this.FindControl<ToggleButton>("PART_IgnoreWhitespaceButton");
+            _wrapLinesButton = this.FindControl<ToggleButton>("PART_WrapLinesButton");
             var copyDiffButton = this.FindControl<Button>("PART_CopyDiffButton");
 
             // Wire up events with enhanced feedback
@@ -345,21 +371,25 @@ namespace AzurePrOps.Controls
                 };
             }
 
-            if (ignoreWhitespaceButton != null)
+            if (_ignoreWhitespaceButton != null)
             {
-                ignoreWhitespaceButton.IsCheckedChanged += (_, __) =>
+                _ignoreWhitespaceButton.IsChecked = _ignoreWhitespace;
+                _ignoreWhitespaceButton.IsCheckedChanged += (_, __) =>
                 {
-                    _ignoreWhitespace = ignoreWhitespaceButton.IsChecked == true;
+                    _ignoreWhitespace = _ignoreWhitespaceButton.IsChecked == true;
+                    DiffPreferences.IgnoreWhitespace = _ignoreWhitespace;
                     Render();
                     UpdateStatus(_ignoreWhitespace ? "Ignoring whitespace" : "Showing whitespace changes");
                 };
             }
 
-            if (wrapLinesButton != null)
+            if (_wrapLinesButton != null)
             {
-                wrapLinesButton.IsCheckedChanged += (_, __) =>
+                _wrapLinesButton.IsChecked = _wrapLines;
+                _wrapLinesButton.IsCheckedChanged += (_, __) =>
                 {
-                    _wrapLines = wrapLinesButton.IsChecked == true;
+                    _wrapLines = _wrapLinesButton.IsChecked == true;
+                    DiffPreferences.WrapLines = _wrapLines;
                     if (_oldEditor != null)
                         _oldEditor.WordWrap = _wrapLines;
                     if (_newEditor != null)
@@ -526,12 +556,12 @@ namespace AzurePrOps.Controls
         private void ApplyDiffVisualization(Dictionary<int, DiffLineType> lineMap)
         {
             var transformer = new DiffLineBackgroundTransformer(lineMap);
-            _oldEditor.TextArea.TextView.LineTransformers.Add(transformer);
-            _newEditor.TextArea.TextView.LineTransformers.Add(transformer);
+            _oldEditor?.TextArea.TextView.LineTransformers.Add(transformer);
+            _newEditor?.TextArea.TextView.LineTransformers.Add(transformer);
 
             var marginRenderer = new LineStatusMarginRenderer(lineMap);
-            _oldEditor.TextArea.TextView.BackgroundRenderers.Add(marginRenderer);
-            _newEditor.TextArea.TextView.BackgroundRenderers.Add(marginRenderer);
+            _oldEditor?.TextArea.TextView.BackgroundRenderers.Add(marginRenderer);
+            _newEditor?.TextArea.TextView.BackgroundRenderers.Add(marginRenderer);
 
             _changedLines = lineMap
                 .Where(kv => kv.Value != DiffLineType.Unchanged)
@@ -562,13 +592,13 @@ namespace AzurePrOps.Controls
             
             if (!string.IsNullOrWhiteSpace(searchQuery))
             {
-                var searchSource = _newEditor.Document.TextLength > 0 ? _newEditor.Text : _oldEditor.Text;
+                var searchSource = _newEditor?.Document.TextLength > 0 ? _newEditor!.Text : _oldEditor?.Text ?? string.Empty;
                 var results = SearchService?.Search(searchQuery, searchSource) ?? Enumerable.Empty<SearchResult>();
                 _searchMatches = results.Select(r => r.LineNumber).ToList();
 
                 var searchTransformer = new SearchHighlightTransformer(searchQuery);
-                _oldEditor.TextArea.TextView.LineTransformers.Add(searchTransformer);
-                _newEditor.TextArea.TextView.LineTransformers.Add(searchTransformer);
+                _oldEditor?.TextArea.TextView.LineTransformers.Add(searchTransformer);
+                _newEditor?.TextArea.TextView.LineTransformers.Add(searchTransformer);
             }
         }
 
