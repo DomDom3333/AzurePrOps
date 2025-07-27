@@ -50,11 +50,9 @@ namespace AzurePrOps.Controls
         public IPullRequestService PullRequestService { get; set; }
         public ILintingService LintingService { get; set; }
         public IBlameService BlameService { get; set; }
-        public IAuditTrailService AuditService { get; set; } = default!;
         public INotificationService NotificationService { get; set; } = default!;
         public IMetricsService MetricsService { get; set; } = default!;
         public ISuggestionService SuggestionService { get; set; } = default!;
-        public IPatchService PatchService { get; set; } = default!;
         public ICodeFoldingService FoldingService { get; set; } = default!;
         public ISearchService SearchService { get; set; } = default!;
         public IIDEIntegrationService IDEService { get; set; } = default!;
@@ -124,11 +122,9 @@ namespace AzurePrOps.Controls
             PullRequestService = PullRequestServiceFactory.Create(PullRequestServiceType.AzureDevOps);
             LintingService = new RoslynLintingService();
             BlameService = new GitBlameService(Environment.CurrentDirectory);
-            AuditService = new FileAuditTrailService();
             NotificationService = new AvaloniaNotificationService();
             MetricsService = new SimpleMetricsService();
             SuggestionService = new SimpleSuggestionService();
-            PatchService = new FilePatchService();
             FoldingService = new IndentationFoldingService();
             SearchService = new SimpleSearchService();
             CommentsService = new CommentsService(new AzureDevOpsClient());
