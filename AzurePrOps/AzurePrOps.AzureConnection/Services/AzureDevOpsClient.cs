@@ -11,7 +11,7 @@ using AzurePrOps.ReviewLogic.Services;
 
 namespace AzurePrOps.AzureConnection.Services;
 
-public partial class AzureDevOpsClient : IAzureDevOpsClient
+public class AzureDevOpsClient : IAzureDevOpsClient
 {
     private static readonly ILogger _logger = AppLogger.CreateLogger<AzureDevOpsClient>();
     private const string AzureDevOpsBaseUrl = "https://dev.azure.com";
@@ -696,7 +696,6 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         return thread;
     }
 
-    // These methods have been moved to the partial class implementation
 
     private static string VoteToString(int vote) => vote switch
     {
