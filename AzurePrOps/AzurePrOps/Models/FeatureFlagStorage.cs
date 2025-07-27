@@ -21,15 +21,15 @@ public static class FeatureFlagStorage
         try
         {
             if (!File.Exists(FilePath))
-                return new FeatureFlags(false, false);
+                return new FeatureFlags(true, true);
 
             var json = File.ReadAllText(FilePath);
             var data = JsonSerializer.Deserialize<FeatureFlags>(json);
-            return data ?? new FeatureFlags(false, false);
+            return data ?? new FeatureFlags(true, true);
         }
         catch
         {
-            return new FeatureFlags(false, false);
+            return new FeatureFlags(true, true);
         }
     }
 

@@ -6,6 +6,7 @@
     x:Class="AzurePrOps.Views.PullRequestDetailsWindow"
     x:DataType="vm:PullRequestDetailsWindowViewModel"
     xmlns="https://github.com/avaloniaui"
+    xmlns:md="clr-namespace:Markdown.Avalonia;assembly=Markdown.Avalonia"
     xmlns:controls="using:AzurePrOps.Controls"
     xmlns:converters="using:AzurePrOps.Converters"
     xmlns:model="using:AzurePrOps.AzureConnection.Models"
@@ -230,17 +231,26 @@
                                                             Grid.Column="1"
                                                             Text="{Binding PostedDate}" />
                                                     </Grid>
-                                                    <TextBlock
-                                                        FontSize="12"
-                                                        MaxLines="3"
-                                                        Text="{Binding Content}"
-                                                        TextWrapping="Wrap" />
+                                                    <md:MarkdownScrollViewer
+                                                        MaxHeight="60"
+                                                        Markdown="{Binding Content}" />
                                                 </StackPanel>
                                             </Border>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                             </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+
+                    <!--  Add Comment  -->
+                    <Border Classes="Card">
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="Add Comment" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBox Text="{Binding NewCommentText}" Watermark="Enter your comment..." Width="200" />
+                                <Button Classes="PrimaryButton" Command="{Binding PostCommentCommand}" Content="Post" />
+                            </StackPanel>
                         </StackPanel>
                     </Border>
 

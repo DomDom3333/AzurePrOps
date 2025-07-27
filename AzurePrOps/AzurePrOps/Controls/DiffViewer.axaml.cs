@@ -24,6 +24,7 @@ using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
 using Microsoft.Extensions.Logging;
 using AzurePrOps.Logging;
+using Markdown.Avalonia;
 using System.IO;
 
 namespace AzurePrOps.Controls
@@ -755,11 +756,9 @@ namespace AzurePrOps.Controls
                         FontSize = 11,
                         FontWeight = FontWeight.SemiBold
                     });
-                    commentStack.Children.Add(new TextBlock
+                    commentStack.Children.Add(new MarkdownScrollViewer
                     {
-                        Text = c.Content,
-                        TextWrapping = TextWrapping.Wrap,
-                        FontSize = 12
+                        Markdown = c.Content
                     });
                     stack.Children.Add(commentStack);
                 }

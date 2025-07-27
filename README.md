@@ -16,7 +16,7 @@ Opening files works across Linux and Windows for many popular IDEs such as VS Co
 
 ## Inline Comments
 
-Enable **Inline comments** from the Settings window to try inline commenting while reviewing diffs. Your Personal Access Token must include the **Code (Read & Write)** scope for posting replies.
+Inline commenting is enabled by default. Your Personal Access Token must include the **Code (Read & Write)** scope for posting replies. You can disable the feature from the Settings window if desired.
 
 When viewing a diff with the feature enabled, click in the gutter beside a line to open a popup showing existing threads. Enter text in the box to add a new comment or reply.
 
@@ -25,4 +25,4 @@ The sidebar lists all threads and can filter to only unresolved items.
 
 ## Lifecycle Actions
 
-Enable **Lifecycle actions** in Settings to show additional pull request controls. When enabled, the PR list displays your vote and a badge for draft PRs. Extra buttons allow approving with suggestions, waiting for the author, rejecting and more.
+Lifecycle actions are also on by default and add extra pull request controls. The PR list displays your vote and a badge for draft PRs, plus buttons for approving with suggestions, waiting for the author, rejecting and more.

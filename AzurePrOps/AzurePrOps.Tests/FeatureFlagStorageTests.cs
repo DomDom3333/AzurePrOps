@@ -39,8 +39,8 @@ public class FeatureFlagStorageTests
         try
         {
             var loaded = FeatureFlagStorage.Load();
-            Assert.False(loaded.InlineCommentsEnabled);
-            Assert.False(loaded.LifecycleActionsEnabled);
+            Assert.True(loaded.InlineCommentsEnabled);
+            Assert.True(loaded.LifecycleActionsEnabled);
         }
         finally
         {
