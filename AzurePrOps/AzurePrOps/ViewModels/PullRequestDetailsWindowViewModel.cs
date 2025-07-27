@@ -53,6 +53,14 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> RefreshDiffsCommand { get; }
     public ReactiveCommand<Unit, Unit> CompleteCommand { get; }
     public ReactiveCommand<Unit, Unit> AbandonCommand { get; }
+    public ReactiveCommand<Unit, Unit> PostCommentCommand { get; }
+
+    private string _newCommentText = string.Empty;
+    public string NewCommentText
+    {
+        get => _newCommentText;
+        set => this.RaiseAndSetIfChanged(ref _newCommentText, value);
+    }
 
     public ObservableCollection<ReviewModels.FileDiff> FileDiffs { get; } = new();
 
@@ -195,6 +203,22 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
                 _settings.Repository,
                 PullRequest.Id,
                 _settings.PersonalAccessToken);
+        });
+
+        PostCommentCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            if (string.IsNullOrWhiteSpace(NewCommentText))
+                return;
+
+            await _client.PostPullRequestCommentAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                PullRequest.Id,
+                NewCommentText,
+                _settings.PersonalAccessToken);
+
+            NewCommentText = string.Empty;
         });
     }
 

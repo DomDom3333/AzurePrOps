@@ -5,6 +5,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="using:AzurePrOps.ViewModels"
     xmlns:model="using:AzurePrOps.AzureConnection.Models"
+    xmlns:md="clr-namespace:Markdown.Avalonia;assembly=Markdown.Avalonia"
     x:Class="AzurePrOps.Views.CommentsWindow"
     x:DataType="vm:CommentsWindowViewModel"
     mc:Ignorable="d"
@@ -19,42 +20,38 @@
             </vm:CommentsWindowViewModel.Comments>
         </vm:CommentsWindowViewModel>
     </Design.DataContext>
-    <StackPanel Margin="20" Spacing="12">
-        <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="Bold" />
-        <ScrollViewer VerticalScrollBarVisibility="Auto"
+    <Grid Margin="20" RowDefinitions="Auto,*,Auto">
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Title}" FontSize="20" FontWeight="Bold" />
+            <Border Background="{StaticResource PrimaryBrush}" CornerRadius="10" Padding="6,2"
+                    IsVisible="{Binding Comments, Converter={StaticResource CollectionNotEmptyConverter}}">
+                <TextBlock FontSize="11" FontWeight="Bold" Foreground="White" Text="{Binding CommentCount}"/>
+            </Border>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                       IsVisible="{Binding Comments, Converter={StaticResource CollectionNotEmptyConverter}}">
             <ItemsControl ItemsSource="{Binding Comments}" Margin="0,0,0,8">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="model:PullRequestComment">
-                        <Border
-                            Background="{StaticResource CardBackgroundBrush}"
-                            CornerRadius="6"
-                            Margin="0,0,0,8"
-                            Padding="10,8">
+                        <Border Background="{StaticResource CardBackgroundBrush}" CornerRadius="6" Margin="0,0,0,8" Padding="12,8">
                             <StackPanel Spacing="4">
                                 <Grid ColumnDefinitions="*,Auto">
-                                    <TextBlock Grid.Column="0"
-                                               FontSize="12"
-                                               FontWeight="SemiBold"
-                                               Text="{Binding Author}" />
-                                    <TextBlock Grid.Column="1"
-                                               FontSize="10"
-                                               Foreground="{StaticResource MutedBrush}"
-                                               Text="{Binding PostedDate}" />
+                                    <TextBlock Grid.Column="0" FontSize="12" FontWeight="SemiBold" Text="{Binding Author}" />
+                                    <TextBlock Grid.Column="1" FontSize="10" Foreground="{StaticResource MutedBrush}" Text="{Binding PostedDate}" />
                                 </Grid>
-                                <TextBlock FontSize="12"
-                                           Text="{Binding Content}"
-                                           TextWrapping="Wrap" />
+                                <md:MarkdownScrollViewer Markdown="{Binding Content}" />
                             </StackPanel>
                         </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
-        <TextBlock Text="No comments found"
-                   Foreground="{StaticResource MutedBrush}"
-                   HorizontalAlignment="Center"
+
+        <TextBlock Grid.Row="1" Text="No comments found" Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
                    IsVisible="{Binding Comments, Converter={StaticResource CollectionNotEmptyConverter}, ConverterParameter=invert}" />
-        <Button Classes="PrimaryButton" Content="Close" Command="{Binding CloseCommand}" HorizontalAlignment="Right" Width="100" />
-    </StackPanel>
+
+        <Button Grid.Row="2" Classes="PrimaryButton" Content="Close" Command="{Binding CloseCommand}" HorizontalAlignment="Right" Width="100" />
+    </Grid>
 </Window>
