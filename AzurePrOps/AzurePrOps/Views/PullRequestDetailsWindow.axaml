@@ -1,14 +1,15 @@
-<Window x:Name="Root"
+<Window
     Height="900"
     Title="Pull Request Review"
     Width="1400"
     WindowStartupLocation="CenterScreen"
     x:Class="AzurePrOps.Views.PullRequestDetailsWindow"
     x:DataType="vm:PullRequestDetailsWindowViewModel"
+    x:Name="Root"
     xmlns="https://github.com/avaloniaui"
-    xmlns:md="clr-namespace:Markdown.Avalonia;assembly=Markdown.Avalonia"
     xmlns:controls="using:AzurePrOps.Controls"
     xmlns:converters="using:AzurePrOps.Converters"
+    xmlns:md="clr-namespace:Markdown.Avalonia;assembly=Markdown.Avalonia"
     xmlns:model="using:AzurePrOps.AzureConnection.Models"
     xmlns:review="using:AzurePrOps.ReviewLogic.Models"
     xmlns:vm="using:AzurePrOps.ViewModels"
@@ -120,22 +121,22 @@
                     Spacing="12">
                     <Button
                         Classes="SecondaryButton"
-                        Content="💬 Comments"
                         Command="{Binding ShowCommentsCommand}"
+                        Content="💬 Comments"
                         ToolTip.Tip="View Comments" />
                     <Button
                         Classes="SecondaryButton"
-                        Content="📊 Insights"
                         Command="{Binding ShowInsightsCommand}"
+                        Content="📊 Insights"
                         ToolTip.Tip="View Analytics" />
                     <Button
                         Classes="SecondaryButton"
-                        Content="Complete"
-                        Command="{Binding CompleteCommand}" />
+                        Command="{Binding CompleteCommand}"
+                        Content="Complete" />
                     <Button
                         Classes="DangerButton"
-                        Content="Abandon"
-                        Command="{Binding AbandonCommand}" />
+                        Command="{Binding AbandonCommand}"
+                        Content="Abandon" />
                     <Button
                         Classes="PrimaryButton"
                         Command="{Binding OpenInBrowserCommand}"
@@ -231,9 +232,7 @@
                                                             Grid.Column="1"
                                                             Text="{Binding PostedDate}" />
                                                     </Grid>
-                                                    <md:MarkdownScrollViewer
-                                                        MaxHeight="60"
-                                                        Markdown="{Binding Content}" />
+                                                    <md:MarkdownScrollViewer Markdown="{Binding Content}" MaxHeight="60" />
                                                 </StackPanel>
                                             </Border>
                                         </DataTemplate>
@@ -246,10 +245,19 @@
                     <!--  Add Comment  -->
                     <Border Classes="Card">
                         <StackPanel Spacing="12">
-                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="Add Comment" />
+                            <TextBlock
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Text="Add Comment" />
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBox Text="{Binding NewCommentText}" Watermark="Enter your comment..." Width="200" />
-                                <Button Classes="PrimaryButton" Command="{Binding PostCommentCommand}" Content="Post" />
+                                <TextBox
+                                    Text="{Binding NewCommentText}"
+                                    Watermark="Enter your comment..."
+                                    Width="200" />
+                                <Button
+                                    Classes="PrimaryButton"
+                                    Command="{Binding PostCommentCommand}"
+                                    Content="Post" />
                             </StackPanel>
                         </StackPanel>
                     </Border>
@@ -257,26 +265,42 @@
                     <!--  Comment Threads  -->
                     <Border Classes="Card">
                         <StackPanel Spacing="12">
-                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <StackPanel
+                                Orientation="Horizontal"
+                                Spacing="8"
+                                VerticalAlignment="Center">
                                 <TextBlock
                                     FontSize="16"
                                     FontWeight="SemiBold"
                                     Text="🧵 Threads" />
-                                <CheckBox
-                                    Content="Unresolved only"
-                                    IsChecked="{Binding ShowUnresolvedOnly}" />
+                                <CheckBox Content="Unresolved only" IsChecked="{Binding ShowUnresolvedOnly}" />
                             </StackPanel>
                             <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
-                                <ListBox ItemsSource="{Binding FilteredThreads}" SelectionChanged="ThreadSelectionChanged">
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate x:DataType="review:CommentThread">
-                                            <StackPanel Spacing="2">
-                                                <TextBlock FontSize="12" FontWeight="SemiBold" Text="{Binding FilePath}" />
-                                                <TextBlock FontSize="11" Foreground="{StaticResource MutedBrush}" Text="Line {Binding LineNumber}" />
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
+                                <Grid>
+                                    <ListBox ItemsSource="{Binding FilteredThreads}" SelectionChanged="ThreadSelectionChanged">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="review:CommentThread">
+                                                <StackPanel Spacing="2">
+                                                    <TextBlock
+                                                        FontSize="12"
+                                                        FontWeight="SemiBold"
+                                                        Text="{Binding FilePath}" />
+                                                    <TextBlock
+                                                        FontSize="11"
+                                                        Foreground="{StaticResource MutedBrush}"
+                                                        Text="Line {Binding LineNumber}" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                    <TextBlock
+                                        FontStyle="Italic"
+                                        Foreground="{StaticResource MutedBrush}"
+                                        HorizontalAlignment="Center"
+                                        IsVisible="{Binding FilteredThreadsCount, Converter={StaticResource NumberEqualsZeroConverter}}"
+                                        Text="No threads found"
+                                        VerticalAlignment="Center" />
+                                </Grid>
                             </ScrollViewer>
                         </StackPanel>
                     </Border>
@@ -369,13 +393,13 @@
                                 Spacing="8">
                                 <Button
                                     Classes="SecondaryButton"
-                                    Content="⚙️ Settings"
                                     Command="{Binding OpenDiffSettingsCommand}"
+                                    Content="⚙️ Settings"
                                     ToolTip.Tip="Diff Settings" />
                                 <Button
                                     Classes="SecondaryButton"
-                                    Content="🔄 Refresh"
                                     Command="{Binding RefreshDiffsCommand}"
+                                    Content="🔄 Refresh"
                                     ToolTip.Tip="Refresh Diff" />
                             </StackPanel>
                         </Grid>
@@ -446,11 +470,11 @@
                                                 Padding="0">
                                                 <controls:DiffViewer
                                                     HorizontalAlignment="Stretch"
+                                                    Loaded="DiffViewer_Loaded"
                                                     NewText="{Binding NewText}"
                                                     OldText="{Binding OldText}"
                                                     VerticalAlignment="Stretch"
-                                                    ViewMode="SideBySide"
-                                                    Loaded="DiffViewer_Loaded" />
+                                                    ViewMode="SideBySide" />
                                             </Border>
 
                                         </Expander>

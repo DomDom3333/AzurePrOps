@@ -40,11 +40,17 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _showUnresolvedOnly, value);
             this.RaisePropertyChanged(nameof(FilteredThreads));
+            this.RaisePropertyChanged(nameof(FilteredThreadsCount));
         }
     }
 
     public IEnumerable<CommentThread> FilteredThreads =>
         ShowUnresolvedOnly ? Threads.Where(t => !string.Equals(t.Status, "closed", StringComparison.OrdinalIgnoreCase)) : Threads;
+
+    public int FilteredThreadsCount =>
+        ShowUnresolvedOnly
+            ? Threads.Count(t => !string.Equals(t.Status, "closed", StringComparison.OrdinalIgnoreCase))
+            : Threads.Count;
 
     public ReactiveCommand<Unit, Unit> OpenInBrowserCommand { get; }
     public ReactiveCommand<Unit, Unit> ShowInsightsCommand { get; }
@@ -358,6 +364,9 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
     {
         try
         {
+            Threads.Clear();
+            this.RaisePropertyChanged(nameof(FilteredThreads));
+
             var threads = await _commentsService.GetThreadsAsync(
                 _settings.Organization,
                 _settings.Project,
@@ -365,19 +374,20 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
                 PullRequest.Id,
                 _settings.PersonalAccessToken);
 
-            Threads.Clear();
             foreach (var t in threads)
                 Threads.Add(t);
 
             this.RaisePropertyChanged(nameof(FilteredThreads));
+            this.RaisePropertyChanged(nameof(FilteredThreadsCount));
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to load threads");
+            // Ensure we still show the 
         }
     }
 
-            // Helper method to parse a unified diff format into old and new content
+    // Helper method to parse a unified diff format into old and new content
             public (string oldContent, string newContent) ParseDiffToContent(string diffText)
             {
         if (string.IsNullOrEmpty(diffText))

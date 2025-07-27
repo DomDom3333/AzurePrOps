@@ -16,6 +16,7 @@
         <converters:StatusToBrushConverter x:Key="StatusToBrush" />
         <converters:StatusToIconConverter x:Key="StatusToIcon" />
         <converters:VoteToIconConverter x:Key="VoteToIcon" />
+        <converters:NumberEqualsZeroConverter x:Key="NumberEqualsZeroConverter" />
         <converters:StringNotEmptyConverter x:Key="StringNotEmptyConverter" />
         <converters:CollectionNotEmptyConverter x:Key="CollectionNotEmptyConverter" />
     </Application.Resources>

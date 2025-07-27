@@ -469,7 +469,17 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
         using var response = await _httpClient.SendAsync(request);
-        response.EnsureSuccessStatusCode();
+
+        try
+        {
+            response.EnsureSuccessStatusCode();
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Handle 404 as a non-critical error - PR might not have threads yet
+            _logger.LogInformation("No threads found for pull request {PullRequestId}", pullRequestId);
+            return new List<ReviewCommentThread>();
+        }
 
         using var stream = await response.Content.ReadAsStreamAsync();
         var json = await JsonDocument.ParseAsync(stream);
@@ -608,33 +618,73 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
 
     private static ReviewCommentThread ParseThread(JsonElement threadJson)
     {
-        var thread = new ReviewCommentThread
-        {
-            ThreadId = threadJson.GetProperty("id").GetInt32(),
-            Status = threadJson.TryGetProperty("status", out var statusProp) ? statusProp.GetString() ?? string.Empty : string.Empty
-        };
+        var thread = new ReviewCommentThread();
 
-        if (threadJson.TryGetProperty("threadContext", out var ctx))
+        // Add null checks before accessing properties
+        if (threadJson.TryGetProperty("id", out var idElement) && idElement.ValueKind != JsonValueKind.Null)
         {
-            thread.FilePath = ctx.TryGetProperty("filePath", out var fp) ? fp.GetString() ?? string.Empty : string.Empty;
-            if (ctx.TryGetProperty("rightFileStart", out var start) && start.TryGetProperty("line", out var lineProp))
-                thread.LineNumber = lineProp.GetInt32();
+            thread.ThreadId = idElement.GetInt32();
         }
 
-        if (threadJson.TryGetProperty("comments", out var comments))
+        if (threadJson.TryGetProperty("status", out var statusElement) && statusElement.ValueKind != JsonValueKind.Null)
         {
-            foreach (var c in comments.EnumerateArray())
+            thread.Status = statusElement.GetString() ?? string.Empty;
+        }
+
+        if (threadJson.TryGetProperty("threadContext", out var contextElement) && contextElement.ValueKind != JsonValueKind.Null)
+        {
+            // Only process if contextElement is not null
+            if (contextElement.TryGetProperty("filePath", out var filePathElement) && filePathElement.ValueKind != JsonValueKind.Null)
+            {
+                thread.FilePath = filePathElement.GetString() ?? string.Empty;
+            }
+
+            if (contextElement.TryGetProperty("rightFileStart", out var lineElement) && lineElement.ValueKind != JsonValueKind.Null)
+            {
+                if (lineElement.TryGetProperty("line", out var lineNumberElement) && lineNumberElement.ValueKind != JsonValueKind.Null)
+                {
+                    thread.LineNumber = lineNumberElement.GetInt32();
+                }
+            }
+        }
+
+        if (threadJson.TryGetProperty("comments", out var commentsElement) && commentsElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var commentElement in commentsElement.EnumerateArray())
             {
                 try
                 {
-                    var comment = new ReviewComment
+                    if (commentElement.ValueKind != JsonValueKind.Null)
                     {
-                        Id = c.TryGetProperty("id", out var idProp) ? idProp.GetInt32() : 0,
-                        Content = c.TryGetProperty("content", out var contentProp) ? contentProp.GetString() ?? string.Empty : string.Empty,
-                        Author = c.TryGetProperty("author", out var authorProp) && authorProp.TryGetProperty("displayName", out var displayName) ? displayName.GetString() ?? string.Empty : string.Empty,
-                        PublishedDate = c.TryGetProperty("publishedDate", out var dateProp) ? dateProp.GetDateTime() : DateTime.Now
-                    };
-                    thread.Comments.Add(comment);
+                        var comment = new ReviewComment();
+
+                        if (commentElement.TryGetProperty("id", out var idProp) && idProp.ValueKind != JsonValueKind.Null)
+                        {
+                            comment.Id = idProp.GetInt32();
+                        }
+
+                        if (commentElement.TryGetProperty("content", out var contentProp) && contentProp.ValueKind != JsonValueKind.Null)
+                        {
+                            comment.Content = contentProp.GetString() ?? string.Empty;
+                        }
+
+                        if (commentElement.TryGetProperty("author", out var authorProp) && authorProp.ValueKind != JsonValueKind.Null &&
+                            authorProp.TryGetProperty("displayName", out var displayName) && displayName.ValueKind != JsonValueKind.Null)
+                        {
+                            comment.Author = displayName.GetString() ?? string.Empty;
+                        }
+
+                        if (commentElement.TryGetProperty("publishedDate", out var dateProp) && dateProp.ValueKind != JsonValueKind.Null)
+                        {
+                            comment.PublishedDate = dateProp.GetDateTime();
+                        }
+                        else
+                        {
+                            comment.PublishedDate = DateTime.Now;
+                        }
+
+                        thread.Comments.Add(comment);
+                    }
                 }
                 catch (Exception ex)
                 {
