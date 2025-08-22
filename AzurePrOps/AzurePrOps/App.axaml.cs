@@ -12,6 +12,7 @@ using AzurePrOps.Logging;
 using AzurePrOps.Infrastructure;
 using AzurePrOps.AzureConnection.Services;
 using AzurePrOps.ReviewLogic.Services;
+using AzurePrOps.Services;
 
 namespace AzurePrOps;
 
@@ -49,6 +50,9 @@ public partial class App : Application
 
         // Load feature flags so they are available throughout the app
         FeatureFlagManager.Load();
+
+        // Initialize theme management
+        ThemeManager.Initialize();
 
         // Register shared services in the composition root
         var devOpsClient = new AzureDevOpsClient();
