@@ -1,5 +1,4 @@
 <Application
-    RequestedThemeVariant="Light"
     x:Class="AzurePrOps.App"
     xmlns="https://github.com/avaloniaui"
     xmlns:converters="using:AzurePrOps.Converters"

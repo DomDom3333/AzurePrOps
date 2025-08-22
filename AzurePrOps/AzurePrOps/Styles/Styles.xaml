@@ -1,272 +1,275 @@
 <Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <Styles.Resources>
-    <!-- Unified modern color palette -->
-    <SolidColorBrush x:Key="PrimaryBrush" Color="#0969DA" />
-    <SolidColorBrush x:Key="PrimaryHoverBrush" Color="#0860CA" />
-    <SolidColorBrush x:Key="PrimaryLightBrush" Color="#DDF4FF" />
+    <Styles.Resources>
+        <!--  Unified modern color palette  -->
+        <SolidColorBrush Color="#0969DA" x:Key="PrimaryBrush" />
+        <SolidColorBrush Color="#0860CA" x:Key="PrimaryHoverBrush" />
+        <SolidColorBrush Color="#DDF4FF" x:Key="PrimaryLightBrush" />
 
-    <!-- Semantic colors -->
-    <SolidColorBrush x:Key="SuccessBrush" Color="#1A7F37" />
-    <SolidColorBrush x:Key="SuccessLightBrush" Color="#DCFFE4" />
-    <SolidColorBrush x:Key="DangerBrush" Color="#CF222E" />
-    <SolidColorBrush x:Key="DangerLightBrush" Color="#FFEBE9" />
-    <SolidColorBrush x:Key="WarningBrush" Color="#BF8700" />
-    <SolidColorBrush x:Key="WarningLightBrush" Color="#FFF8C5" />
-    <SolidColorBrush x:Key="ErrorBrush" Color="#CF222E" />
+        <!--  Semantic colors  -->
+        <SolidColorBrush Color="#1A7F37" x:Key="SuccessBrush" />
+        <SolidColorBrush Color="#DCFFE4" x:Key="SuccessLightBrush" />
+        <SolidColorBrush Color="#CF222E" x:Key="DangerBrush" />
+        <SolidColorBrush Color="#FFEBE9" x:Key="DangerLightBrush" />
+        <SolidColorBrush Color="#BF8700" x:Key="WarningBrush" />
+        <SolidColorBrush Color="#FFF8C5" x:Key="WarningLightBrush" />
+        <SolidColorBrush Color="#CF222E" x:Key="ErrorBrush" />
 
-    <!-- Neutral grays -->
-    <SolidColorBrush x:Key="MutedBrush" Color="#656D76" />
-    <SolidColorBrush x:Key="BorderBrush" Color="#D0D7DE" />
-    <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="BackgroundBrush" Color="#F6F8FA" />
-    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#24292F" />
-    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#656D76" />
+        <!--  Neutral grays  -->
+        <SolidColorBrush Color="#656D76" x:Key="MutedBrush" />
+        <SolidColorBrush Color="#D0D7DE" x:Key="BorderBrush" />
+        <SolidColorBrush Color="#FFFFFF" x:Key="SurfaceBrush" />
+        <SolidColorBrush Color="#F6F8FA" x:Key="BackgroundBrush" />
+        <SolidColorBrush Color="#24292F" x:Key="TextPrimaryBrush" />
+        <SolidColorBrush Color="#656D76" x:Key="TextSecondaryBrush" />
 
-    <!-- Interactive states -->
-    <SolidColorBrush x:Key="HoverBrush" Color="#F3F4F6" />
-    <SolidColorBrush x:Key="SelectedBrush" Color="#E7F3FF" />
-    <SolidColorBrush x:Key="FocusBrush" Color="#0969DA" />
-    <SolidColorBrush x:Key="CardHoverBrush" Color="#F8F9FA" />
-    <SolidColorBrush x:Key="CardBackgroundBrush" Color="#F8F9FA" />
-  </Styles.Resources>
+        <!--  Interactive states  -->
+        <SolidColorBrush Color="#F3F4F6" x:Key="HoverBrush" />
+        <SolidColorBrush Color="#E7F3FF" x:Key="SelectedBrush" />
+        <SolidColorBrush Color="#0969DA" x:Key="FocusBrush" />
+        <SolidColorBrush Color="#F8F9FA" x:Key="CardHoverBrush" />
+        <SolidColorBrush Color="#F8F9FA" x:Key="CardBackgroundBrush" />
 
-  <Style Selector="Window">
-    <Setter Property="Background" Value="{StaticResource BackgroundBrush}" />
-  </Style>
+        <!--  Overlay backgrounds for modals and loading screens  -->
+        <SolidColorBrush Color="#80000000" x:Key="OverlayBackgroundBrush" />
+    </Styles.Resources>
 
-  <Style Selector="TextBlock">
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-  </Style>
+    <Style Selector="Window">
+        <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+    </Style>
 
-  <!-- Modern button styles -->
-  <Style Selector="Button.PrimaryButton">
-    <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
-    <Setter Property="Foreground" Value="White" />
-    <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="6" />
-    <Setter Property="Padding" Value="12,8" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="Transitions">
-      <Transitions>
-        <BrushTransition Property="Background" Duration="0:0:0.15" />
-      </Transitions>
-    </Setter>
-  </Style>
+    <Style Selector="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
 
-  <Style Selector="Button.PrimaryButton:pointerover">
-    <Setter Property="Background" Value="{StaticResource PrimaryHoverBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource PrimaryHoverBrush}" />
-  </Style>
+    <!--  Modern button styles  -->
+    <Style Selector="Button.PrimaryButton">
+        <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Duration="0:0:0.15" Property="Background" />
+            </Transitions>
+        </Setter>
+    </Style>
 
-  <Style Selector="Button.SecondaryButton">
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="6" />
-    <Setter Property="Padding" Value="12,8" />
-    <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="FontWeight" Value="Medium" />
-    <Setter Property="Transitions">
-      <Transitions>
-        <BrushTransition Property="Background" Duration="0:0:0.15" />
-      </Transitions>
-    </Setter>
-  </Style>
+    <Style Selector="Button.PrimaryButton:pointerover">
+        <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHoverBrush}" />
+    </Style>
 
-  <Style Selector="Button.SecondaryButton:pointerover">
-    <Setter Property="Background" Value="{StaticResource HoverBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
-  </Style>
+    <Style Selector="Button.SecondaryButton">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Duration="0:0:0.15" Property="Background" />
+            </Transitions>
+        </Setter>
+    </Style>
 
-  <Style Selector="Button.SuccessButton">
-    <Setter Property="Background" Value="{StaticResource SuccessBrush}" />
-    <Setter Property="Foreground" Value="White" />
-    <Setter Property="BorderBrush" Value="{StaticResource SuccessBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="6" />
-    <Setter Property="Padding" Value="12,8" />
-    <Setter Property="FontWeight" Value="SemiBold" />
-    <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="Transitions">
-      <Transitions>
-        <BrushTransition Property="Background" Duration="0:0:0.15" />
-      </Transitions>
-    </Setter>
-  </Style>
+    <Style Selector="Button.SecondaryButton:pointerover">
+        <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+    </Style>
 
-  <Style Selector="Button.SuccessButton:pointerover">
-    <Setter Property="Background" Value="#0F5F2A" />
-    <Setter Property="BorderBrush" Value="#0F5F2A" />
-  </Style>
+    <Style Selector="Button.SuccessButton">
+        <Setter Property="Background" Value="{StaticResource SuccessBrush}" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="BorderBrush" Value="{StaticResource SuccessBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Duration="0:0:0.15" Property="Background" />
+            </Transitions>
+        </Setter>
+    </Style>
 
-  <!-- Input controls -->
-  <Style Selector="AutoCompleteBox">
-    <Setter Property="CornerRadius" Value="6" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-    <Setter Property="Padding" Value="8,6" />
-  </Style>
+    <Style Selector="Button.SuccessButton:pointerover">
+        <Setter Property="Background" Value="#0F5F2A" />
+        <Setter Property="BorderBrush" Value="#0F5F2A" />
+    </Style>
 
-  <Style Selector="ComboBox">
-    <Setter Property="CornerRadius" Value="6" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-    <Setter Property="Padding" Value="8,6" />
-  </Style>
+    <!--  Input controls  -->
+    <Style Selector="AutoCompleteBox">
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+        <Setter Property="Padding" Value="8,6" />
+    </Style>
 
-  <Style Selector="TextBox">
-    <Setter Property="CornerRadius" Value="6" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-    <Setter Property="Padding" Value="8,6" />
-  </Style>
+    <Style Selector="ComboBox">
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+        <Setter Property="Padding" Value="8,6" />
+    </Style>
 
-  <!-- ListBox styles -->
-  <Style Selector="ListBox">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="8" />
-    <Setter Property="Padding" Value="4" />
-  </Style>
+    <Style Selector="TextBox">
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+        <Setter Property="Padding" Value="8,6" />
+    </Style>
 
-  <Style Selector="ListBoxItem">
-    <Setter Property="CornerRadius" Value="6" />
-    <Setter Property="Margin" Value="0,0,0,2" />
-    <Setter Property="Padding" Value="0" />
-  </Style>
+    <!--  ListBox styles  -->
+    <Style Selector="ListBox">
+        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="4" />
+    </Style>
 
-  <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource SelectedBrush}" />
-  </Style>
+    <Style Selector="ListBoxItem">
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Margin" Value="0,0,0,2" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
 
-  <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource HoverBrush}" />
-  </Style>
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource SelectedBrush}" />
+    </Style>
 
-  <!-- Card container style -->
-  <Style Selector="Border.Card">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="8" />
-    <Setter Property="Padding" Value="16" />
-    <Setter Property="Margin" Value="0,0,0,16" />
-    <Setter Property="Transitions">
-      <Transitions>
-        <BrushTransition Property="Background" Duration="0:0:0.15" />
-      </Transitions>
-    </Setter>
-  </Style>
+    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+    </Style>
 
-  <Style Selector="Border.Card:pointerover">
-    <Setter Property="Background" Value="{StaticResource CardHoverBrush}" />
-  </Style>
+    <!--  Card container style  -->
+    <Style Selector="Border.Card">
+        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Duration="0:0:0.15" Property="Background" />
+            </Transitions>
+        </Setter>
+    </Style>
 
-  <!-- File list item -->
-  <Style Selector="Border.file-item">
-    <Setter Property="Background" Value="{StaticResource BackgroundBrush}" />
-    <Setter Property="BorderBrush" Value="Transparent" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="6" />
-    <Setter Property="Padding" Value="8,6" />
-    <Setter Property="Margin" Value="0,0,0,4" />
-    <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="Transitions">
-      <Transitions>
-        <BrushTransition Property="Background" Duration="0:0:0.15" />
-      </Transitions>
-    </Setter>
-  </Style>
+    <Style Selector="Border.Card:pointerover">
+        <Setter Property="Background" Value="{StaticResource CardHoverBrush}" />
+    </Style>
 
-  <Style Selector="Border.file-item:pointerover">
-    <Setter Property="Background" Value="{StaticResource HoverBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-  </Style>
+    <!--  File list item  -->
+    <Style Selector="Border.file-item">
+        <Setter Property="Background" Value="{StaticResource BackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Duration="0:0:0.15" Property="Background" />
+            </Transitions>
+        </Setter>
+    </Style>
 
-  <Style Selector="Border.file-item.selected">
-    <Setter Property="Background" Value="{StaticResource SelectedBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
-  </Style>
+    <Style Selector="Border.file-item:pointerover">
+        <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+    </Style>
 
-  <!-- Expander fixes -->
-  <Style Selector="Expander">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-    <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
-    <Setter Property="BorderThickness" Value="0" />
-  </Style>
+    <Style Selector="Border.file-item.selected">
+        <Setter Property="Background" Value="{StaticResource SelectedBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+    </Style>
 
-  <Style Selector="Expander /template/ ToggleButton#PART_toggle">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-    <Setter Property="BorderBrush" Value="Transparent" />
-    <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="Padding" Value="0" />
-  </Style>
+    <!--  Expander fixes  -->
+    <Style Selector="Expander">
+        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
 
-  <Style Selector="Expander /template/ ToggleButton#PART_toggle:pointerover">
-    <Setter Property="Background" Value="{StaticResource HoverBrush}" />
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-  </Style>
+    <Style Selector="Expander /template/ ToggleButton#PART_toggle">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
 
-  <Style Selector="Expander /template/ ToggleButton#PART_toggle:pressed">
-    <Setter Property="Background" Value="{StaticResource SelectedBrush}" />
-  </Style>
+    <Style Selector="Expander /template/ ToggleButton#PART_toggle:pointerover">
+        <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
 
-  <Style Selector="Expander /template/ Border#PART_content">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-    <Setter Property="BorderBrush" Value="Transparent" />
-    <Setter Property="BorderThickness" Value="0" />
-  </Style>
+    <Style Selector="Expander /template/ ToggleButton#PART_toggle:pressed">
+        <Setter Property="Background" Value="{StaticResource SelectedBrush}" />
+    </Style>
 
-  <Style Selector="Expander /template/ ToggleButton#PART_toggle ContentPresenter">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-  </Style>
+    <Style Selector="Expander /template/ Border#PART_content">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
 
-  <Style Selector="Expander /template/ ToggleButton#PART_toggle PathIcon">
-    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-  </Style>
+    <Style Selector="Expander /template/ ToggleButton#PART_toggle ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    </Style>
 
-  <Style Selector="Expander /template/ ToggleButton#PART_toggle:pointerover PathIcon">
-    <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}" />
-  </Style>
+    <Style Selector="Expander /template/ ToggleButton#PART_toggle PathIcon">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
 
-  <Style Selector="Expander /template/ Grid">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-  </Style>
+    <Style Selector="Expander /template/ ToggleButton#PART_toggle:pointerover PathIcon">
+        <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}" />
+    </Style>
 
-  <Style Selector="Expander /template/ Border">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-  </Style>
+    <Style Selector="Expander /template/ Grid">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    </Style>
 
-  <Style Selector="Expander Border">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-  </Style>
+    <Style Selector="Expander /template/ Border">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    </Style>
 
-  <Style Selector="Expander /template/ ToggleButton#PART_toggle ContentPresenter Border">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-  </Style>
+    <Style Selector="Expander Border">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    </Style>
 
-  <Style Selector="Expander /template/ ToggleButton#PART_toggle ContentPresenter StackPanel">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-  </Style>
+    <Style Selector="Expander /template/ ToggleButton#PART_toggle ContentPresenter Border">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    </Style>
 
-  <Style Selector="Expander /template/ ToggleButton#PART_toggle ContentPresenter Grid">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-  </Style>
+    <Style Selector="Expander /template/ ToggleButton#PART_toggle ContentPresenter StackPanel">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    </Style>
 
-  <Style Selector="Expander /template/ Panel">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-  </Style>
+    <Style Selector="Expander /template/ ToggleButton#PART_toggle ContentPresenter Grid">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    </Style>
 
-  <Style Selector="Expander /template/ StackPanel">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-  </Style>
+    <Style Selector="Expander /template/ Panel">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    </Style>
 
-  <Style Selector="Expander /template/ DockPanel">
-    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-  </Style>
+    <Style Selector="Expander /template/ StackPanel">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    </Style>
+
+    <Style Selector="Expander /template/ DockPanel">
+        <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    </Style>
 </Styles>
