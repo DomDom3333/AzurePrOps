@@ -116,9 +116,24 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
                             {
                                 var idPropLocal = rev.TryGetProperty("id", out var idValue)
                                     ? idValue.GetString() ?? string.Empty
-                                    : string.Empty; var name = rev.TryGetProperty("displayName", out var nameValue) ? nameValue.GetString() ?? string.Empty : string.Empty;
+                                    : string.Empty; 
+                                var name = rev.TryGetProperty("displayName", out var nameValue) ? nameValue.GetString() ?? string.Empty : string.Empty;
                                 var vote = rev.TryGetProperty("vote", out var voteValue) ? VoteToString(voteValue.GetInt32()) : "No vote";
-                                reviewers.Add(new ReviewerInfo(idPropLocal, name, vote));
+                                
+                                // Detect if this is a group reviewer based on Azure DevOps API properties
+                                var isGroup = false;
+                                if (rev.TryGetProperty("isContainer", out var isContainerProp) && isContainerProp.GetBoolean())
+                                {
+                                    isGroup = true;
+                                }
+                                else if (rev.TryGetProperty("descriptor", out var descriptorProp))
+                                {
+                                    var descriptor = descriptorProp.GetString() ?? string.Empty;
+                                    // In Azure DevOps, group descriptors typically start with "vssgp."
+                                    isGroup = descriptor.StartsWith("vssgp.", StringComparison.OrdinalIgnoreCase);
+                                }
+                                
+                                reviewers.Add(new ReviewerInfo(idPropLocal, name, vote, isGroup));
                             }
                             catch (Exception ex)
                             {
