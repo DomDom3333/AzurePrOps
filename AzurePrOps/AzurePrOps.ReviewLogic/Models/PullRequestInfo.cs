@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace AzurePrOps.ReviewLogic.Models;
 
-public record ReviewerInfo(string Id, string DisplayName, string Vote);
+public record ReviewerInfo(string Id, string DisplayName, string Vote, bool IsGroup = false);
 
 public record PullRequestComment(string Author, string Content, DateTime PostedDate);
 
