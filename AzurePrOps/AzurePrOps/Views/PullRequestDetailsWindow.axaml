@@ -17,7 +17,7 @@
 
 
 
-    <Grid Background="{StaticResource BackgroundBrush}">
+    <Grid Background="{DynamicResource BackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="{Binding OverviewHeight}" />
@@ -26,8 +26,8 @@
 
         <!--  Header Section  -->
         <Border
-            Background="{StaticResource SurfaceBrush}"
-            BorderBrush="{StaticResource BorderBrush}"
+            Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Grid.Row="0"
             Padding="24,20">
@@ -715,13 +715,13 @@
 
         <!--  Loading Overlay  -->
         <Border
-            Background="#80000000"
+            Background="{DynamicResource OverlayBackgroundBrush}"
             Grid.RowSpan="3"
             IsVisible="{Binding IsLoading}"
             ZIndex="999">
             <Border
-                Background="{StaticResource SurfaceBrush}"
-                BorderBrush="{StaticResource BorderBrush}"
+                Background="{DynamicResource SurfaceBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
                 HorizontalAlignment="Center"
