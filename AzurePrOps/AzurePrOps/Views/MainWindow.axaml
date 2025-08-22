@@ -1,5 +1,5 @@
 <Window
-    Background="{StaticResource BackgroundBrush}"
+    Background="{DynamicResource BackgroundBrush}"
     Icon="/Assets/avalonia-logo.ico"
     Title="AzurePrOps"
     d:DesignHeight="600"
@@ -27,8 +27,8 @@
 
         <!--  Header  -->
         <Border
-            Background="{StaticResource SurfaceBrush}"
-            BorderBrush="{StaticResource BorderBrush}"
+            Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="24,20">
             <Grid ColumnDefinitions="*,Auto">
@@ -564,13 +564,13 @@
 
         <!--  Loading overlay while opening PR details  -->
         <Border
-            Background="#80000000"
+            Background="{DynamicResource OverlayBackgroundBrush}"
             IsHitTestVisible="{Binding IsLoadingDiffs}"
             IsVisible="{Binding IsLoadingDiffs}"
             ZIndex="100">
             <ProgressBar
-                Background="{StaticResource SurfaceBrush}"
-                Foreground="{StaticResource PrimaryBrush}"
+                Background="{DynamicResource SurfaceBrush}"
+                Foreground="{DynamicResource PrimaryBrush}"
                 Height="20"
                 HorizontalAlignment="Center"
                 IsIndeterminate="True"
