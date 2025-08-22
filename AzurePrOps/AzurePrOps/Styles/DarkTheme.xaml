@@ -1,0 +1,41 @@
+﻿<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Styles.Resources>
+        <!--  Dark theme color palette - GitHub Dark inspired  -->
+
+        <!--  Primary colors (keeping same blue for consistency)  -->
+        <SolidColorBrush Color="#1F6FEB" x:Key="PrimaryBrush" />
+        <SolidColorBrush Color="#1C5ED6" x:Key="PrimaryHoverBrush" />
+        <SolidColorBrush Color="#1E2A3E" x:Key="PrimaryLightBrush" />
+
+        <!--  Semantic colors adapted for dark theme  -->
+        <SolidColorBrush Color="#3FB950" x:Key="SuccessBrush" />
+        <SolidColorBrush Color="#0D2117" x:Key="SuccessLightBrush" />
+        <SolidColorBrush Color="#F85149" x:Key="DangerBrush" />
+        <SolidColorBrush Color="#2D1217" x:Key="DangerLightBrush" />
+        <SolidColorBrush Color="#D29922" x:Key="WarningBrush" />
+        <SolidColorBrush Color="#341A00" x:Key="WarningLightBrush" />
+        <SolidColorBrush Color="#F85149" x:Key="ErrorBrush" />
+
+        <!--  Dark theme neutral grays  -->
+        <SolidColorBrush Color="#7D8590" x:Key="MutedBrush" />
+        <SolidColorBrush Color="#30363D" x:Key="BorderBrush" />
+        <SolidColorBrush Color="#161B22" x:Key="SurfaceBrush" />
+        <SolidColorBrush Color="#0D1117" x:Key="BackgroundBrush" />
+        <SolidColorBrush Color="#F0F6FC" x:Key="TextPrimaryBrush" />
+        <SolidColorBrush Color="#7D8590" x:Key="TextSecondaryBrush" />
+
+        <!--  Dark theme interactive states  -->
+        <SolidColorBrush Color="#21262D" x:Key="HoverBrush" />
+        <SolidColorBrush Color="#1C2128" x:Key="SelectedBrush" />
+        <SolidColorBrush Color="#1F6FEB" x:Key="FocusBrush" />
+        <SolidColorBrush Color="#21262D" x:Key="CardHoverBrush" />
+        <SolidColorBrush Color="#21262D" x:Key="CardBackgroundBrush" />
+
+        <!--  Error message colors for dark theme  -->
+        <SolidColorBrush Color="#2D1217" x:Key="ErrorBackgroundBrush" />
+        <SolidColorBrush Color="#F85149" x:Key="ErrorBorderBrush" />
+
+        <!--  Overlay backgrounds for modals and loading screens - dark theme  -->
+        <SolidColorBrush Color="#80161B22" x:Key="OverlayBackgroundBrush" />
+    </Styles.Resources>
+</Styles>
