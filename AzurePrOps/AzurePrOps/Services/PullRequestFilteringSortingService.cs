@@ -3,23 +3,28 @@ using System.Collections.Generic;
 using System.Linq;
 using AzurePrOps.AzureConnection.Models;
 using AzurePrOps.Models.FilteringAndSorting;
+using Microsoft.Extensions.Logging;
+using AzurePrOps.Logging;
 
 namespace AzurePrOps.Services;
 
 public class PullRequestFilteringSortingService
 {
+    private static readonly ILogger _logger = AppLogger.CreateLogger<PullRequestFilteringSortingService>();
     public IEnumerable<PullRequestInfo> ApplyFiltersAndSorting(
         IEnumerable<PullRequestInfo> pullRequests,
         FilterCriteria filterCriteria,
-        SortCriteria sortCriteria)
+        SortCriteria sortCriteria,
+        IReadOnlyList<string> userGroupMemberships = null)
     {
-        var filtered = ApplyFilters(pullRequests, filterCriteria);
+        var filtered = ApplyFilters(pullRequests, filterCriteria, userGroupMemberships);
         return ApplySorting(filtered, sortCriteria);
     }
 
     public IEnumerable<PullRequestInfo> ApplyFilters(
         IEnumerable<PullRequestInfo> pullRequests,
-        FilterCriteria criteria)
+        FilterCriteria criteria,
+        IReadOnlyList<string> userGroupMemberships = null)
     {
         var filtered = pullRequests.AsEnumerable();
 
@@ -67,9 +72,66 @@ public class PullRequestFilteringSortingService
             filtered = filtered.Where(pr => pr.Reviewers.Any(r => r.Id.Equals(criteria.CurrentUserId, StringComparison.OrdinalIgnoreCase)));
 
         if (criteria.NeedsMyReviewOnly && !string.IsNullOrWhiteSpace(criteria.CurrentUserId))
-            filtered = filtered.Where(pr => pr.Reviewers.Any(r => 
-                r.Id.Equals(criteria.CurrentUserId, StringComparison.OrdinalIgnoreCase) && 
-                (r.Vote.Equals("No vote", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(r.Vote))));
+        {
+            _logger.LogInformation("[DEBUG_LOG] Applying NeedsMyReviewOnly filter for user: {UserId}", criteria.CurrentUserId);
+            
+            if (userGroupMemberships != null && userGroupMemberships.Count > 0)
+            {
+                _logger.LogInformation("[DEBUG_LOG] User is member of {GroupCount} groups: {Groups}", 
+                    userGroupMemberships.Count, string.Join(", ", userGroupMemberships));
+            }
+            else
+            {
+                _logger.LogInformation("[DEBUG_LOG] User has no group memberships or groups list is null/empty");
+            }
+
+            filtered = filtered.Where(pr => 
+            {
+                _logger.LogInformation("[DEBUG_LOG] Evaluating PR #{PrId}: {Title}", pr.Id, pr.Title);
+                
+                // Log all reviewers for this PR
+                foreach (var reviewer in pr.Reviewers)
+                {
+                    _logger.LogInformation("[DEBUG_LOG] PR #{PrId} reviewer: {Name} (ID: {Id}, IsGroup: {IsGroup}, Vote: {Vote})", 
+                        pr.Id, reviewer.DisplayName, reviewer.Id, reviewer.IsGroup, reviewer.Vote);
+                }
+                
+                // Check if user is directly assigned as reviewer and hasn't voted
+                var directReviewNeeded = pr.Reviewers.Any(r => 
+                    !r.IsGroup &&
+                    r.Id.Equals(criteria.CurrentUserId, StringComparison.OrdinalIgnoreCase) && 
+                    (r.Vote.Equals("No vote", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(r.Vote)));
+                
+                _logger.LogInformation("[DEBUG_LOG] PR #{PrId} direct review needed: {DirectReviewNeeded}", pr.Id, directReviewNeeded);
+                
+                // Check if user is in a group that is assigned as reviewer and no one from the group has reviewed
+                var groupReviewNeeded = false;
+                if (userGroupMemberships != null && userGroupMemberships.Count > 0)
+                {
+                    foreach (var reviewer in pr.Reviewers.Where(r => r.IsGroup))
+                    {
+                        var userInGroup = userGroupMemberships.Contains(reviewer.DisplayName, StringComparer.OrdinalIgnoreCase);
+                        var groupHasNotVoted = reviewer.Vote.Equals("No vote", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(reviewer.Vote);
+                        
+                        _logger.LogInformation("[DEBUG_LOG] PR #{PrId} group reviewer {GroupName}: UserInGroup={UserInGroup}, GroupHasNotVoted={GroupHasNotVoted}", 
+                            pr.Id, reviewer.DisplayName, userInGroup, groupHasNotVoted);
+                            
+                        if (userInGroup && groupHasNotVoted)
+                        {
+                            groupReviewNeeded = true;
+                            break;
+                        }
+                    }
+                }
+                
+                _logger.LogInformation("[DEBUG_LOG] PR #{PrId} group review needed: {GroupReviewNeeded}", pr.Id, groupReviewNeeded);
+                
+                var needsReview = directReviewNeeded || groupReviewNeeded;
+                _logger.LogInformation("[DEBUG_LOG] PR #{PrId} final decision - needs review: {NeedsReview}", pr.Id, needsReview);
+                
+                return needsReview;
+            });
+        }
 
         return filtered;
     }
