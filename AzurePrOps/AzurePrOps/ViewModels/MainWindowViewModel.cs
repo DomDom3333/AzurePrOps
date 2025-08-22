@@ -29,6 +29,7 @@ public class MainWindowViewModel : ViewModelBase
     private readonly IPullRequestService _pullRequestService;
     private readonly Models.ConnectionSettings _settings;
     private readonly PullRequestFilteringSortingService _filterSortService = new();
+    private IReadOnlyList<string> _userGroupMemberships = new List<string>();
 
     public ObservableCollection<PullRequestInfo> PullRequests { get; } = new();
     private readonly ObservableCollection<PullRequestInfo> _allPullRequests = new();
@@ -305,6 +306,15 @@ public class MainWindowViewModel : ViewModelBase
                     _settings.Project,
                     _settings.Repository,
                     _settings.PersonalAccessToken);
+
+                // Fetch user group memberships for filtering
+                _userGroupMemberships = await _client.GetUserGroupMembershipsAsync(
+                    _settings.Organization,
+                    _settings.PersonalAccessToken);
+                
+                _logger.LogInformation("[DEBUG_LOG] Fetched user group memberships: {GroupCount} groups: {Groups}", 
+                    _userGroupMemberships?.Count ?? 0, 
+                    _userGroupMemberships != null ? string.Join(", ", _userGroupMemberships) : "null");
 
                 _allPullRequests.Clear();
                 foreach (var pr in prs.OrderByDescending(p => p.Created))
@@ -589,8 +599,8 @@ public class MainWindowViewModel : ViewModelBase
     {
         PullRequests.Clear();
         
-        // Apply enhanced filtering and sorting
-        var filtered = _filterSortService.ApplyFiltersAndSorting(_allPullRequests, FilterCriteria, SortCriteria);
+        // Apply enhanced filtering and sorting with user group memberships
+        var filtered = _filterSortService.ApplyFiltersAndSorting(_allPullRequests, FilterCriteria, SortCriteria, _userGroupMemberships);
         
         foreach (var pr in filtered)
         {
