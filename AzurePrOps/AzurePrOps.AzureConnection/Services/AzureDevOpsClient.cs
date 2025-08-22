@@ -294,6 +294,545 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         response.EnsureSuccessStatusCode();
     }
 
+    public async Task<IReadOnlyList<string>> GetUserGroupMembershipsAsync(string organization, string personalAccessToken)
+    {
+        _logger.LogInformation("[DEBUG_LOG] Starting GetUserGroupMembershipsAsync for organization: {Organization}", organization);
+        
+        if (string.IsNullOrWhiteSpace(organization) || string.IsNullOrWhiteSpace(personalAccessToken))
+        {
+            _logger.LogWarning("[DEBUG_LOG] Organization or PAT is null/empty - returning empty groups list");
+            return new List<string>();
+        }
+
+        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+        var groups = new List<string>();
+
+        // Approach 1: Get user descriptor first, then fetch memberships using correct Graph API pattern
+        try
+        {
+            var encodedOrg = Uri.EscapeDataString(organization);
+            
+            // First, get the user's subject descriptor
+            var userDescriptor = await GetUserSubjectDescriptorAsync(encodedOrg, authToken);
+            if (!string.IsNullOrWhiteSpace(userDescriptor))
+            {
+                _logger.LogInformation("[DEBUG_LOG] Got user descriptor: {UserDescriptor}", userDescriptor);
+                
+                // Now use the descriptor to get memberships
+                var requestUri = $"https://vssps.dev.azure.com/{encodedOrg}/_apis/graph/memberships/{Uri.EscapeDataString(userDescriptor)}?api-version=7.1-preview.1&direction=up";
+                _logger.LogInformation("[DEBUG_LOG] Trying Graph API with user descriptor: {RequestUri}", requestUri);
+                
+                using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+                using var response = await _httpClient.SendAsync(request);
+                _logger.LogInformation("[DEBUG_LOG] Graph API with descriptor response status: {StatusCode}", response.StatusCode);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await ProcessMembershipsResponse(response);
+                    if (result.Count > 0)
+                    {
+                        _logger.LogInformation("[DEBUG_LOG] Successfully fetched {GroupCount} groups using user descriptor", result.Count);
+                        return result;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[DEBUG_LOG] Graph API with user descriptor failed, trying fallbacks");
+        }
+        
+        // Approach 2: Try Teams API for team memberships
+        try
+        {
+            var encodedOrg = Uri.EscapeDataString(organization);
+            var teamsResult = await GetTeamMembershipsAsync(encodedOrg, authToken);
+            if (teamsResult.Count > 0)
+            {
+                _logger.LogInformation("[DEBUG_LOG] Successfully fetched {GroupCount} team memberships", teamsResult.Count);
+                return teamsResult;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[DEBUG_LOG] Teams API failed, trying next fallback");
+        }
+        
+        // Approach 3: Try Identity API for security groups
+        try
+        {
+            var encodedOrg = Uri.EscapeDataString(organization);
+            var identityResult = await GetSecurityGroupMembershipsAsync(encodedOrg, authToken);
+            if (identityResult.Count > 0)
+            {
+                _logger.LogInformation("[DEBUG_LOG] Successfully fetched {GroupCount} security groups", identityResult.Count);
+                return identityResult;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[DEBUG_LOG] Identity API also failed");
+        }
+
+        _logger.LogWarning("[DEBUG_LOG] All API approaches failed, returning empty groups list");
+        return groups;
+    }
+
+    private async Task<string?> GetUserSubjectDescriptorAsync(string encodedOrganization, string authToken)
+    {
+        try
+        {
+            var requestUri = $"https://vssps.dev.azure.com/{encodedOrganization}/_apis/graph/users?api-version=7.1-preview.1";
+            _logger.LogInformation("[DEBUG_LOG] Getting user descriptor from: {RequestUri}", requestUri);
+            
+            using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+            using var response = await _httpClient.SendAsync(request);
+            _logger.LogInformation("[DEBUG_LOG] Users API response status: {StatusCode}", response.StatusCode);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                using var stream = await response.Content.ReadAsStreamAsync();
+                var json = await JsonDocument.ParseAsync(stream);
+
+                if (json.RootElement.TryGetProperty("value", out var usersArray))
+                {
+                    foreach (var user in usersArray.EnumerateArray())
+                    {
+                        // Find the current user (the one making the request)
+                        if (user.TryGetProperty("descriptor", out var descriptorProp))
+                        {
+                            var descriptor = descriptorProp.GetString();
+                            _logger.LogInformation("[DEBUG_LOG] Found user descriptor: {Descriptor}", descriptor);
+                            return descriptor; // Return the first descriptor found - this should be the current user
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[DEBUG_LOG] Failed to get user descriptor");
+        }
+        
+        return null;
+    }
+
+    private async Task<List<string>> GetTeamMembershipsAsync(string encodedOrganization, string authToken)
+    {
+        var teams = new List<string>();
+        
+        try
+        {
+            // Step 1: Get all projects
+            var projectsUri = $"https://dev.azure.com/{encodedOrganization}/_apis/projects?api-version=7.1";
+            _logger.LogInformation("[DEBUG_LOG] Getting projects from: {ProjectsUri}", projectsUri);
+            
+            using var projectsRequest = new HttpRequestMessage(HttpMethod.Get, projectsUri);
+            projectsRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+            using var projectsResponse = await _httpClient.SendAsync(projectsRequest);
+            _logger.LogInformation("[DEBUG_LOG] Projects API response status: {StatusCode}", projectsResponse.StatusCode);
+            
+            if (projectsResponse.IsSuccessStatusCode)
+            {
+                using var projectsStream = await projectsResponse.Content.ReadAsStreamAsync();
+                var projectsJson = await JsonDocument.ParseAsync(projectsStream);
+
+                if (projectsJson.RootElement.TryGetProperty("value", out var projectsArray))
+                {
+                    foreach (var project in projectsArray.EnumerateArray())
+                    {
+                        if (project.TryGetProperty("name", out var projectNameProp))
+                        {
+                            var projectName = projectNameProp.GetString();
+                            if (!string.IsNullOrWhiteSpace(projectName))
+                            {
+                                _logger.LogInformation("[DEBUG_LOG] Processing project: {ProjectName}", projectName);
+                                
+                                // Step 2: Get teams for this project
+                                var teamsUri = $"https://dev.azure.com/{encodedOrganization}/{Uri.EscapeDataString(projectName)}/_apis/teams?api-version=7.1";
+                                _logger.LogInformation("[DEBUG_LOG] Getting teams for project {ProjectName} from: {TeamsUri}", projectName, teamsUri);
+                                
+                                using var teamsRequest = new HttpRequestMessage(HttpMethod.Get, teamsUri);
+                                teamsRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+                                using var teamsResponse = await _httpClient.SendAsync(teamsRequest);
+                                _logger.LogInformation("[DEBUG_LOG] Teams API response status for project {ProjectName}: {StatusCode}", projectName, teamsResponse.StatusCode);
+                                
+                                if (teamsResponse.IsSuccessStatusCode)
+                                {
+                                    using var teamsStream = await teamsResponse.Content.ReadAsStreamAsync();
+                                    var teamsJson = await JsonDocument.ParseAsync(teamsStream);
+
+                                    if (teamsJson.RootElement.TryGetProperty("value", out var teamsArray))
+                                    {
+                                        foreach (var team in teamsArray.EnumerateArray())
+                                        {
+                                            if (team.TryGetProperty("name", out var teamNameProp) && team.TryGetProperty("id", out var teamIdProp))
+                                            {
+                                                var teamName = teamNameProp.GetString();
+                                                var teamId = teamIdProp.GetString();
+                                                if (!string.IsNullOrWhiteSpace(teamName) && !string.IsNullOrWhiteSpace(teamId))
+                                                {
+                                                    _logger.LogInformation("[DEBUG_LOG] Found team: {TeamName} (ID: {TeamId})", teamName, teamId);
+                                                    
+                                                    // Step 3: Check if current user is member of this team
+                                                    var membersUri = $"https://dev.azure.com/{encodedOrganization}/{Uri.EscapeDataString(projectName)}/_apis/teams/{Uri.EscapeDataString(teamId)}/members?api-version=7.1";
+                                                    _logger.LogInformation("[DEBUG_LOG] Checking team membership for {TeamName}: {MembersUri}", teamName, membersUri);
+                                                    
+                                                    using var membersRequest = new HttpRequestMessage(HttpMethod.Get, membersUri);
+                                                    membersRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+                                                    using var membersResponse = await _httpClient.SendAsync(membersRequest);
+                                                    _logger.LogInformation("[DEBUG_LOG] Team members API response status for {TeamName}: {StatusCode}", teamName, membersResponse.StatusCode);
+                                                    
+                                                    if (membersResponse.IsSuccessStatusCode)
+                                                    {
+                                                        using var membersStream = await membersResponse.Content.ReadAsStreamAsync();
+                                                        var membersJson = await JsonDocument.ParseAsync(membersStream);
+
+                                                        if (membersJson.RootElement.TryGetProperty("value", out var membersArray))
+                                                        {
+                                                            // Check if current user is in the members list
+                                                            var currentUserFound = false;
+                                                            foreach (var member in membersArray.EnumerateArray())
+                                                            {
+                                                                if (member.TryGetProperty("identity", out var identityProp))
+                                                                {
+                                                                    // Check if this member represents the current user
+                                                                    var memberName = "Unknown";
+                                                                    if (identityProp.TryGetProperty("displayName", out var displayNameProp))
+                                                                    {
+                                                                        memberName = displayNameProp.GetString() ?? "Unknown";
+                                                                        currentUserFound = true;
+                                                                    }
+                                                                    else if (identityProp.TryGetProperty("uniqueName", out var uniqueNameProp))
+                                                                    {
+                                                                        memberName = uniqueNameProp.GetString() ?? "Unknown";
+                                                                        currentUserFound = true;
+                                                                    }
+                                                                    else if (identityProp.TryGetProperty("id", out var memberIdProp))
+                                                                    {
+                                                                        memberName = memberIdProp.GetString() ?? "Unknown";
+                                                                        currentUserFound = true;
+                                                                    }
+                                                                    
+                                                                    if (currentUserFound)
+                                                                    {
+                                                                        _logger.LogInformation("[DEBUG_LOG] Found team member: {MemberName}", memberName);
+                                                                        break; // We found at least one member, assume user is member
+                                                                    }
+                                                                }
+                                                            }
+                                                            
+                                                            var memberCount = membersArray.GetArrayLength();
+                                                            _logger.LogInformation("[DEBUG_LOG] Team {TeamName} has {MemberCount} members, current user found: {CurrentUserFound}", 
+                                                                teamName, memberCount, currentUserFound);
+                                                            
+                                                            // If we can access the team members, we likely have permission (are a member)
+                                                            if (memberCount > 0)
+                                                            {
+                                                                teams.Add(teamName);
+                                                                _logger.LogInformation("[DEBUG_LOG] Added team to user groups: {TeamName}", teamName);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[DEBUG_LOG] Failed to get team memberships");
+        }
+        
+        return teams;
+    }
+
+    private async Task<List<string>> GetSecurityGroupMembershipsAsync(string encodedOrganization, string authToken)
+    {
+        var groups = new List<string>();
+        
+        try
+        {
+            // Approach 1: Try Subject Query API for comprehensive group lookup
+            var subjectQueryResult = await GetGroupsViaSubjectQueryAsync(encodedOrganization, authToken);
+            if (subjectQueryResult.Count > 0)
+            {
+                groups.AddRange(subjectQueryResult);
+                _logger.LogInformation("[DEBUG_LOG] Found {GroupCount} groups via Subject Query API", subjectQueryResult.Count);
+            }
+            
+            // Approach 2: Try Group Lookup API - get all groups and check membership
+            if (groups.Count == 0)
+            {
+                var groupLookupResult = await GetGroupsViaGroupLookupAsync(encodedOrganization, authToken);
+                if (groupLookupResult.Count > 0)
+                {
+                    groups.AddRange(groupLookupResult);
+                    _logger.LogInformation("[DEBUG_LOG] Found {GroupCount} groups via Group Lookup API", groupLookupResult.Count);
+                }
+            }
+            
+            // Approach 3: Try Identities API for AD groups with expanded membership
+            if (groups.Count == 0)
+            {
+                var identitiesResult = await GetGroupsViaIdentitiesAsync(encodedOrganization, authToken);
+                if (identitiesResult.Count > 0)
+                {
+                    groups.AddRange(identitiesResult);
+                    _logger.LogInformation("[DEBUG_LOG] Found {GroupCount} groups via Identities API", identitiesResult.Count);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[DEBUG_LOG] Failed to get security group memberships");
+        }
+        
+        return groups;
+    }
+
+    private async Task<List<string>> GetGroupsViaSubjectQueryAsync(string encodedOrganization, string authToken)
+    {
+        var groups = new List<string>();
+        
+        try
+        {
+            var requestUri = $"https://vssps.dev.azure.com/{encodedOrganization}/_apis/graph/subjectquery?api-version=7.1-preview.1";
+            _logger.LogInformation("[DEBUG_LOG] Trying Subject Query API: {RequestUri}", requestUri);
+            
+            var requestBody = JsonSerializer.Serialize(new
+            {
+                query = "@@users@@",
+                subjectKind = new[] { "User" }
+            });
+            
+            using var request = new HttpRequestMessage(HttpMethod.Post, requestUri);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+            request.Content = new StringContent(requestBody, System.Text.Encoding.UTF8, "application/json");
+
+            using var response = await _httpClient.SendAsync(request);
+            _logger.LogInformation("[DEBUG_LOG] Subject Query API response status: {StatusCode}", response.StatusCode);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                using var stream = await response.Content.ReadAsStreamAsync();
+                var json = await JsonDocument.ParseAsync(stream);
+
+                if (json.RootElement.TryGetProperty("value", out var subjectsArray))
+                {
+                    foreach (var subject in subjectsArray.EnumerateArray())
+                    {
+                        if (subject.TryGetProperty("displayName", out var displayNameProp))
+                        {
+                            var groupName = displayNameProp.GetString();
+                            if (!string.IsNullOrWhiteSpace(groupName))
+                            {
+                                groups.Add(groupName);
+                                _logger.LogInformation("[DEBUG_LOG] Found group via Subject Query: {GroupName}", groupName);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[DEBUG_LOG] Subject Query API failed");
+        }
+        
+        return groups;
+    }
+
+    private async Task<List<string>> GetGroupsViaGroupLookupAsync(string encodedOrganization, string authToken)
+    {
+        var groups = new List<string>();
+        
+        try
+        {
+            // First get all groups
+            var requestUri = $"https://vssps.dev.azure.com/{encodedOrganization}/_apis/graph/groups?api-version=7.1-preview.1";
+            _logger.LogInformation("[DEBUG_LOG] Getting all groups from: {RequestUri}", requestUri);
+            
+            using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+            using var response = await _httpClient.SendAsync(request);
+            _logger.LogInformation("[DEBUG_LOG] Groups API response status: {StatusCode}", response.StatusCode);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                using var stream = await response.Content.ReadAsStreamAsync();
+                var json = await JsonDocument.ParseAsync(stream);
+
+                if (json.RootElement.TryGetProperty("value", out var groupsArray))
+                {
+                    var userDescriptor = await GetUserSubjectDescriptorAsync(encodedOrganization, authToken);
+                    if (!string.IsNullOrWhiteSpace(userDescriptor))
+                    {
+                        foreach (var group in groupsArray.EnumerateArray())
+                        {
+                            if (group.TryGetProperty("descriptor", out var groupDescriptorProp) &&
+                                group.TryGetProperty("displayName", out var displayNameProp))
+                            {
+                                var groupDescriptor = groupDescriptorProp.GetString();
+                                var groupName = displayNameProp.GetString();
+                                
+                                if (!string.IsNullOrWhiteSpace(groupDescriptor) && !string.IsNullOrWhiteSpace(groupName))
+                                {
+                                    // Check if user is member of this group
+                                    var membershipUri = $"https://vssps.dev.azure.com/{encodedOrganization}/_apis/graph/memberships/{Uri.EscapeDataString(groupDescriptor)}/{Uri.EscapeDataString(userDescriptor)}?api-version=7.1-preview.1";
+                                    
+                                    using var membershipRequest = new HttpRequestMessage(HttpMethod.Get, membershipUri);
+                                    membershipRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+                                    
+                                    using var membershipResponse = await _httpClient.SendAsync(membershipRequest);
+                                    if (membershipResponse.IsSuccessStatusCode)
+                                    {
+                                        groups.Add(groupName);
+                                        _logger.LogInformation("[DEBUG_LOG] User is member of group: {GroupName}", groupName);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[DEBUG_LOG] Group Lookup API failed");
+        }
+        
+        return groups;
+    }
+
+    private async Task<List<string>> GetGroupsViaIdentitiesAsync(string encodedOrganization, string authToken)
+    {
+        var groups = new List<string>();
+        
+        try
+        {
+            var userDescriptor = await GetUserSubjectDescriptorAsync(encodedOrganization, authToken);
+            if (!string.IsNullOrWhiteSpace(userDescriptor))
+            {
+                var requestUri = $"https://vssps.dev.azure.com/{encodedOrganization}/_apis/identities?searchFilter=General&filterValue={Uri.EscapeDataString(userDescriptor)}&queryMembership=Expanded&api-version=7.1";
+                _logger.LogInformation("[DEBUG_LOG] Trying Identities API with expanded membership: {RequestUri}", requestUri);
+                
+                using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+                using var response = await _httpClient.SendAsync(request);
+                _logger.LogInformation("[DEBUG_LOG] Identities API response status: {StatusCode}", response.StatusCode);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    using var stream = await response.Content.ReadAsStreamAsync();
+                    var json = await JsonDocument.ParseAsync(stream);
+
+                    if (json.RootElement.TryGetProperty("value", out var identitiesArray))
+                    {
+                        foreach (var identity in identitiesArray.EnumerateArray())
+                        {
+                            if (identity.TryGetProperty("memberOf", out var memberOfArray))
+                            {
+                                foreach (var group in memberOfArray.EnumerateArray())
+                                {
+                                    if (group.TryGetProperty("displayName", out var displayNameProp))
+                                    {
+                                        var groupName = displayNameProp.GetString();
+                                        if (!string.IsNullOrWhiteSpace(groupName))
+                                        {
+                                            groups.Add(groupName);
+                                            _logger.LogInformation("[DEBUG_LOG] Found group via Identities API: {GroupName}", groupName);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[DEBUG_LOG] Identities API failed");
+        }
+        
+        return groups;
+    }
+
+    private async Task<List<string>> ProcessMembershipsResponse(HttpResponseMessage response)
+    {
+        var groups = new List<string>();
+        
+        using var stream = await response.Content.ReadAsStreamAsync();
+        var json = await JsonDocument.ParseAsync(stream);
+
+        _logger.LogInformation("[DEBUG_LOG] Successfully parsed JSON response");
+
+        if (json.RootElement.TryGetProperty("value", out var array))
+        {
+            _logger.LogInformation("[DEBUG_LOG] Found 'value' property with {Count} memberships", array.GetArrayLength());
+            
+            foreach (var membership in array.EnumerateArray())
+            {
+                _logger.LogInformation("[DEBUG_LOG] Processing membership entry...");
+                
+                if (membership.TryGetProperty("containerDescriptor", out var containerProp) &&
+                    membership.TryGetProperty("memberDescriptor", out var memberProp))
+                {
+                    _logger.LogInformation("[DEBUG_LOG] Found containerDescriptor and memberDescriptor");
+                    
+                    // This is a group membership - get the group display name
+                    if (membership.TryGetProperty("container", out var container) &&
+                        container.TryGetProperty("displayName", out var displayNameProp))
+                    {
+                        var groupName = displayNameProp.GetString();
+                        _logger.LogInformation("[DEBUG_LOG] Found container displayName: {GroupName}", groupName);
+                        
+                        if (!string.IsNullOrWhiteSpace(groupName))
+                        {
+                            groups.Add(groupName);
+                            _logger.LogInformation("[DEBUG_LOG] Added group to list: {GroupName}", groupName);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("[DEBUG_LOG] Group name is null or whitespace, skipping");
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogInformation("[DEBUG_LOG] No container or displayName property found");
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation("[DEBUG_LOG] Missing containerDescriptor or memberDescriptor");
+                }
+            }
+        }
+        else
+        {
+            _logger.LogWarning("[DEBUG_LOG] No 'value' property found in JSON response");
+        }
+
+        _logger.LogInformation("[DEBUG_LOG] Returning {GroupCount} groups: {Groups}", groups.Count, string.Join(", ", groups));
+        return groups;
+    }
+
     public async Task<string> GetUserIdAsync(string personalAccessToken)
     {
         if (string.IsNullOrWhiteSpace(personalAccessToken))
