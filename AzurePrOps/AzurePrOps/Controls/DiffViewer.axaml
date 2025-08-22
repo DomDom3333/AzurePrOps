@@ -12,7 +12,7 @@
             <GradientStop Color="#F8F9FA" Offset="1" />
         </LinearGradientBrush>
 
-        <!-- Component-specific brushes -->
+        <!--  Component-specific brushes  -->
 
         <!--  Icon colors for better contrast  -->
         <SolidColorBrush Color="#24292F" x:Key="IconBrush" />
@@ -244,19 +244,20 @@
                     <!--  Search  -->
                     <Border
                         Grid.Column="1"
-                        HorizontalAlignment="Center"
-                        MaxWidth="300">
+                        HorizontalAlignment="Stretch"
+                        MinWidth="320">
                         <Grid ColumnDefinitions="*,Auto">
                             <TextBox
                                 Classes="search"
                                 Grid.Column="0"
+                                HorizontalAlignment="Stretch"
                                 Watermark="Search in diff..."
                                 x:Name="PART_SearchBox" />
                             <StackPanel
                                 Grid.Column="1"
-                                Margin="4,0,0,0"
+                                Margin="6,0,0,0"
                                 Orientation="Horizontal"
-                                Spacing="1">
+                                Spacing="2">
                                 <Button
                                     Classes="modern"
                                     ToolTip.Tip="Previous Match"
@@ -289,28 +290,49 @@
                             IsChecked="True"
                             ToolTip.Tip="Show Only Changes"
                             x:Name="PART_CodeFoldingButton">
-                            <PathIcon
-                                Data="M2,4 L14,4 M2,8 L14,8 M2,12 L14,12"
-                                Height="16"
-                                Width="16" />
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <PathIcon
+                                    Data="M2,4 L14,4 M2,8 L14,8 M2,12 L14,12"
+                                    Height="16"
+                                    Width="16" />
+                                <TextBlock Text="Changes" />
+                            </StackPanel>
                         </ToggleButton>
                         <ToggleButton
                             Classes="toolbar"
                             ToolTip.Tip="Ignore Whitespace"
                             x:Name="PART_IgnoreWhitespaceButton">
-                            <PathIcon
-                                Data="M2,2 L14,14 M14,2 L2,14"
-                                Height="16"
-                                Width="16" />
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <PathIcon
+                                    Data="M2,2 L14,14 M14,2 L2,14"
+                                    Height="16"
+                                    Width="16" />
+                                <TextBlock Text="Ignore WS" />
+                            </StackPanel>
+                        </ToggleButton>
+                        <ToggleButton
+                            Classes="toolbar"
+                            ToolTip.Tip="Ignore EOL (line ending) differences"
+                            x:Name="PART_IgnoreNewlinesButton">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <PathIcon
+                                    Data="M3,3 L13,3 L13,6 L9,6 L9,11 L6,11 L6,6 L3,6 Z M10,9 L14,13 M14,9 L10,13"
+                                    Height="16"
+                                    Width="16" />
+                                <TextBlock Text="Ignore EOL" />
+                            </StackPanel>
                         </ToggleButton>
                         <ToggleButton
                             Classes="toolbar"
                             ToolTip.Tip="Wrap Lines"
                             x:Name="PART_WrapLinesButton">
-                            <PathIcon
-                                Data="M2,4 L12,4 M2,8 L12,8 M2,12 L12,12 M12,8 L16,12 L12,16"
-                                Height="16"
-                                Width="16" />
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <PathIcon
+                                    Data="M2,4 L12,4 M2,8 L12,8 M2,12 L12,12 M12,8 L16,12 L12,16"
+                                    Height="16"
+                                    Width="16" />
+                                <TextBlock Text="Wrap" />
+                            </StackPanel>
                         </ToggleButton>
 
                         <Border
@@ -322,19 +344,25 @@
                             Classes="modern"
                             ToolTip.Tip="Copy Selected"
                             x:Name="PART_CopyButton">
-                            <PathIcon
-                                Data="M4,2 L4,4 L2,4 L2,14 L10,14 L10,12 L12,12 L12,2 Z M6,0 L14,0 L14,10 L12,10"
-                                Height="14"
-                                Width="14" />
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <PathIcon
+                                    Data="M4,2 L4,4 L2,4 L2,14 L10,14 L10,12 L12,12 L12,2 Z M6,0 L14,0 L14,10 L12,10"
+                                    Height="14"
+                                    Width="14" />
+                                <TextBlock Text="Copy Sel" />
+                            </StackPanel>
                         </Button>
                         <Button
                             Classes="modern"
                             ToolTip.Tip="Copy Diff"
                             x:Name="PART_CopyDiffButton">
-                            <PathIcon
-                                Data="M2,2 L10,2 L10,12 L2,12 Z M12,4 L14,4 L14,14 L6,14 L6,12"
-                                Height="14"
-                                Width="14" />
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <PathIcon
+                                    Data="M2,2 L10,2 L10,12 L2,12 Z M12,4 L14,4 L14,14 L6,14 L6,12"
+                                    Height="14"
+                                    Width="14" />
+                                <TextBlock Text="Copy Diff" />
+                            </StackPanel>
                         </Button>
                         <Button
                             Classes="primary"
@@ -416,7 +444,7 @@
                         Foreground="{StaticResource MutedBrush}"
                         Grid.Column="2"
                         VerticalAlignment="Center">
-                        Diff Viewer �� AzurePrOps
+                        Diff Viewer - AzurePrOps
                     </TextBlock>
                 </Grid>
             </Border>

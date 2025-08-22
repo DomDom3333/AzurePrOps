@@ -1,36 +1,36 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text.Json;
 
 namespace AzurePrOps.Models;
 
-public record DiffPreferencesData(bool IgnoreWhitespace, bool WrapLines, bool IgnoreNewlines, bool ExpandAllOnOpen);
+public record UIPreferencesData(bool AutoRefreshEnabled, int SelectedThemeIndex, int RefreshIntervalSeconds, bool ShowNotifications, bool MinimizeToTray);
 
-public static class DiffPreferencesStorage
+public static class UIPreferencesStorage
 {
     private static readonly string FilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "AzurePrOps",
-        "diffsettings.json");
+        "uisettings.json");
 
-    public static DiffPreferencesData Load()
+    public static UIPreferencesData Load()
     {
         try
         {
             if (!File.Exists(FilePath))
-                return new DiffPreferencesData(true, false, true, true);
+                return new UIPreferencesData(true, 0, 60, true, false);
 
             var json = File.ReadAllText(FilePath);
-            var data = JsonSerializer.Deserialize<DiffPreferencesData>(json);
-            return data ?? new DiffPreferencesData(true, false, true, true);
+            var data = JsonSerializer.Deserialize<UIPreferencesData>(json);
+            return data ?? new UIPreferencesData(true, 0, 60, true, false);
         }
         catch
         {
-            return new DiffPreferencesData(true, false, true, true);
+            return new UIPreferencesData(true, 0, 60, true, false);
         }
     }
 
-    public static void Save(DiffPreferencesData data)
+    public static void Save(UIPreferencesData data)
     {
         var dir = Path.GetDirectoryName(FilePath);
         if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))

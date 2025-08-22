@@ -9,6 +9,9 @@ using AzurePrOps.ViewModels;
 using AzurePrOps.Views;
 using Microsoft.Extensions.Logging;
 using AzurePrOps.Logging;
+using AzurePrOps.Infrastructure;
+using AzurePrOps.AzureConnection.Services;
+using AzurePrOps.ReviewLogic.Services;
 
 namespace AzurePrOps;
 
@@ -46,6 +49,11 @@ public partial class App : Application
 
         // Load feature flags so they are available throughout the app
         FeatureFlagManager.Load();
+
+        // Register shared services in the composition root
+        var devOpsClient = new AzureDevOpsClient();
+        ServiceRegistry.Register<IAzureDevOpsClient>(devOpsClient);
+        ServiceRegistry.Register<ICommentsService>(new CommentsService(devOpsClient));
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {

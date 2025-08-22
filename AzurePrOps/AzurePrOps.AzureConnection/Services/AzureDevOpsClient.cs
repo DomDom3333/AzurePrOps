@@ -30,6 +30,15 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         _errorHandler?.Invoke(message);
     }
 
+    private void NotifyAuthIfNeeded(HttpResponseMessage response)
+    {
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+            response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            ReportError("Your Azure DevOps Personal Access Token appears to be invalid or expired. Please open Settings and update your token.");
+        }
+    }
+
     public AzureDevOpsClient(HttpClient? httpClient = null)
     {
         _httpClient = httpClient ?? new HttpClient();
@@ -58,6 +67,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
         using var response = await _httpClient.SendAsync(request);
+        NotifyAuthIfNeeded(response);
         response.EnsureSuccessStatusCode();
 
         using var stream = await response.Content.ReadAsStreamAsync();
@@ -150,6 +160,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
         using var response = await _httpClient.SendAsync(request);
+        NotifyAuthIfNeeded(response);
         response.EnsureSuccessStatusCode();
 
         using var stream = await response.Content.ReadAsStreamAsync();
@@ -200,6 +211,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         request.Content = new StringContent($"{{ \"vote\": {vote} }}", System.Text.Encoding.UTF8, "application/json");
 
         using var response = await _httpClient.SendAsync(request);
+        NotifyAuthIfNeeded(response);
         response.EnsureSuccessStatusCode();
     }
 
@@ -278,6 +290,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
 
         request.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
         using var response = await _httpClient.SendAsync(request);
+        NotifyAuthIfNeeded(response);
         response.EnsureSuccessStatusCode();
     }
 
@@ -373,9 +386,11 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
 
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
+            NotifyAuthIfNeeded(response);
             throw new UnauthorizedAccessException("Invalid Personal Access Token. Please verify your token has the required permissions and is not expired.");
         }
 
+        NotifyAuthIfNeeded(response);
         response.EnsureSuccessStatusCode();
 
         using var stream = await response.Content.ReadAsStreamAsync();
@@ -404,6 +419,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
         using var response = await _httpClient.SendAsync(request);
+        NotifyAuthIfNeeded(response);
         response.EnsureSuccessStatusCode();
 
         using var stream = await response.Content.ReadAsStreamAsync();
@@ -433,6 +449,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
         using var response = await _httpClient.SendAsync(request);
+        NotifyAuthIfNeeded(response);
         response.EnsureSuccessStatusCode();
 
         using var stream = await response.Content.ReadAsStreamAsync();
@@ -536,6 +553,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
 
         request.Content = new StringContent(JsonSerializer.Serialize(body), System.Text.Encoding.UTF8, "application/json");
         using var response = await _httpClient.SendAsync(request);
+        NotifyAuthIfNeeded(response);
         response.EnsureSuccessStatusCode();
 
         using var stream = await response.Content.ReadAsStreamAsync();
@@ -567,6 +585,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         request.Content = new StringContent(JsonSerializer.Serialize(body), System.Text.Encoding.UTF8, "application/json");
 
         using var response = await _httpClient.SendAsync(request);
+        NotifyAuthIfNeeded(response);
         response.EnsureSuccessStatusCode();
 
         using var stream = await response.Content.ReadAsStreamAsync();
@@ -613,6 +632,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         request.Content = new StringContent(JsonSerializer.Serialize(new { status }), System.Text.Encoding.UTF8, "application/json");
 
         using var response = await _httpClient.SendAsync(request);
+        NotifyAuthIfNeeded(response);
         response.EnsureSuccessStatusCode();
     }
 
@@ -639,13 +659,24 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
                 thread.FilePath = filePathElement.GetString() ?? string.Empty;
             }
 
-            if (contextElement.TryGetProperty("rightFileStart", out var lineElement) && lineElement.ValueKind != JsonValueKind.Null)
+            int parsedLine = 0;
+            if (contextElement.TryGetProperty("rightFileStart", out var rightStart) && rightStart.ValueKind != JsonValueKind.Null)
             {
-                if (lineElement.TryGetProperty("line", out var lineNumberElement) && lineNumberElement.ValueKind != JsonValueKind.Null)
+                if (rightStart.TryGetProperty("line", out var rightLine) && rightLine.ValueKind != JsonValueKind.Null)
                 {
-                    thread.LineNumber = lineNumberElement.GetInt32();
+                    parsedLine = rightLine.GetInt32();
                 }
             }
+            // Fallback to left side if right is missing or zero (e.g., deletions anchored on left)
+            if ((parsedLine == 0) && contextElement.TryGetProperty("leftFileStart", out var leftStart) && leftStart.ValueKind != JsonValueKind.Null)
+            {
+                if (leftStart.TryGetProperty("line", out var leftLine) && leftLine.ValueKind != JsonValueKind.Null)
+                {
+                    parsedLine = leftLine.GetInt32();
+                }
+            }
+            // Ensure we have a sensible default
+            thread.LineNumber = parsedLine <= 0 ? 1 : parsedLine;
         }
 
         if (threadJson.TryGetProperty("comments", out var commentsElement) && commentsElement.ValueKind == JsonValueKind.Array)
@@ -727,6 +758,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         request.Content = new StringContent(JsonSerializer.Serialize(new { isDraft }), System.Text.Encoding.UTF8, "application/json");
 
         using var response = await _httpClient.SendAsync(request);
+        NotifyAuthIfNeeded(response);
         response.EnsureSuccessStatusCode();
     }
 
@@ -761,6 +793,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         request.Content = new StringContent(JsonSerializer.Serialize(body), System.Text.Encoding.UTF8, "application/json");
 
         using var response = await _httpClient.SendAsync(request);
+        NotifyAuthIfNeeded(response);
         response.EnsureSuccessStatusCode();
     }
 
@@ -783,6 +816,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         request.Content = new StringContent(JsonSerializer.Serialize(new { status = "abandoned" }), System.Text.Encoding.UTF8, "application/json");
 
         using var response = await _httpClient.SendAsync(request);
+        NotifyAuthIfNeeded(response);
         response.EnsureSuccessStatusCode();
     }
 }

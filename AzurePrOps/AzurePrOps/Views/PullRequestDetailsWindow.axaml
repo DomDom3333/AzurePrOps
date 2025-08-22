@@ -20,6 +20,7 @@
     <Grid Background="{StaticResource BackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="{Binding OverviewHeight}" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -121,6 +122,16 @@
                     Spacing="12">
                     <Button
                         Classes="SecondaryButton"
+                        Command="{Binding ToggleSidebarCommand}"
+                        Content="📖 Focus Mode"
+                        ToolTip.Tip="Toggle sidebar visibility to maximize diff viewer space" />
+                    <Button
+                        Classes="SecondaryButton"
+                        Command="{Binding ToggleOverviewCommand}"
+                        Content="📊 Overview"
+                        ToolTip.Tip="Toggle overview metrics to maximize diff viewer space" />
+                    <Button
+                        Classes="SecondaryButton"
                         Command="{Binding ShowCommentsCommand}"
                         Content="💬 Comments"
                         ToolTip.Tip="View Comments" />
@@ -140,21 +151,229 @@
                     <Button
                         Classes="PrimaryButton"
                         Command="{Binding OpenInBrowserCommand}"
-                        Content="🌐 Open in Browser"
-                        IsEnabled="{Binding PullRequest.WebUrl, Converter={StaticResource StringNotEmptyConverter}}" />
+                        Content="🌐 Open in Browser" />
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!--  Main Content  -->
-        <Grid
-            ColumnDefinitions="300,*"
+        <!--  Total Metrics Overview  -->
+        <Border
+            Background="{StaticResource SurfaceBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="0,0,0,1"
             Grid.Row="1"
-            Margin="24,20">
+            IsVisible="{Binding IsOverviewVisible}"
+            Padding="24,16">
+            <StackPanel Spacing="12">
+                <TextBlock
+                    FontSize="18"
+                    FontWeight="SemiBold"
+                    Text="📊 Review Overview" />
+                <Grid ColumnDefinitions="*,*,*,*,*,*,*,*,*">
+                    <!--  Wrap cards in two rows for better display  -->
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Border
+                        Classes="Card"
+                        Grid.Column="0"
+                        Margin="0,0,8,0"
+                        Padding="16,12"
+                        ToolTip.Tip="Total number of files modified in this pull request. Includes additions, deletions, and modifications.">
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                FontSize="24"
+                                FontWeight="Bold"
+                                Foreground="{StaticResource PrimaryBrush}"
+                                HorizontalAlignment="Center"
+                                Text="{Binding FilesChanged}" />
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{StaticResource MutedBrush}"
+                                HorizontalAlignment="Center"
+                                Text="Files Changed" />
+                        </StackPanel>
+                    </Border>
+                    <Border
+                        Classes="Card"
+                        Grid.Column="1"
+                        Margin="8,0,8,0"
+                        Padding="16,12"
+                        ToolTip.Tip="Total number of comments and discussions on this pull request. Higher numbers may indicate more complex or controversial changes.">
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                FontSize="24"
+                                FontWeight="Bold"
+                                Foreground="{StaticResource PrimaryBrush}"
+                                HorizontalAlignment="Center"
+                                Text="{Binding TotalComments}" />
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{StaticResource MutedBrush}"
+                                HorizontalAlignment="Center"
+                                Text="Comments" />
+                        </StackPanel>
+                    </Border>
+                    <Border
+                        Classes="Card"
+                        Grid.Column="2"
+                        Margin="8,0,8,0"
+                        Padding="16,12"
+                        ToolTip.Tip="Number of new lines of code added. Large additions may require more careful review to ensure quality and consistency.">
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                FontSize="24"
+                                FontWeight="Bold"
+                                Foreground="{StaticResource SuccessBrush}"
+                                HorizontalAlignment="Center"
+                                Text="{Binding LinesAdded}" />
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{StaticResource MutedBrush}"
+                                HorizontalAlignment="Center"
+                                Text="Lines Added" />
+                        </StackPanel>
+                    </Border>
+                    <Border
+                        Classes="Card"
+                        Grid.Column="3"
+                        Margin="8,0,8,0"
+                        Padding="16,12"
+                        ToolTip.Tip="Number of lines of code removed or deleted. High deletion counts may indicate refactoring or cleanup efforts.">
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                FontSize="24"
+                                FontWeight="Bold"
+                                Foreground="{StaticResource DangerBrush}"
+                                HorizontalAlignment="Center"
+                                Text="{Binding LinesRemoved}" />
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{StaticResource MutedBrush}"
+                                HorizontalAlignment="Center"
+                                Text="Lines Removed" />
+                        </StackPanel>
+                    </Border>
+                    <Border
+                        Classes="Card"
+                        Grid.Column="4"
+                        Margin="8,0,8,0"
+                        Padding="16,12"
+                        ToolTip.Tip="Potential code quality issues detected, such as TODO comments, debug statements, or warnings. Lower is better.">
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                FontSize="24"
+                                FontWeight="Bold"
+                                Foreground="{StaticResource WarningBrush}"
+                                HorizontalAlignment="Center"
+                                Text="{Binding LintWarnings}" />
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{StaticResource MutedBrush}"
+                                HorizontalAlignment="Center"
+                                Text="Lint Warnings" />
+                        </StackPanel>
+                    </Border>
+                    <Border
+                        Classes="Card"
+                        Grid.Column="5"
+                        Margin="8,0,0,0"
+                        Padding="16,12"
+                        ToolTip.Tip="Estimated time needed to review this pull request based on change complexity, file types, and size. Accounts for test files and bulk changes.">
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                FontSize="24"
+                                FontWeight="Bold"
+                                Foreground="{StaticResource PrimaryBrush}"
+                                HorizontalAlignment="Center"
+                                Text="{Binding ReviewTimeMin, StringFormat={}{0:F1} min}" />
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{StaticResource MutedBrush}"
+                                HorizontalAlignment="Center"
+                                Text="Review Time" />
+                        </StackPanel>
+                    </Border>
+                    <!--  Second Row of Metrics  -->
+                    <Border
+                        Classes="Card"
+                        Grid.Column="0"
+                        Grid.Row="1"
+                        Margin="0,8,8,0"
+                        Padding="16,12"
+                        ToolTip.Tip="Potential security vulnerabilities detected in code changes, such as hardcoded secrets, unsafe operations, or SQL injection risks. Zero is ideal.">
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                FontSize="24"
+                                FontWeight="Bold"
+                                Foreground="{StaticResource DangerBrush}"
+                                HorizontalAlignment="Center"
+                                Text="{Binding SecurityRisks}" />
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{StaticResource MutedBrush}"
+                                HorizontalAlignment="Center"
+                                Text="Security Risks" />
+                        </StackPanel>
+                    </Border>
+                    <Border
+                        Classes="Card"
+                        Grid.Column="1"
+                        Grid.Row="1"
+                        Margin="8,8,8,0"
+                        Padding="16,12"
+                        ToolTip.Tip="Code complexity score (0-100) based on control structures, nesting depth, and logic density. Higher scores indicate more complex code that may need extra review attention.">
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                FontSize="24"
+                                FontWeight="Bold"
+                                Foreground="{StaticResource WarningBrush}"
+                                HorizontalAlignment="Center"
+                                Text="{Binding CodeComplexity}" />
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{StaticResource MutedBrush}"
+                                HorizontalAlignment="Center"
+                                Text="Complexity Score" />
+                        </StackPanel>
+                    </Border>
+                    <Border
+                        Classes="Card"
+                        Grid.Column="2"
+                        Grid.Row="1"
+                        Margin="8,8,0,0"
+                        Padding="16,12"
+                        ToolTip.Tip="Percentage of code changes that are test-related. Higher test coverage indicates better quality assurance and easier maintenance.">
+                        <StackPanel Spacing="4">
+                            <TextBlock
+                                FontSize="24"
+                                FontWeight="Bold"
+                                Foreground="{StaticResource SuccessBrush}"
+                                HorizontalAlignment="Center"
+                                Text="{Binding TestCoverage, StringFormat={}{0}%}" />
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{StaticResource MutedBrush}"
+                                HorizontalAlignment="Center"
+                                Text="Test Coverage" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!--  Main Content  -->
+        <Grid Grid.Row="2" Margin="24,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="{Binding SidebarWidth}" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
 
             <!--  Sidebar  -->
             <ScrollViewer
                 Grid.Column="0"
+                IsVisible="{Binding IsSidebarVisible}"
                 Margin="0,0,16,0"
                 VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="16">
@@ -288,7 +507,7 @@
                                                     <TextBlock
                                                         FontSize="11"
                                                         Foreground="{StaticResource MutedBrush}"
-                                                        Text="Line {Binding LineNumber}" />
+                                                        Text="{Binding LineNumber, StringFormat=Line {0}}" />
                                                 </StackPanel>
                                             </DataTemplate>
                                         </ListBox.ItemTemplate>
@@ -378,12 +597,14 @@
                                 <Border
                                     Background="{StaticResource PrimaryBrush}"
                                     CornerRadius="10"
-                                    Padding="6,2">
+                                    Padding="6,2"
+                                    VerticalAlignment="Center">
                                     <TextBlock
                                         FontSize="11"
                                         FontWeight="Bold"
                                         Foreground="White"
-                                        Text="{Binding FileDiffs.Count}" />
+                                        Text="{Binding FileDiffs.Count}"
+                                        VerticalAlignment="Center" />
                                 </Border>
                             </StackPanel>
 
@@ -422,9 +643,10 @@
 
                                         <Expander
                                             Background="{StaticResource SurfaceBrush}"
+                                            Expanding="Expander_Expanding"
                                             HorizontalAlignment="Stretch"
                                             HorizontalContentAlignment="Stretch"
-                                            IsExpanded="True">
+                                            IsExpanded="False">
 
                                             <!--  File Header  -->
                                             <Expander.Header>
@@ -436,7 +658,7 @@
                                                             Spacing="8">
                                                             <TextBlock
                                                                 FontSize="14"
-                                                                Text="��"
+                                                                Text="📄"
                                                                 VerticalAlignment="Center" />
                                                             <TextBlock
                                                                 FontFamily="JetBrains Mono, Consolas, monospace"
@@ -452,29 +674,31 @@
                                                             Orientation="Horizontal"
                                                             Spacing="12">
                                                             <!--  File stats would go here  -->
-                                                            <TextBlock
-                                                                Cursor="Hand"
+                                                            <Button
+                                                                Classes="SecondaryButton"
+                                                                Click="ViewInIDE_Click"
+                                                                Content="View in IDE"
                                                                 FontSize="11"
-                                                                Foreground="{StaticResource PrimaryBrush}"
-                                                                Text="View in IDE"
+                                                                PointerPressed="ViewInIDE_PointerPressed"
                                                                 VerticalAlignment="Center" />
                                                         </StackPanel>
                                                     </Grid>
                                                 </Border>
                                             </Expander.Header>
 
-                                            <!--  Diff Content  -->
+                                            <!--  Diff Content - Lazy loaded only when expanded  -->
                                             <Border
                                                 Background="{StaticResource SurfaceBrush}"
-                                                MinHeight="500"
+                                                MinHeight="100"
+                                                Name="DiffContainer"
                                                 Padding="0">
-                                                <controls:DiffViewer
-                                                    HorizontalAlignment="Stretch"
-                                                    Loaded="DiffViewer_Loaded"
-                                                    NewText="{Binding NewText}"
-                                                    OldText="{Binding OldText}"
-                                                    VerticalAlignment="Stretch"
-                                                    ViewMode="SideBySide" />
+                                                <!--  DiffViewer will be added programmatically when expanded  -->
+                                                <TextBlock
+                                                    FontStyle="Italic"
+                                                    Foreground="{StaticResource MutedBrush}"
+                                                    HorizontalAlignment="Center"
+                                                    Text="Click to expand and view diff..."
+                                                    VerticalAlignment="Center" />
                                             </Border>
 
                                         </Expander>
@@ -488,5 +712,40 @@
             </Border>
 
         </Grid>
+
+        <!--  Loading Overlay  -->
+        <Border
+            Background="#80000000"
+            Grid.RowSpan="3"
+            IsVisible="{Binding IsLoading}"
+            ZIndex="999">
+            <Border
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                HorizontalAlignment="Center"
+                Padding="30"
+                VerticalAlignment="Center">
+                <StackPanel Spacing="16">
+                    <TextBlock
+                        FontSize="18"
+                        FontWeight="SemiBold"
+                        HorizontalAlignment="Center"
+                        Text="Loading Pull Request..." />
+                    <ProgressBar
+                        Height="6"
+                        IsIndeterminate="{Binding LoadingProgress, Converter={x:Static ObjectConverters.IsNull}}"
+                        Maximum="100"
+                        MinWidth="300"
+                        Value="{Binding LoadingProgress}" />
+                    <TextBlock
+                        FontSize="14"
+                        Foreground="{StaticResource MutedBrush}"
+                        HorizontalAlignment="Center"
+                        Text="{Binding LoadingStatus}" />
+                </StackPanel>
+            </Border>
+        </Border>
     </Grid>
 </Window>

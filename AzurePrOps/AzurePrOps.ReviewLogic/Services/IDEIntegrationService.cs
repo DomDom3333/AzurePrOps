@@ -14,14 +14,25 @@ public class IDEIntegrationService : IIDEIntegrationService
 
     public void OpenInIDE(string filePath, int lineNumber)
     {
-        var args = GetArguments(_editorCommand, filePath, lineNumber);
-
-        Process.Start(new ProcessStartInfo
+        try
         {
-            FileName        = _editorCommand,
-            Arguments       = args,
-            UseShellExecute = false
-        });
+            var args = GetArguments(_editorCommand, filePath, lineNumber);
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName        = _editorCommand,
+                Arguments       = args,
+                UseShellExecute = false
+            });
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to open file in IDE. Editor '{_editorCommand}' not found or not accessible.", ex);
+        }
+        catch (System.Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to open file '{filePath}' in IDE: {ex.Message}", ex);
+        }
     }
 
     private static string GetArguments(string editor, string filePath, int line)

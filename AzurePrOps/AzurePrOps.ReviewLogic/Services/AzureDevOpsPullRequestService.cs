@@ -33,6 +33,15 @@ namespace AzurePrOps.ReviewLogic.Services
             _errorHandler?.Invoke(message);
         }
 
+        private void NotifyAuthIfNeeded(HttpResponseMessage response)
+        {
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                ReportError("Your Azure DevOps Personal Access Token appears to be invalid or expired. Please open Settings and update your token.");
+            }
+        }
+
         private static string RunGit(string workingDirectory, string arguments)
         {
             var psi = new ProcessStartInfo("git", arguments)
@@ -64,7 +73,8 @@ namespace AzurePrOps.ReviewLogic.Services
             string repoPath = Path.Combine(cacheRoot, $"{organization}_{project}_{repositoryId}");
 
             string repoUrl = $"{AzureDevOpsBaseUrl}/{organization}/{project}/_git/{repositoryId}";
-            string authUrl = repoUrl.Insert(8, $"pat:{pat}@");
+            string safePat = Uri.EscapeDataString(pat);
+            string authUrl = repoUrl.Insert(8, $"pat:{safePat}@");
 
             if (!Directory.Exists(repoPath) || !Directory.Exists(Path.Combine(repoPath, ".git")))
             {
@@ -155,6 +165,7 @@ namespace AzurePrOps.ReviewLogic.Services
                     throw new Exception($"Pull request not found. Please check if the pull request still exists.");
                 }
 
+                NotifyAuthIfNeeded(prResponse);
                 prResponse.EnsureSuccessStatusCode();
                 using var prStream = await prResponse.Content.ReadAsStreamAsync();
                 var prJson = await System.Text.Json.JsonDocument.ParseAsync(prStream);
@@ -189,12 +200,15 @@ namespace AzurePrOps.ReviewLogic.Services
 
                 if (UseGitClient)
                 {
-                    var repoPath = CloneRepository(organization, project, repositoryId, personalAccessToken);
-                    RunGit(repoPath, $"fetch --filter=blob:none --depth 1 origin {targetBranch} {sourceBranch}");
-                    string baseSha = GetCommitSha(repoPath, baseCommit ?? baseCommitId ?? $"origin/{targetBranch}");
-                    string sourceSha = GetCommitSha(repoPath, diffCommit ?? sourceCommitId ?? $"origin/{sourceBranch}");
-                    var result = ComputeDiffWithGit(repoPath, baseSha, sourceSha);
-                    return await Task.FromResult(result);
+                    return await Task.Run(() =>
+                    {
+                        var repoPath = CloneRepository(organization, project, repositoryId, personalAccessToken);
+                        RunGit(repoPath, $"fetch --filter=blob:none --depth 1 origin {targetBranch} {sourceBranch}");
+                        string baseSha = GetCommitSha(repoPath, baseCommit ?? baseCommitId ?? $"origin/{targetBranch}");
+                        string sourceSha = GetCommitSha(repoPath, diffCommit ?? sourceCommitId ?? $"origin/{sourceBranch}");
+                        IReadOnlyList<FileDiff> result = ComputeDiffWithGit(repoPath, baseSha, sourceSha);
+                        return result;
+                    });
                 }
                 else
                 {
@@ -238,6 +252,7 @@ namespace AzurePrOps.ReviewLogic.Services
                 prRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", authToken);
 
                 using var prResponse = await _httpClient.SendAsync(prRequest);
+                NotifyAuthIfNeeded(prResponse);
                 prResponse.EnsureSuccessStatusCode();
 
                 using var prStream = await prResponse.Content.ReadAsStreamAsync();
@@ -271,12 +286,15 @@ namespace AzurePrOps.ReviewLogic.Services
 
                 if (UseGitClient)
                 {
-                    var repoPath = CloneRepository(organization, project, repositoryId, personalAccessToken);
-                    RunGit(repoPath, $"fetch --filter=blob:none --depth 1 origin {targetBranch} {sourceBranch}");
-                    string baseSha = GetCommitSha(repoPath, baseCommit ?? baseCommitId ?? $"origin/{targetBranch}");
-                    string sourceSha = GetCommitSha(repoPath, diffCommit ?? sourceCommitId ?? $"origin/{sourceBranch}");
-                    var result = ComputeDiffWithGit(repoPath, baseSha, sourceSha);
-                    return await Task.FromResult(result);
+                    return await Task.Run(() =>
+                    {
+                        var repoPath = CloneRepository(organization, project, repositoryId, personalAccessToken);
+                        RunGit(repoPath, $"fetch --filter=blob:none --depth 1 origin {targetBranch} {sourceBranch}");
+                        string baseSha = GetCommitSha(repoPath, baseCommit ?? baseCommitId ?? $"origin/{targetBranch}");
+                        string sourceSha = GetCommitSha(repoPath, diffCommit ?? sourceCommitId ?? $"origin/{sourceBranch}");
+                        IReadOnlyList<FileDiff> result = ComputeDiffWithGit(repoPath, baseSha, sourceSha);
+                        return result;
+                    });
                 }
                 else
                 {
@@ -343,6 +361,7 @@ namespace AzurePrOps.ReviewLogic.Services
                 diffRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", authToken);
 
                 using var diffResponse = await _httpClient.SendAsync(diffRequest);
+                NotifyAuthIfNeeded(diffResponse);
 
                 if (!diffResponse.IsSuccessStatusCode)
                 {
@@ -354,7 +373,7 @@ namespace AzurePrOps.ReviewLogic.Services
                 var jsonContent = await diffResponse.Content.ReadAsStringAsync();
                 using var jsonDoc = System.Text.Json.JsonDocument.Parse(jsonContent);
 
-                return await ProcessGitDiffsResponse(jsonDoc, encodedOrg, encodedProject, encodedRepoId, authToken);
+                return await ProcessGitDiffsResponse(jsonDoc, encodedOrg, encodedProject, encodedRepoId, authToken, baseCommit, sourceCommit);
             }
             catch (Exception ex)
             {
@@ -368,7 +387,9 @@ namespace AzurePrOps.ReviewLogic.Services
             string encodedOrg,
             string encodedProject,
             string encodedRepoId,
-            string authToken)
+            string authToken,
+            string baseCommit,
+            string sourceCommit)
         {
             var fileDiffs = new List<FileDiff>();
 
@@ -383,7 +404,7 @@ namespace AzurePrOps.ReviewLogic.Services
 
             foreach (var change in changesArray.EnumerateArray())
             {
-                tasks.Add(ProcessChangeAsync(change, encodedOrg, encodedProject, encodedRepoId, authToken, semaphore));
+                tasks.Add(ProcessChangeAsync(change, encodedOrg, encodedProject, encodedRepoId, authToken, semaphore, baseCommit, sourceCommit));
             }
 
             var results = await Task.WhenAll(tasks);
@@ -403,7 +424,9 @@ namespace AzurePrOps.ReviewLogic.Services
             string encodedProject,
             string encodedRepoId,
             string authToken,
-            SemaphoreSlim semaphore)
+            SemaphoreSlim semaphore,
+            string baseCommit,
+            string sourceCommit)
         {
             await semaphore.WaitAsync();
             try
@@ -414,14 +437,37 @@ namespace AzurePrOps.ReviewLogic.Services
                     return null;
                 }
 
+                // Exclude folders from the diff list — we only want actual files
+                try
+                {
+                    // Many Azure DevOps APIs expose either item.isFolder (bool) or item.gitObjectType ("blob" for files, "tree" for folders)
+                    bool isFolder = (item.TryGetProperty("isFolder", out var isFolderProp) && isFolderProp.ValueKind == System.Text.Json.JsonValueKind.True);
+                    string? objectType = item.TryGetProperty("gitObjectType", out var objTypeProp) ? objTypeProp.GetString() : null;
+                    if (isFolder || (!string.IsNullOrEmpty(objectType) && !string.Equals(objectType, "blob", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        return null;
+                    }
+                }
+                catch { /* be permissive: if we cannot determine, continue */ }
+
                 var filePath = pathProp.GetString() ?? string.Empty;
                 if (string.IsNullOrEmpty(filePath))
                 {
                     return null;
                 }
 
-                var changeType = change.TryGetProperty("changeType", out var changeTypeProp) ?
+                // Capture original (old) path for renames/moves when provided by API
+                string? originalPath = null;
+                if (change.TryGetProperty("originalPath", out var originalPathProp))
+                {
+                    originalPath = originalPathProp.GetString();
+                }
+
+                var changeTypeRaw = change.TryGetProperty("changeType", out var changeTypeProp) ?
                     changeTypeProp.GetString() ?? "edit" : "edit";
+                var changeType = changeTypeRaw.ToLowerInvariant();
+
+                bool IsType(string token) => changeType.Contains(token, StringComparison.OrdinalIgnoreCase);
 
                 var newObjectId = item.TryGetProperty("objectId", out var newIdProp) ?
                     newIdProp.GetString() : null;
@@ -430,8 +476,29 @@ namespace AzurePrOps.ReviewLogic.Services
                     ? oldIdProp.GetString()
                     : null;
 
-                var (oldContent, newContent) = await GetFileContents(
-                    encodedOrg, encodedProject, encodedRepoId, filePath, oldObjectId, newObjectId, changeType, authToken);
+                (string oldContent, string newContent) versions;
+                if (!string.IsNullOrEmpty(oldObjectId) || !string.IsNullOrEmpty(newObjectId))
+                {
+                    versions = await GetFileContents(
+                        encodedOrg, encodedProject, encodedRepoId, filePath, oldObjectId, newObjectId, changeType, authToken, baseCommit, sourceCommit);
+                }
+                else
+                {
+                    // Fallback: fetch by overall base/source commits when per-item object IDs are missing
+                    // Use originalPath for the old side if present (e.g., rename/move)
+                    versions = await FetchFileVersions(
+                        encodedOrg,
+                        encodedProject,
+                        encodedRepoId,
+                        filePath,
+                        baseCommit,
+                        sourceCommit,
+                        changeType,
+                        authToken,
+                        originalPath,
+                        filePath);
+                }
+                var (oldContent, newContent) = versions;
 
                 if (string.IsNullOrEmpty(oldContent) && string.IsNullOrEmpty(newContent))
                 {
@@ -507,64 +574,72 @@ namespace AzurePrOps.ReviewLogic.Services
         }
 
         private async Task<(string oldContent, string newContent)> GetFileContents(
-            string encodedOrg, 
-            string encodedProject, 
-            string encodedRepoId, 
-            string filePath, 
-            string? oldObjectId, 
-            string? newObjectId, 
+            string encodedOrg,
+            string encodedProject,
+            string encodedRepoId,
+            string filePath,
+            string? oldObjectId,
+            string? newObjectId,
             string changeType,
-            string authToken)
+            string authToken,
+            string baseCommit,
+            string sourceCommit)
         {
             string oldContent = string.Empty;
             string newContent = string.Empty;
 
             try
             {
-                var encodedPath = EncodePath(filePath);
-
-                // Get new content if file wasn't deleted
-                if (changeType.ToLowerInvariant() != "delete" && !string.IsNullOrEmpty(newObjectId))
+                // Prefer blob API when objectIds are present (objectId refers to blob, not commit)
+                async Task<string> GetBlobAsync(string objectId)
                 {
-                    var newContentUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/items" +
-                                       $"?path={encodedPath}" +
-                                       $"&versionDescriptor.version={newObjectId}" +
-                                       $"&versionDescriptor.versionType=commit" +
-                                       $"&includeContent=true" +
-                                       $"&download=true" +
-                                       $"&api-version=7.1";
-
-                    using var newRequest = new HttpRequestMessage(HttpMethod.Get, newContentUri);
-                    newRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", authToken);
-
-                    using var newResponse = await _httpClient.SendAsync(newRequest);
-
-                    if (newResponse.IsSuccessStatusCode)
+                    var blobUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/blobs/{objectId}?download=true&api-version=7.1";
+                    using var req = new HttpRequestMessage(HttpMethod.Get, blobUri);
+                    req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", authToken);
+                    using var resp = await _httpClient.SendAsync(req);
+                    if (!resp.IsSuccessStatusCode)
+                        return string.Empty;
+                    var bytes = await resp.Content.ReadAsByteArrayAsync();
+                    // Detect binary content (contains NUL or high binary ratio)
+                    bool hasNull = bytes.Any(b => b == 0);
+                    if (hasNull)
+                        return "[Binary content not displayed]";
+                    try
                     {
-                        newContent = await newResponse.Content.ReadAsStringAsync();
+                        // Try UTF8 with fallback
+                        return System.Text.Encoding.UTF8.GetString(bytes);
+                    }
+                    catch
+                    {
+                        return "[Content decoding error]";
                     }
                 }
 
-                // Get old content if file wasn't added
-                if (changeType.ToLowerInvariant() != "add" && !string.IsNullOrEmpty(oldObjectId))
+                // Normalize type to handle composite values (e.g., "rename, edit")
+                string ct = changeType.ToLowerInvariant();
+                bool isAdd = ct.Contains("add");
+                bool isDelete = ct.Contains("delete");
+
+                // New content (skip for deletes)
+                if (!isDelete && !string.IsNullOrEmpty(newObjectId))
                 {
-                    var oldContentUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/items" +
-                                      $"?path={encodedPath}" +
-                                      $"&versionDescriptor.version={oldObjectId}" +
-                                      $"&versionDescriptor.versionType=commit" +
-                                      $"&includeContent=true" +
-                                      $"&download=true" +
-                                      $"&api-version=7.1";
+                    newContent = await GetBlobAsync(newObjectId);
+                }
 
-                    using var oldRequest = new HttpRequestMessage(HttpMethod.Get, oldContentUri);
-                    oldRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", authToken);
+                // Old content (skip for adds)
+                if (!isAdd && !string.IsNullOrEmpty(oldObjectId))
+                {
+                    oldContent = await GetBlobAsync(oldObjectId);
+                }
 
-                    using var oldResponse = await _httpClient.SendAsync(oldRequest);
+                // Fallback by path and commits if blob retrieval failed or produced empty placeholders
+                bool NeedsFallback(string s) => string.IsNullOrEmpty(s) || s.StartsWith("[Binary content", StringComparison.OrdinalIgnoreCase) || s.StartsWith("[Content decoding", StringComparison.OrdinalIgnoreCase);
 
-                    if (oldResponse.IsSuccessStatusCode)
-                    {
-                        oldContent = await oldResponse.Content.ReadAsStringAsync();
-                    }
+                if ((!isDelete && NeedsFallback(newContent)) || (!isAdd && NeedsFallback(oldContent)))
+                {
+                    var byPath = await FetchFileVersions(encodedOrg, encodedProject, encodedRepoId, filePath, baseCommit, sourceCommit, changeType, authToken);
+                    if (NeedsFallback(oldContent)) oldContent = byPath.oldContent;
+                    if (NeedsFallback(newContent)) newContent = byPath.newContent;
                 }
             }
             catch (Exception ex)
@@ -609,6 +684,7 @@ namespace AzurePrOps.ReviewLogic.Services
                 changesRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", authToken);
 
                 using var changesResponse = await _httpClient.SendAsync(changesRequest);
+                NotifyAuthIfNeeded(changesResponse);
                 changesResponse.EnsureSuccessStatusCode();
 
                 var changesContent = await changesResponse.Content.ReadAsStringAsync();
@@ -662,19 +738,26 @@ namespace AzurePrOps.ReviewLogic.Services
             string baseCommit,
             string sourceCommit,
             string changeType,
-            string authToken)
+            string authToken,
+            string? oldFilePath = null,
+            string? newFilePath = null)
         {
             string oldContent = string.Empty;
             string newContent = string.Empty;
 
             try
             {
-                var encodedPath = EncodePath(filePath);
+                var encodedPathOld = EncodePath(oldFilePath ?? filePath);
+                var encodedPathNew = EncodePath(newFilePath ?? filePath);
 
-                if (changeType.ToLowerInvariant() != "add" && !string.IsNullOrEmpty(baseCommit))
+                string ct = changeType.ToLowerInvariant();
+                bool isAdd = ct.Contains("add");
+                bool isDelete = ct.Contains("delete");
+
+                if (!isAdd && !string.IsNullOrEmpty(baseCommit))
                 {
                     var oldVersionUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/items" +
-                                      $"?path={encodedPath}" +
+                                      $"?path={encodedPathOld}" +
                                       $"&versionDescriptor.version={baseCommit}" +
                                       $"&versionDescriptor.versionType=commit" +
                                       $"&includeContent=true" +
@@ -691,10 +774,10 @@ namespace AzurePrOps.ReviewLogic.Services
                     }
                 }
 
-                if (changeType.ToLowerInvariant() != "delete" && !string.IsNullOrEmpty(sourceCommit))
+                if (!isDelete && !string.IsNullOrEmpty(sourceCommit))
                 {
                     var newVersionUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/items" +
-                                      $"?path={encodedPath}" +
+                                      $"?path={encodedPathNew}" +
                                       $"&versionDescriptor.version={sourceCommit}" +
                                       $"&versionDescriptor.versionType=commit" +
                                       $"&includeContent=true" +

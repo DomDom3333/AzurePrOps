@@ -1,9 +1,12 @@
-<Window
-    Height="350"
+﻿<Window
+    Height="650"
+    MinHeight="500"
+    MinWidth="600"
     Title="Settings"
-    Width="500"
-    d:DesignHeight="350"
-    d:DesignWidth="500"
+    Width="800"
+    WindowStartupLocation="CenterOwner"
+    d:DesignHeight="650"
+    d:DesignWidth="800"
     mc:Ignorable="d"
     x:Class="AzurePrOps.Views.SettingsWindow"
     x:DataType="vm:SettingsWindowViewModel"
@@ -12,165 +15,330 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="using:AzurePrOps.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Grid Margin="20" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,Auto">
-        <TextBlock
-            FontSize="18"
-            FontWeight="Bold"
-            Grid.Row="0"
-            Margin="0,0,0,10"
-            Text="Select Azure DevOps Project" />
 
-        <StackPanel Grid.Row="1" Margin="0,0,0,10">
-            <Grid ColumnDefinitions="*,Auto">
-                <TextBlock
-                    FontWeight="SemiBold"
+    <Window.Styles>
+        <Style Selector="Border.SettingsGroup">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="20" />
+            <Setter Property="Margin" Value="0,0,0,16" />
+        </Style>
+
+        <Style Selector="TextBlock.GroupHeader">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+
+        <Style Selector="TextBlock.FieldLabel">
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+
+        <Style Selector="CheckBox.SettingCheckBox">
+            <Setter Property="Margin" Value="0,0,0,12" />
+        </Style>
+
+        <Style Selector="ComboBox.SettingComboBox">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="MinWidth" Value="200" />
+            <Setter Property="Margin" Value="0,0,0,16" />
+        </Style>
+
+        <Style Selector="ProgressBar.LoadingIndicator">
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Margin" Value="8,0,0,0" />
+        </Style>
+    </Window.Styles>
+
+    <ScrollViewer Padding="24" VerticalScrollBarVisibility="Auto">
+        <StackPanel MaxWidth="750">
+            <!--  Azure DevOps Connection Settings  -->
+            <Border Classes="SettingsGroup">
+                <StackPanel>
+                    <TextBlock Classes="GroupHeader" Text="Azure DevOps Connection" />
+
+                    <!--  Organization Selection  -->
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Classes="FieldLabel" Text="Organization" />
+                            <ComboBox
+                                Classes="SettingComboBox"
+                                IsEnabled="{Binding !IsLoadingOrganizations}"
+                                IsTextSearchEnabled="True"
+                                ItemsSource="{Binding Organizations}"
+                                PlaceholderText="Select Organization"
+                                SelectedItem="{Binding SelectedOrganization}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                        <ProgressBar
+                            Classes="LoadingIndicator"
+                            Grid.Column="1"
+                            IsIndeterminate="True"
+                            IsVisible="{Binding IsLoadingOrganizations}" />
+                    </Grid>
+
+                    <!--  Project Selection  -->
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Classes="FieldLabel" Text="Project" />
+                            <ComboBox
+                                Classes="SettingComboBox"
+                                IsEnabled="{Binding !IsLoadingProjects}"
+                                IsTextSearchEnabled="True"
+                                ItemsSource="{Binding Projects}"
+                                PlaceholderText="Select Project"
+                                SelectedItem="{Binding SelectedProject}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                        <ProgressBar
+                            Classes="LoadingIndicator"
+                            Grid.Column="1"
+                            IsIndeterminate="True"
+                            IsVisible="{Binding IsLoadingProjects}" />
+                    </Grid>
+
+                    <!--  Repository Selection  -->
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Classes="FieldLabel" Text="Repository" />
+                            <ComboBox
+                                Classes="SettingComboBox"
+                                IsEnabled="{Binding !IsLoadingRepositories}"
+                                IsTextSearchEnabled="True"
+                                ItemsSource="{Binding Repositories}"
+                                PlaceholderText="Select Repository"
+                                SelectedItem="{Binding SelectedRepository}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                        <ProgressBar
+                            Classes="LoadingIndicator"
+                            Grid.Column="1"
+                            IsIndeterminate="True"
+                            IsVisible="{Binding IsLoadingRepositories}" />
+                    </Grid>
+
+                    <!--  Error Message  -->
+                    <Border
+                        Background="{DynamicResource ErrorBackgroundBrush}"
+                        BorderBrush="{DynamicResource ErrorBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        IsVisible="{Binding !!ErrorMessage}"
+                        Margin="0,12,0,0"
+                        Padding="12">
+                        <TextBlock
+                            Foreground="{DynamicResource ErrorBrush}"
+                            Text="{Binding ErrorMessage}"
+                            TextWrapping="Wrap" />
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <!--  Diff Viewer Settings  -->
+            <Border Classes="SettingsGroup">
+                <StackPanel>
+                    <TextBlock Classes="GroupHeader" Text="Diff Viewer" />
+
+                    <CheckBox
+                        Classes="SettingCheckBox"
+                        Content="Use Git client for diffs"
+                        IsChecked="{Binding UseGitDiff}"
+                        ToolTip.Tip="Use external Git client instead of built-in diff viewer" />
+
+                    <CheckBox
+                        Classes="SettingCheckBox"
+                        Content="Expand all diffs on open"
+                        IsChecked="{Binding ExpandAllDiffsOnOpen}"
+                        ToolTip.Tip="Automatically expand all file diffs when opening pull request details" />
+
+                    <CheckBox
+                        Classes="SettingCheckBox"
+                        Content="Ignore whitespace changes"
+                        IsChecked="{Binding IgnoreWhitespace}"
+                        ToolTip.Tip="Hide whitespace-only changes in diff view" />
+
+                    <CheckBox
+                        Classes="SettingCheckBox"
+                        Content="Wrap long lines"
+                        IsChecked="{Binding WrapLines}"
+                        ToolTip.Tip="Wrap long lines in diff editor instead of horizontal scrolling" />
+
+                    <CheckBox
+                        Classes="SettingCheckBox"
+                        Content="Ignore line ending differences"
+                        IsChecked="{Binding IgnoreNewlines}"
+                        ToolTip.Tip="Treat CRLF and LF line endings as equivalent" />
+                </StackPanel>
+            </Border>
+
+            <!--  Features Settings  -->
+            <Border Classes="SettingsGroup">
+                <StackPanel>
+                    <TextBlock Classes="GroupHeader" Text="Features" />
+
+                    <CheckBox
+                        Classes="SettingCheckBox"
+                        Content="Enable inline comments"
+                        IsChecked="{Binding InlineCommentsEnabled}"
+                        ToolTip.Tip="Allow adding comments directly in diff view" />
+
+                    <CheckBox
+                        Classes="SettingCheckBox"
+                        Content="Enable lifecycle actions"
+                        IsChecked="{Binding LifecycleActionsEnabled}"
+                        ToolTip.Tip="Show approve, complete, and abandon actions in pull request view" />
+
+                    <CheckBox
+                        Classes="SettingCheckBox"
+                        Content="Auto-refresh pull requests"
+                        IsChecked="{Binding AutoRefreshEnabled}"
+                        ToolTip.Tip="Automatically refresh pull request list periodically" />
+                </StackPanel>
+            </Border>
+
+            <!--  External Editor Settings  -->
+            <Border Classes="SettingsGroup">
+                <StackPanel>
+                    <TextBlock Classes="GroupHeader" Text="External Editor" />
+
+                    <TextBlock Classes="FieldLabel" Text="Default Editor" />
+                    <ComboBox
+                        Classes="SettingComboBox"
+                        ItemsSource="{Binding EditorOptions}"
+                        SelectedItem="{Binding SelectedEditorOption}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock FontWeight="Medium" Text="{Binding DisplayName}" />
+                                    <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" Text="{Binding Command, StringFormat={}({0})}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <StackPanel IsVisible="{Binding ShowCustomEditorPath}" Margin="0,8,0,0">
+                        <TextBlock Classes="FieldLabel" Text="Custom Editor Path" />
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox
+                                Grid.Column="0"
+                                Margin="0,0,8,0"
+                                Text="{Binding CustomEditorPath}"
+                                Watermark="Enter path to editor executable" />
+                            <Button
+                                Command="{Binding BrowseEditorCommand}"
+                                Content="Browse..."
+                                Grid.Column="1" />
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!--  Interface Settings  -->
+            <Border Classes="SettingsGroup">
+                <StackPanel>
+                    <TextBlock Classes="GroupHeader" Text="Interface" />
+
+                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,12">
+                        <TextBlock
+                            Classes="FieldLabel"
+                            Grid.Column="0"
+                            Margin="0,0,12,0"
+                            Text="Theme:" />
+                        <ComboBox
+                            Grid.Column="1"
+                            HorizontalAlignment="Left"
+                            MinWidth="150"
+                            SelectedIndex="{Binding SelectedThemeIndex}">
+                            <ComboBoxItem Content="System" />
+                            <ComboBoxItem Content="Light" />
+                            <ComboBoxItem Content="Dark" />
+                        </ComboBox>
+                    </Grid>
+
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12">
+                        <TextBlock
+                            Classes="FieldLabel"
+                            Grid.Column="0"
+                            Margin="0,0,12,0"
+                            Text="Auto-refresh interval:" />
+                        <Slider
+                            Grid.Column="1"
+                            Maximum="300"
+                            Minimum="30"
+                            TickFrequency="30"
+                            Value="{Binding RefreshIntervalSeconds}" />
+                        <TextBlock
+                            Grid.Column="2"
+                            Margin="8,0,0,0"
+                            Text="{Binding RefreshIntervalSeconds, StringFormat={}{0}s}" />
+                    </Grid>
+
+                    <CheckBox
+                        Classes="SettingCheckBox"
+                        Content="Show notifications"
+                        IsChecked="{Binding ShowNotifications}"
+                        ToolTip.Tip="Show desktop notifications for pull request updates" />
+
+                    <CheckBox
+                        Classes="SettingCheckBox"
+                        Content="Minimize to system tray"
+                        IsChecked="{Binding MinimizeToTray}"
+                        ToolTip.Tip="Minimize application to system tray instead of taskbar" />
+                </StackPanel>
+            </Border>
+
+            <!--  Action Buttons  -->
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,24,0,0">
+                <Button
+                    Classes="SecondaryButton"
+                    Command="{Binding ResetToDefaultsCommand}"
+                    Content="Reset to Defaults"
                     Grid.Column="0"
-                    Margin="0,0,0,5"
-                    Text="Organization" />
-                <ProgressBar
-                    Grid.Column="1"
-                    Height="20"
-                    IsIndeterminate="True"
-                    IsVisible="{Binding IsLoadingOrganizations}"
-                    Margin="0,0,10,0"
-                    Width="20" />
+                    Width="140" />
+
+                <Button
+                    Classes="SecondaryButton"
+                    Command="{Binding CancelCommand}"
+                    Content="Cancel"
+                    Grid.Column="2"
+                    Margin="0,0,12,0"
+                    Width="100" />
+
+                <Button
+                    Classes="SecondaryButton"
+                    Command="{Binding LogoutCommand}"
+                    Content="Logout"
+                    Grid.Column="3"
+                    Margin="0,0,12,0"
+                    Width="100" />
+
+                <Button
+                    Classes="PrimaryButton"
+                    Command="{Binding SaveCommand}"
+                    Content="Save"
+                    Grid.Column="4"
+                    IsEnabled="{Binding !!SelectedRepository}"
+                    Width="100" />
             </Grid>
-            <ComboBox
-                HorizontalAlignment="Stretch"
-                IsEnabled="{Binding !IsLoadingOrganizations}"
-                IsTextSearchEnabled="True"
-                ItemsSource="{Binding Organizations}"
-                Margin="0,0,0,10"
-                PlaceholderText="Select Organization"
-                SelectedItem="{Binding SelectedOrganization}"
-                Width="460">
-                <ComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Name}" />
-                    </DataTemplate>
-                </ComboBox.ItemTemplate>
-            </ComboBox>
         </StackPanel>
-
-        <StackPanel Grid.Row="2" Margin="0,0,0,10">
-            <Grid ColumnDefinitions="*,Auto">
-                <TextBlock
-                    FontWeight="SemiBold"
-                    Grid.Column="0"
-                    Margin="0,0,0,5"
-                    Text="Project" />
-                <ProgressBar
-                    Grid.Column="1"
-                    Height="20"
-                    IsIndeterminate="True"
-                    IsVisible="{Binding IsLoadingProjects}"
-                    Margin="0,0,10,0"
-                    Width="20" />
-            </Grid>
-            <ComboBox
-                HorizontalAlignment="Stretch"
-                IsEnabled="{Binding !IsLoadingProjects}"
-                IsTextSearchEnabled="True"
-                ItemsSource="{Binding Projects}"
-                Margin="0,0,0,10"
-                PlaceholderText="Select Project"
-                SelectedItem="{Binding SelectedProject}"
-                Width="460">
-                <ComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Name}" />
-                    </DataTemplate>
-                </ComboBox.ItemTemplate>
-            </ComboBox>
-        </StackPanel>
-
-        <StackPanel Grid.Row="3" Margin="0,0,0,10">
-            <Grid ColumnDefinitions="*,Auto">
-                <TextBlock
-                    FontWeight="SemiBold"
-                    Grid.Column="0"
-                    Margin="0,0,0,5"
-                    Text="Repository" />
-                <ProgressBar
-                    Grid.Column="1"
-                    Height="20"
-                    IsIndeterminate="True"
-                    IsVisible="{Binding IsLoadingRepositories}"
-                    Margin="0,0,10,0"
-                    Width="20" />
-            </Grid>
-            <ComboBox
-                HorizontalAlignment="Stretch"
-                IsEnabled="{Binding !IsLoadingRepositories}"
-                IsTextSearchEnabled="True"
-                ItemsSource="{Binding Repositories}"
-                Margin="0,0,0,10"
-                PlaceholderText="Select Repository"
-                SelectedItem="{Binding SelectedRepository}"
-                Width="460">
-                <ComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Name}" />
-                    </DataTemplate>
-                </ComboBox.ItemTemplate>
-            </ComboBox>
-        </StackPanel>
-
-        <Border
-            Background="{DynamicResource CardBackgroundBrush}"
-            BorderBrush="{DynamicResource BorderBrush}"
-            BorderThickness="1"
-            Grid.Row="4"
-            IsVisible="{Binding !!ErrorMessage}"
-            Margin="0,0,0,10"
-            Padding="10">
-            <TextBlock
-                Foreground="{DynamicResource ErrorBrush}"
-                Text="{Binding ErrorMessage}"
-                TextWrapping="Wrap" />
-        </Border>
-
-        <CheckBox
-            Grid.Row="5"
-            Margin="0,0,0,10"
-            Content="Use Git client for diffs"
-            IsChecked="{Binding UseGitDiff}" />
-
-        <CheckBox
-            Grid.Row="6"
-            Margin="0,0,0,10"
-            Content="Enable inline comments"
-            IsChecked="{Binding InlineCommentsEnabled}" />
-
-        <CheckBox
-            Grid.Row="7"
-            Margin="0,0,0,10"
-            Content="Enable lifecycle actions"
-            IsChecked="{Binding LifecycleActionsEnabled}" />
-
-        <StackPanel Grid.Row="8" Margin="0,0,0,10">
-            <TextBlock
-                FontWeight="SemiBold"
-                Margin="0,0,0,5"
-                Text="External Editor" />
-            <ComboBox
-                ItemsSource="{Binding Editors}"
-                SelectedItem="{Binding SelectedEditor}"
-                Width="200" />
-        </StackPanel>
-
-        <StackPanel Grid.Row="10" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
-            <Button
-                Classes="SecondaryButton"
-                Content="Logout"
-                Command="{Binding LogoutCommand}"
-                Width="120" />
-            <Button
-                Classes="PrimaryButton"
-                Content="Save"
-                Command="{Binding SaveCommand}"
-                IsEnabled="{Binding !!SelectedRepository}"
-                Width="120" />
-        </StackPanel>
-    </Grid>
+    </ScrollViewer>
 </Window>

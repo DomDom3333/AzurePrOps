@@ -24,8 +24,10 @@ using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
 using Microsoft.Extensions.Logging;
 using AzurePrOps.Logging;
+using AzurePrOps.Infrastructure;
 using Markdown.Avalonia;
 using System.IO;
+using System.Text;
 
 namespace AzurePrOps.Controls
 {
@@ -76,12 +78,16 @@ namespace AzurePrOps.Controls
 
         // Diff tracking
         private Dictionary<int, DiffLineType> _lineTypes = new();
+        private Dictionary<int, DiffLineType> _oldLineTypes = new();
+        private Dictionary<int, DiffLineType> _newLineTypes = new();
         private List<int> _changedLines = new();
         private int _currentChangeIndex = -1;
         private bool _codeFoldingEnabled = true;
         private bool _ignoreWhitespace = DiffPreferences.IgnoreWhitespace;
         private bool _wrapLines = DiffPreferences.WrapLines;
+        private bool _ignoreNewlines = DiffPreferences.IgnoreNewlines;
         private ToggleButton? _ignoreWhitespaceButton;
+        private ToggleButton? _ignoreNewlinesButton;
         private ToggleButton? _wrapLinesButton;
         private ScrollViewer? _oldScrollViewer;
         private ScrollViewer? _newScrollViewer;
@@ -131,10 +137,8 @@ namespace AzurePrOps.Controls
             PatchService = new FilePatchService();
             FoldingService = new IndentationFoldingService();
             SearchService = new SimpleSearchService();
-            CommentsService = new CommentsService(new AzureDevOpsClient());
-            string editor = ConnectionSettingsStorage.TryLoad(out var s)
-                ? s!.EditorCommand
-                : EditorDetector.GetDefaultEditor();
+            CommentsService = ServiceRegistry.Resolve<ICommentsService>() ?? new CommentsService(new AzureDevOpsClient());
+            string editor = GetValidEditorCommand();
             IDEService = new IDEIntegrationService(editor);
 
             // Apply persisted preferences
@@ -147,13 +151,41 @@ namespace AzurePrOps.Controls
             Unloaded += (_, __) => DiffPreferences.PreferencesChanged -= OnPreferencesChanged;
         }
 
+        private string GetValidEditorCommand()
+        {
+            // First check if we have stored settings
+            if (ConnectionSettingsStorage.TryLoad(out var settings) && !string.IsNullOrWhiteSpace(settings.EditorCommand))
+            {
+                var storedEditor = settings.EditorCommand;
+                
+                // If it's already a full path and exists, use it
+                if (Path.IsPathRooted(storedEditor) && File.Exists(storedEditor))
+                {
+                    return storedEditor;
+                }
+                
+                // If it's just a command name, try to get the full path
+                var fullPath = EditorDetector.GetEditorFullPath(storedEditor);
+                if (!string.IsNullOrEmpty(fullPath))
+                {
+                    return fullPath;
+                }
+            }
+            
+            // Fall back to EditorDetector default
+            return EditorDetector.GetDefaultEditor();
+        }
+
         private void OnPreferencesChanged(object? sender, EventArgs e)
         {
             _ignoreWhitespace = DiffPreferences.IgnoreWhitespace;
             _wrapLines = DiffPreferences.WrapLines;
+            _ignoreNewlines = DiffPreferences.IgnoreNewlines;
 
             if (_ignoreWhitespaceButton != null)
                 _ignoreWhitespaceButton.IsChecked = _ignoreWhitespace;
+            if (_ignoreNewlinesButton != null)
+                _ignoreNewlinesButton.IsChecked = _ignoreNewlines;
             if (_wrapLinesButton != null)
                 _wrapLinesButton.IsChecked = _wrapLines;
 
@@ -279,6 +311,7 @@ namespace AzurePrOps.Controls
             var codeFoldingButton = this.FindControl<ToggleButton>("PART_CodeFoldingButton");
             var copyButton = this.FindControl<Button>("PART_CopyButton");
             _ignoreWhitespaceButton = this.FindControl<ToggleButton>("PART_IgnoreWhitespaceButton");
+            _ignoreNewlinesButton = this.FindControl<ToggleButton>("PART_IgnoreNewlinesButton");
             _wrapLinesButton = this.FindControl<ToggleButton>("PART_WrapLinesButton");
             var copyDiffButton = this.FindControl<Button>("PART_CopyDiffButton");
 
@@ -407,6 +440,18 @@ namespace AzurePrOps.Controls
                 };
             }
 
+            if (_ignoreNewlinesButton != null)
+            {
+                _ignoreNewlinesButton.IsChecked = _ignoreNewlines;
+                _ignoreNewlinesButton.IsCheckedChanged += (_, __) =>
+                {
+                    _ignoreNewlines = _ignoreNewlinesButton.IsChecked == true;
+                    DiffPreferences.IgnoreNewlines = _ignoreNewlines;
+                    Render();
+                    UpdateStatus(_ignoreNewlines ? "Ignoring EOL differences" : "Showing EOL differences");
+                };
+            }
+
             if (_wrapLinesButton != null)
             {
                 _wrapLinesButton.IsChecked = _wrapLines;
@@ -503,8 +548,10 @@ namespace AzurePrOps.Controls
 
             ResetFoldingManagers();
 
-            string oldTextValue = OldText ?? "";
-            string newTextValue = NewText ?? "";
+            string oldTextRaw = OldText ?? string.Empty;
+            string newTextRaw = NewText ?? string.Empty;
+            string oldTextValue = SanitizeForDiff(oldTextRaw, _ignoreNewlines);
+            string newTextValue = SanitizeForDiff(newTextRaw, _ignoreNewlines);
 
             _oldEditor.Document = new AvaloniaEdit.Document.TextDocument(oldTextValue);
             _newEditor.Document = new AvaloniaEdit.Document.TextDocument(newTextValue);
@@ -516,10 +563,8 @@ namespace AzurePrOps.Controls
             _oldEditor.TextArea.TextView.BackgroundRenderers.Clear();
             _newEditor.TextArea.TextView.BackgroundRenderers.Clear();
 
-            // Enhanced diff processing with better feedback
-            ProcessDiffAndUpdateUI(oldTextValue, newTextValue);
-
-            UpdateStatus("Diff rendered successfully");
+            // Enhanced diff processing with better feedback (async to avoid UI freeze)
+            _ = ProcessDiffAndUpdateUIAsync(oldTextValue, newTextValue);
         }
 
         private void ProcessDiffAndUpdateUI(string oldTextValue, string newTextValue)
@@ -557,6 +602,154 @@ namespace AzurePrOps.Controls
                 ClearFolding();
         }
 
+        private async System.Threading.Tasks.Task ProcessDiffAndUpdateUIAsync(string oldTextValue, string newTextValue)
+        {
+            try
+            {
+                // Handle special cases for new/deleted files quickly on UI thread
+                if (string.IsNullOrEmpty(oldTextValue) && !string.IsNullOrEmpty(newTextValue))
+                {
+                    HandleNewFile(newTextValue);
+                    UpdateStatus("Diff rendered successfully");
+                    return;
+                }
+
+                if (!string.IsNullOrEmpty(oldTextValue) && string.IsNullOrEmpty(newTextValue))
+                {
+                    HandleDeletedFile(oldTextValue);
+                    UpdateStatus("Diff rendered successfully");
+                    return;
+                }
+
+                bool ignoreWhitespace = _ignoreWhitespace; // capture for background
+
+                // Build the diff model off the UI thread
+                var result = await System.Threading.Tasks.Task.Run(() =>
+                {
+                    static bool IsMeaningful(string s)
+                    {
+                        if (string.IsNullOrEmpty(s)) return false;
+                        foreach (var ch in s)
+                        {
+                            if (!char.IsWhiteSpace(ch) && !char.IsPunctuation(ch))
+                                return true;
+                        }
+                        return false;
+                    }
+
+                    var sbs = new DiffPlex.DiffBuilder.SideBySideDiffBuilder(new Differ())
+                        .BuildDiffModel(oldTextValue, newTextValue, ignoreWhitespace);
+
+                    var oldMap = new Dictionary<int, DiffLineType>();
+                    var newMap = new Dictionary<int, DiffLineType>();
+                    var oldWord = new Dictionary<int, List<(int start, int length)>>();
+                    var newWord = new Dictionary<int, List<(int start, int length)>>();
+
+                    int count = System.Math.Max(sbs.OldText.Lines.Count, sbs.NewText.Lines.Count);
+                    for (int i = 0; i < count; i++)
+                    {
+                        var oldPiece = i < sbs.OldText.Lines.Count ? sbs.OldText.Lines[i] : null;
+                        var newPiece = i < sbs.NewText.Lines.Count ? sbs.NewText.Lines[i] : null;
+
+                        if (oldPiece != null)
+                        {
+                            int posOld = oldPiece.Position ?? (i + 1);
+                            oldMap[posOld] = Map(oldPiece.Type);
+                        }
+                        if (newPiece != null)
+                        {
+                            int posNew = newPiece.Position ?? (i + 1);
+                            newMap[posNew] = Map(newPiece.Type);
+                        }
+
+                        // Word-level spans for modified lines using token-aware diff (ignores pure formatting/newline changes)
+                        if (oldPiece != null && newPiece != null && (oldPiece.Type == ChangeType.Modified || newPiece.Type == ChangeType.Modified))
+                        {
+                            int posOld = oldPiece.Position ?? (i + 1);
+                            int posNew = newPiece.Position ?? (i + 1);
+                            string oldLineText = oldPiece.Text ?? string.Empty;
+                            string newLineText = newPiece.Text ?? string.Empty;
+
+                            var (oldSp, newSp) = ComputeTokenDiffSpans(oldLineText, newLineText);
+
+                            if (oldSp.Count > 0)
+                            {
+                                if (!oldWord.TryGetValue(posOld, out var list))
+                                {
+                                    list = new List<(int start, int length)>();
+                                    oldWord[posOld] = list;
+                                }
+                                list.AddRange(oldSp);
+                            }
+                            if (newSp.Count > 0)
+                            {
+                                if (!newWord.TryGetValue(posNew, out var list))
+                                {
+                                    list = new List<(int start, int length)>();
+                                    newWord[posNew] = list;
+                                }
+                                list.AddRange(newSp);
+                            }
+
+                            // If no meaningful token spans detected, downgrade Modified to Unchanged on that side
+                            if (oldPiece.Type == ChangeType.Modified && (!oldWord.ContainsKey(posOld) || oldWord[posOld].Count == 0))
+                                oldMap[posOld] = DiffLineType.Unchanged;
+                            if (newPiece.Type == ChangeType.Modified && (!newWord.ContainsKey(posNew) || newWord[posNew].Count == 0))
+                                newMap[posNew] = DiffLineType.Unchanged;
+                        }
+                    }
+
+                    // Fallback: ensure maps cover all lines (unchanged lines default)
+                    if (oldMap.Count == 0)
+                    {
+                        var oldLines = oldTextValue.Split('\n');
+                        for (int i = 0; i < oldLines.Length; i++) oldMap[i + 1] = DiffLineType.Unchanged;
+                    }
+                    if (newMap.Count == 0)
+                    {
+                        var newLines = newTextValue.Split('\n');
+                        for (int i = 0; i < newLines.Length; i++) newMap[i + 1] = DiffLineType.Unchanged;
+                    }
+
+                    return (oldMap, newMap, oldWord, newWord);
+                }).ConfigureAwait(false);
+
+                // Apply results on UI thread
+                Dispatcher.UIThread.Post(() =>
+                {
+                    var (oldMap, newMap, oldWord, newWord) = result;
+                    // Store maps for folding/navigation
+                    _oldLineTypes = oldMap;
+                    _newLineTypes = newMap;
+                    // For backward compatibility some features use _lineTypes; use new side
+                    _lineTypes = newMap;
+
+                    ApplyDiffVisualization(oldMap, newMap, oldWord, newWord);
+
+                    // Update statistics combined (meaningful modified already filtered)
+                    int added = newMap.Count(kv => kv.Value == DiffLineType.Added);
+                    int removed = oldMap.Count(kv => kv.Value == DiffLineType.Removed);
+                    int modified = newMap.Count(kv => kv.Value == DiffLineType.Modified) + oldMap.Count(kv => kv.Value == DiffLineType.Modified);
+                    if (_addedLinesText != null) _addedLinesText.Text = $"{added} added";
+                    if (_removedLinesText != null) _removedLinesText.Text = $"{removed} removed";
+                    if (_modifiedLinesText != null) _modifiedLinesText.Text = $"{modified} modified";
+
+                    ApplySearchHighlighting();
+                    UpdateMetrics();
+                    if (_codeFoldingEnabled)
+                        ApplyFolding();
+                    else
+                        ClearFolding();
+                    UpdateStatus("Diff rendered successfully");
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while rendering diff asynchronously");
+                await Dispatcher.UIThread.InvokeAsync(() => UpdateStatus($"Error: {ex.Message}"));
+            }
+        }
+
         private void HandleNewFile(string newText)
         {
             var newLines = newText.Split('\n');
@@ -583,6 +776,7 @@ namespace AzurePrOps.Controls
 
         private void ApplyDiffVisualization(Dictionary<int, DiffLineType> lineMap)
         {
+            // Backward-compatible: apply same map to both editors (used for new/deleted file cases)
             var transformer = new DiffLineBackgroundTransformer(lineMap);
             _oldEditor?.TextArea.TextView.LineTransformers.Add(transformer);
             _newEditor?.TextArea.TextView.LineTransformers.Add(transformer);
@@ -594,6 +788,45 @@ namespace AzurePrOps.Controls
             _changedLines = lineMap
                 .Where(kv => kv.Value != DiffLineType.Unchanged)
                 .Select(kv => kv.Key)
+                .OrderBy(line => line)
+                .ToList();
+        }
+
+        // New overload that supports independent maps and word-level spans for each editor
+        private void ApplyDiffVisualization(
+            Dictionary<int, DiffLineType> oldMap,
+            Dictionary<int, DiffLineType> newMap,
+            Dictionary<int, List<(int start, int length)>> oldWordSpans,
+            Dictionary<int, List<(int start, int length)>> newWordSpans)
+        {
+            if (_oldEditor == null || _newEditor == null)
+                return;
+
+            // Clear any existing line transformers; keep other background renderers (comments, etc.) intact
+            _oldEditor.TextArea.TextView.LineTransformers.Clear();
+            _newEditor.TextArea.TextView.LineTransformers.Clear();
+
+            var oldTransformer = new DiffLineBackgroundTransformer(oldMap);
+            var newTransformer = new DiffLineBackgroundTransformer(newMap);
+            _oldEditor.TextArea.TextView.LineTransformers.Add(oldTransformer);
+            _newEditor.TextArea.TextView.LineTransformers.Add(newTransformer);
+
+            // Word-level transformers (deleted parts on the old editor, inserted parts on the new editor)
+            var oldWordTransformer = new WordDiffColorizingTransformer(oldWordSpans, isAdditionStyle: false);
+            var newWordTransformer = new WordDiffColorizingTransformer(newWordSpans, isAdditionStyle: true);
+            _oldEditor.TextArea.TextView.LineTransformers.Add(oldWordTransformer);
+            _newEditor.TextArea.TextView.LineTransformers.Add(newWordTransformer);
+
+            var oldMarginRenderer = new LineStatusMarginRenderer(oldMap);
+            var newMarginRenderer = new LineStatusMarginRenderer(newMap);
+            _oldEditor.TextArea.TextView.BackgroundRenderers.Add(oldMarginRenderer);
+            _newEditor.TextArea.TextView.BackgroundRenderers.Add(newMarginRenderer);
+
+            // Track changed lines for navigation using the new editor's perspective primarily
+            _changedLines = newMap
+                .Where(kv => kv.Value != DiffLineType.Unchanged)
+                .Select(kv => kv.Key)
+                .Union(oldMap.Where(kv => kv.Value != DiffLineType.Unchanged).Select(kv => kv.Key))
                 .OrderBy(line => line)
                 .ToList();
         }
@@ -633,15 +866,8 @@ namespace AzurePrOps.Controls
         private void UpdateMetrics()
         {
             _metricsPanel?.Children.Clear();
-            foreach (var m in MetricsService?.GetMetrics("<repo>") ?? Enumerable.Empty<MetricData>())
-            {
-                _metricsPanel?.Children.Add(new TextBlock
-                {
-                    Text = $"{m.Name}: {m.Value}",
-                    FontSize = 12,
-                    Margin = new Thickness(8, 0)
-                });
-            }
+            // Per-file metrics have been removed as requested
+            // Only the overview section should show total metrics
         }
 
         private async void LoadThreadsAsync(FileDiff diff)
@@ -1048,21 +1274,16 @@ namespace AzurePrOps.Controls
             _oldFoldingManager ??= FoldingManager.Install(_oldEditor.TextArea);
             _newFoldingManager ??= FoldingManager.Install(_newEditor.TextArea);
 
-            var folds = GetFoldRegionsAroundChanges();
+            var foldsOld = GetFoldRegionsAroundChangesForMap(_oldLineTypes);
+            var foldsNew = GetFoldRegionsAroundChangesForMap(_newLineTypes);
             var newFoldingsOld = new List<NewFolding>();
             var newFoldingsNew = new List<NewFolding>();
 
-            foreach (var (start, end) in folds)
+            foreach (var (start, end) in foldsOld)
             {
-                // Skip folds that start beyond the document length for either editor
-                if (start > _oldEditor.Document.LineCount && start > _newEditor.Document.LineCount)
-                    continue;
-
-                // Clamp end line numbers to each document
+                if (start > _oldEditor.Document.LineCount) continue;
                 int endOldLine = Math.Min(end, _oldEditor.Document.LineCount);
-                int endNewLine = Math.Min(end, _newEditor.Document.LineCount);
-
-                if (start <= _oldEditor.Document.LineCount && start <= endOldLine)
+                if (start <= endOldLine)
                 {
                     var startOld = _oldEditor.Document.GetLineByNumber(start).Offset;
                     var endOld = _oldEditor.Document.GetLineByNumber(endOldLine).EndOffset;
@@ -1072,8 +1293,13 @@ namespace AzurePrOps.Controls
                         DefaultClosed = true
                     });
                 }
+            }
 
-                if (start <= _newEditor.Document.LineCount && start <= endNewLine)
+            foreach (var (start, end) in foldsNew)
+            {
+                if (start > _newEditor.Document.LineCount) continue;
+                int endNewLine = Math.Min(end, _newEditor.Document.LineCount);
+                if (start <= endNewLine)
                 {
                     var startNew = _newEditor.Document.GetLineByNumber(start).Offset;
                     var endNew = _newEditor.Document.GetLineByNumber(endNewLine).EndOffset;
@@ -1117,37 +1343,34 @@ namespace AzurePrOps.Controls
             }
         }
 
-        private IEnumerable<(int Start, int End)> GetFoldRegionsAroundChanges(int context = 2)
+        private IEnumerable<(int Start, int End)> GetFoldRegionsAroundChangesForMap(Dictionary<int, DiffLineType> map, int context = 2)
         {
+            if (_oldEditor is null || _newEditor is null)
+                yield break;
+
+            // Determine line count per corresponding editor is done by caller; here use the max available
             int lineCount = Math.Max(_oldEditor?.Document.LineCount ?? 0, _newEditor?.Document.LineCount ?? 0);
 
-            _logger.LogDebug("GetFoldRegionsAroundChanges: lineCount={LineCount}, _lineTypes.Count={LineTypesCount}",
-                lineCount, _lineTypes.Count);
+            _logger.LogDebug("GetFoldRegionsAroundChangesForMap: lineCount={LineCount}, map.Count={MapCount}",
+                lineCount, map.Count);
 
             if (lineCount == 0)
             {
-                _logger.LogDebug("GetFoldRegionsAroundChanges: No lines to process");
+                _logger.LogDebug("GetFoldRegionsAroundChangesForMap: No lines to process");
                 yield break;
             }
 
-            // Get all changed line numbers
+            // Get all changed line numbers for the provided map
             var changedLines = new HashSet<int>();
-            for (int i = 1; i <= lineCount; i++)
+            foreach (var kv in map)
             {
-                var type = _lineTypes.TryGetValue(i, out var t) ? t : DiffLineType.Unchanged;
-                if (type != DiffLineType.Unchanged)
-                {
-                    changedLines.Add(i);
-                }
+                if (kv.Value != DiffLineType.Unchanged)
+                    changedLines.Add(kv.Key);
             }
 
-            _logger.LogDebug("GetFoldRegionsAroundChanges: Found {ChangedCount} changed lines: [{ChangedLines}]",
-                changedLines.Count, string.Join(",", changedLines.OrderBy(x => x)));
-
-            // If no changes, don't fold anything
             if (changedLines.Count == 0)
             {
-                _logger.LogDebug("GetFoldRegionsAroundChanges: No changes found, not folding anything");
+                _logger.LogDebug("GetFoldRegionsAroundChangesForMap: No changes found, not folding anything");
                 yield break;
             }
 
@@ -1155,7 +1378,6 @@ namespace AzurePrOps.Controls
             var visibleLines = new HashSet<int>();
             foreach (int changedLine in changedLines)
             {
-                // Add the changed line and context around it
                 for (int i = Math.Max(1, changedLine - context);
                      i <= Math.Min(lineCount, changedLine + context);
                      i++)
@@ -1164,9 +1386,6 @@ namespace AzurePrOps.Controls
                 }
             }
 
-            _logger.LogDebug("GetFoldRegionsAroundChanges: {VisibleCount} visible lines with context {Context}: [{VisibleLines}]",
-                visibleLines.Count, context, string.Join(",", visibleLines.OrderBy(x => x)));
-
             // Find consecutive ranges of hidden lines to fold
             int? foldStart = null;
             var foldRegions = new List<(int, int)>();
@@ -1174,36 +1393,28 @@ namespace AzurePrOps.Controls
             for (int i = 1; i <= lineCount; i++)
             {
                 bool shouldBeVisible = visibleLines.Contains(i);
-
                 if (!shouldBeVisible)
                 {
-                    // Start a new fold region if we haven't started one
-                    if (foldStart == null)
-                        foldStart = i;
+                    if (foldStart == null) foldStart = i;
                 }
                 else
                 {
-                    // End the current fold region if we have one
                     if (foldStart.HasValue)
                     {
-                        // Only fold if we have at least 1 line to fold
                         if (i - 1 >= foldStart.Value)
-                        {
                             foldRegions.Add((foldStart.Value, i - 1));
-                        }
                         foldStart = null;
                     }
                 }
             }
 
-            // Handle case where fold region extends to end of file
             if (foldStart.HasValue)
             {
                 foldRegions.Add((foldStart.Value, lineCount));
             }
 
-            _logger.LogDebug("GetFoldRegionsAroundChanges: Generated {FoldCount} fold regions: [{FoldRegions}]",
-                foldRegions.Count, string.Join(", ", foldRegions.Select(r => $"{r.Item1}-{r.Item2}")));
+            _logger.LogDebug("GetFoldRegionsAroundChangesForMap: Generated {FoldCount} fold regions",
+                foldRegions.Count);
 
             foreach (var region in foldRegions)
             {
@@ -1275,6 +1486,182 @@ namespace AzurePrOps.Controls
                 });
             }
         }
+
+        // Removes BOM and hidden/zero-width characters, normalizes newlines and Unicode
+        private static string SanitizeForDiff(string s, bool normalizeNewlines)
+        {
+            if (string.IsNullOrEmpty(s)) return string.Empty;
+
+            // Normalize line endings to LF only when requested
+            if (normalizeNewlines)
+                s = s.Replace("\r\n", "\n").Replace("\r", "\n");
+
+            // Strip BOM at start
+            if (s.Length > 0 && s[0] == '\uFEFF')
+                s = s.Substring(1);
+
+            // Remove zero-width and directional marks common in source text
+            // U+FEFF BOM, U+200B ZWSP, U+200C ZWNJ, U+200D ZWJ, U+2060 WORD JOINER,
+            // U+200E LRM, U+200F RLM, U+202A..U+202E Bidi marks, U+2066..U+2069 isolates
+            var sb = new StringBuilder(s.Length);
+            foreach (var ch in s)
+            {
+                switch (ch)
+                {
+                    case '\uFEFF': // BOM
+                    case '\u200B': // ZWSP
+                    case '\u200C': // ZWNJ
+                    case '\u200D': // ZWJ
+                    case '\u2060': // WORD JOINER
+                    case '\u200E': // LRM
+                    case '\u200F': // RLM
+                    case '\u202A': // LRE
+                    case '\u202B': // RLE
+                    case '\u202C': // PDF
+                    case '\u202D': // LRO
+                    case '\u202E': // RLO
+                    case '\u2066': // LRI
+                    case '\u2067': // RLI
+                    case '\u2068': // FSI
+                    case '\u2069': // PDI
+                        continue; // skip hidden/formatting char
+                }
+                sb.Append(ch);
+            }
+
+            s = sb.ToString();
+
+            // Normalize Unicode to NFC for stable comparisons
+            s = s.Normalize(NormalizationForm.FormC);
+            return s;
+        }
+
+        // Token structure for intra-line diffs
+        private readonly struct Token
+        {
+            public readonly int Start;
+            public readonly int Length;
+            public readonly string Text;
+            public Token(int start, int length, string text)
+            {
+                Start = start; Length = length; Text = text;
+            }
+        }
+
+        // Tokenize a single line into meaningful code tokens (identifiers, numbers, dotted names, string literals)
+        private static List<Token> Tokenize(string line)
+        {
+            var tokens = new List<Token>();
+            if (string.IsNullOrEmpty(line)) return tokens;
+            int i = 0;
+            while (i < line.Length)
+            {
+                char c = line[i];
+                // Identifier/number/dotted
+                if (char.IsLetterOrDigit(c) || c == '_')
+                {
+                    int start = i;
+                    i++;
+                    while (i < line.Length)
+                    {
+                        char ch = line[i];
+                        if (char.IsLetterOrDigit(ch) || ch == '_' || ch == '.') i++;
+                        else break;
+                    }
+                    int len = i - start;
+                    if (len > 0)
+                        tokens.Add(new Token(start, len, line.Substring(start, len)));
+                    continue;
+                }
+                // String literal
+                if (c == '"' || c == '\'')
+                {
+                    char quote = c;
+                    int start = i;
+                    i++; // skip opening quote
+                    while (i < line.Length)
+                    {
+                        char ch = line[i];
+                        if (ch == '\\') // escape
+                        {
+                            if (i + 1 < line.Length) i += 2; else { i++; break; }
+                        }
+                        else if (ch == quote)
+                        {
+                            i++; // include closing quote
+                            break;
+                        }
+                        else i++;
+                    }
+                    int len = i - start;
+                    if (len > 0)
+                        tokens.Add(new Token(start, len, line.Substring(start, len)));
+                    continue;
+                }
+                // Otherwise delimiter/whitespace, skip
+                i++;
+            }
+            return tokens;
+        }
+
+        // Compute token-level diff spans for old/new lines using LCS. Returns character spans to highlight.
+        private static (List<(int start, int length)> oldSpans, List<(int start, int length)> newSpans) ComputeTokenDiffSpans(string oldLine, string newLine)
+        {
+            var oldTokens = Tokenize(oldLine);
+            var newTokens = Tokenize(newLine);
+
+            // Quick exit: identical token sequences => no spans
+            if (oldTokens.Count == newTokens.Count)
+            {
+                bool equal = true;
+                for (int k = 0; k < oldTokens.Count; k++)
+                {
+                    if (!string.Equals(oldTokens[k].Text, newTokens[k].Text, StringComparison.Ordinal))
+                    { equal = false; break; }
+                }
+                if (equal) return (new List<(int, int)>(), new List<(int, int)>());
+            }
+
+            int n = oldTokens.Count;
+            int m = newTokens.Count;
+            // LCS DP
+            int[,] dp = new int[n + 1, m + 1];
+            for (int i = n - 1; i >= 0; i--)
+            {
+                for (int j = m - 1; j >= 0; j--)
+                {
+                    if (string.Equals(oldTokens[i].Text, newTokens[j].Text, StringComparison.Ordinal))
+                        dp[i, j] = dp[i + 1, j + 1] + 1;
+                    else
+                        dp[i, j] = Math.Max(dp[i + 1, j], dp[i, j + 1]);
+                }
+            }
+            // Backtrack to find matched indices
+            var matchedOld = new bool[n];
+            var matchedNew = new bool[m];
+            {
+                int i = 0, j = 0;
+                while (i < n && j < m)
+                {
+                    if (string.Equals(oldTokens[i].Text, newTokens[j].Text, StringComparison.Ordinal))
+                    {
+                        matchedOld[i] = true; matchedNew[j] = true; i++; j++;
+                    }
+                    else if (dp[i + 1, j] >= dp[i, j + 1]) i++;
+                    else j++;
+                }
+            }
+            var oldSpans = new List<(int start, int length)>();
+            var newSpans = new List<(int start, int length)>();
+            // Any old tokens not matched are deletions => highlight on old side
+            for (int i = 0; i < n; i++)
+                if (!matchedOld[i]) oldSpans.Add((oldTokens[i].Start, oldTokens[i].Length));
+            // Any new tokens not matched are insertions => highlight on new side
+            for (int j = 0; j < m; j++)
+                if (!matchedNew[j]) newSpans.Add((newTokens[j].Start, newTokens[j].Length));
+
+            return (oldSpans, newSpans);
+        }
     }
 
     // Highlights full-line backgrounds according to diff type
@@ -1302,8 +1689,9 @@ namespace AzurePrOps.Controls
                         foregroundBrush = new SolidColorBrush(Color.FromRgb(207, 34, 46)); // DangerBrush equivalent
                         break;
                     case DiffLineType.Modified:
-                        backgroundBrush = new SolidColorBrush(Color.FromRgb(255, 248, 197)); // WarningLightBrush equivalent
-                        foregroundBrush = new SolidColorBrush(Color.FromRgb(191, 135, 0)); // WarningBrush equivalent
+                        // Do not apply full-line background for modified lines; rely on margin + word-level spans
+                        backgroundBrush = null;
+                        foregroundBrush = new SolidColorBrush(Color.FromRgb(36, 41, 47)); // keep default text color
                         break;
                     default:
                         // Use default text color for unchanged lines

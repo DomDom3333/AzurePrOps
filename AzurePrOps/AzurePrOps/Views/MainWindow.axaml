@@ -9,10 +9,10 @@
     x:DataType="vm:MainWindowViewModel"
     xmlns="https://github.com/avaloniaui"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:vm="using:AzurePrOps.ViewModels"
-    xmlns:model="using:AzurePrOps.AzureConnection.Models"
     xmlns:ff="using:AzurePrOps.Models"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:model="using:AzurePrOps.AzureConnection.Models"
+    xmlns:vm="using:AzurePrOps.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <Design.DataContext>
@@ -25,7 +25,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
+        <!--  Header  -->
         <Border
             Background="{StaticResource SurfaceBrush}"
             BorderBrush="{StaticResource BorderBrush}"
@@ -36,7 +36,10 @@
                     FontSize="24"
                     FontWeight="Bold"
                     Text="Pull Requests" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
+                <StackPanel
+                    Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="12">
                     <Button
                         Classes="PrimaryButton"
                         Command="{Binding RefreshCommand}"
@@ -49,43 +52,162 @@
             </Grid>
         </Border>
 
-        <!-- Main Content -->
-        <Grid Grid.Row="1" ColumnDefinitions="300,*" Margin="24,20">
-            <!-- Sidebar -->
-            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" Margin="0,0,16,0">
+        <!--  Main Content  -->
+        <Grid
+            ColumnDefinitions="300,*"
+            Grid.Row="1"
+            Margin="24,20">
+            <!--  Sidebar  -->
+            <ScrollViewer
+                Grid.Column="0"
+                Margin="0,0,16,0"
+                VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="16">
-                    <!-- Filters -->
+                    <!--  Enhanced Filters  -->
                     <Border Classes="Card">
                         <StackPanel Spacing="12">
-                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="Filters" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock
+                                    FontSize="16"
+                                    FontWeight="SemiBold"
+                                    Text="Filters" />
+                                <Button
+                                    Classes="SecondaryButton"
+                                    Command="{Binding ResetFiltersCommand}"
+                                    Content="Reset" />
+                            </StackPanel>
+
+                            <!--  Workflow Presets  -->
+                            <StackPanel Spacing="4">
+                                <TextBlock
+                                    FontSize="12"
+                                    FontWeight="Medium"
+                                    Text="Workflow Preset" />
+                                <ComboBox
+                                    ItemsSource="{Binding WorkflowPresets}"
+                                    SelectedItem="{Binding SelectedWorkflowPreset}"
+                                    ToolTip.Tip="{Binding SelectedWorkflowPresetTooltip}" />
+                            </StackPanel>
+
+                            <!--  Text Filters  -->
                             <StackPanel Spacing="8">
+                                <TextBlock
+                                    FontSize="12"
+                                    FontWeight="Medium"
+                                    Text="Text Filters" />
+                                <TextBox Text="{Binding FilterCriteria.TitleFilter}" Watermark="Title contains..." />
                                 <AutoCompleteBox
-                                    ItemsSource="{Binding TitleOptions}"
-                                    Text="{Binding TitleFilter}"
-                                    Watermark="Title" />
-                                <AutoCompleteBox
-                                    ItemsSource="{Binding CreatorOptions}"
-                                    Text="{Binding CreatorFilter}"
+                                    ItemsSource="{Binding AvailableCreators}"
+                                    Text="{Binding FilterCriteria.CreatorFilter}"
                                     Watermark="Creator" />
                                 <AutoCompleteBox
-                                    ItemsSource="{Binding SourceBranchOptions}"
-                                    Text="{Binding SourceBranchFilter}"
-                                    Watermark="Source" />
+                                    ItemsSource="{Binding AvailableReviewers}"
+                                    Text="{Binding FilterCriteria.ReviewerFilter}"
+                                    Watermark="Reviewer" />
                                 <AutoCompleteBox
-                                    ItemsSource="{Binding TargetBranchOptions}"
-                                    Text="{Binding TargetBranchFilter}"
-                                    Watermark="Target" />
-                                <ComboBox
-                                    ItemsSource="{Binding StatusOptions}"
-                                    SelectedItem="{Binding StatusFilter}" />
+                                    ItemsSource="{Binding AvailableSourceBranches}"
+                                    Text="{Binding FilterCriteria.SourceBranchFilter}"
+                                    Watermark="Source Branch" />
+                                <AutoCompleteBox
+                                    ItemsSource="{Binding AvailableTargetBranches}"
+                                    Text="{Binding FilterCriteria.TargetBranchFilter}"
+                                    Watermark="Target Branch" />
+                            </StackPanel>
+
+                            <!--  Status Filter  -->
+                            <StackPanel Spacing="4">
+                                <TextBlock
+                                    FontSize="12"
+                                    FontWeight="Medium"
+                                    Text="Status Filter" />
+                                <ComboBox ItemsSource="{Binding AvailableStatuses}" SelectedItem="{Binding StatusFilter}" />
+                            </StackPanel>
+
+                            <!--  Date Range Filters  -->
+                            <StackPanel Spacing="4">
+                                <TextBlock
+                                    FontSize="12"
+                                    FontWeight="Medium"
+                                    Text="Date Range" />
+                                <DatePicker SelectedDate="{Binding FilterCriteria.CreatedAfter}" />
+                                <DatePicker SelectedDate="{Binding FilterCriteria.CreatedBefore}" />
+                            </StackPanel>
+
+                            <!--  Quick Filters  -->
+                            <StackPanel Spacing="4">
+                                <TextBlock
+                                    FontSize="12"
+                                    FontWeight="Medium"
+                                    Text="Quick Filters" />
+                                <CheckBox Content="My Pull Requests Only" IsChecked="{Binding FilterCriteria.MyPullRequestsOnly}" />
+                                <CheckBox Content="Assigned to Me Only" IsChecked="{Binding FilterCriteria.AssignedToMeOnly}" />
+                                <CheckBox Content="Needs My Review Only" IsChecked="{Binding FilterCriteria.NeedsMyReviewOnly}" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="Drafts:" VerticalAlignment="Center" />
+                                    <ComboBox>
+                                        <ComboBoxItem Content="All" />
+                                        <ComboBoxItem Content="Drafts Only" />
+                                        <ComboBoxItem Content="Non-Drafts Only" />
+                                    </ComboBox>
+                                </StackPanel>
                             </StackPanel>
                         </StackPanel>
                     </Border>
 
-                    <!-- Saved Views -->
+                    <!--  Sorting  -->
                     <Border Classes="Card">
                         <StackPanel Spacing="12">
-                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="Saved Views" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock
+                                    FontSize="16"
+                                    FontWeight="SemiBold"
+                                    Text="Sorting" />
+                                <Button
+                                    Classes="SecondaryButton"
+                                    Command="{Binding ResetSortingCommand}"
+                                    Content="Reset" />
+                            </StackPanel>
+
+                            <!--  Sort Presets  -->
+                            <StackPanel Spacing="4">
+                                <TextBlock
+                                    FontSize="12"
+                                    FontWeight="Medium"
+                                    Text="Quick Sort" />
+                                <ComboBox
+                                    ItemsSource="{Binding SortPresets}"
+                                    SelectedItem="{Binding SelectedSortPreset}"
+                                    ToolTip.Tip="{Binding SelectedSortPresetTooltip}" />
+                            </StackPanel>
+
+                            <!--  Custom Sorting  -->
+                            <StackPanel Spacing="4">
+                                <TextBlock
+                                    FontSize="12"
+                                    FontWeight="Medium"
+                                    Text="Primary Sort" />
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <ComboBox
+                                        Grid.Column="0"
+                                        ItemsSource="{Binding SortFieldOptions}"
+                                        SelectedItem="{Binding SortCriteria.PrimarySortField}" />
+                                    <ToggleButton
+                                        Content="↑↓"
+                                        Grid.Column="1"
+                                        Margin="4,0,0,0" />
+                                </Grid>
+                            </StackPanel>
+
+                        </StackPanel>
+                    </Border>
+
+                    <!--  Saved Views  -->
+                    <Border Classes="Card">
+                        <StackPanel Spacing="12">
+                            <TextBlock
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Text="Saved Views" />
                             <StackPanel Spacing="8">
                                 <ComboBox ItemsSource="{Binding FilterViews}" SelectedItem="{Binding SelectedFilterView}">
                                     <ComboBox.ItemTemplate>
@@ -95,127 +217,365 @@
                                     </ComboBox.ItemTemplate>
                                 </ComboBox>
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <TextBox Text="{Binding NewViewName}" Watermark="View Name" Width="120" />
-                                    <Button Classes="SecondaryButton" Command="{Binding SaveViewCommand}" Content="Save" Width="60" />
+                                    <TextBox
+                                        Text="{Binding NewViewName}"
+                                        Watermark="View Name"
+                                        Width="120" />
+                                    <Button
+                                        Classes="SecondaryButton"
+                                        Command="{Binding SaveViewCommand}"
+                                        Content="Save"
+                                        Width="60" />
                                 </StackPanel>
                             </StackPanel>
                         </StackPanel>
                     </Border>
 
-                    <!-- Comment Input -->
-                    <Border Classes="Card">
-                        <StackPanel Spacing="12">
-                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="Add Comment" />
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBox Text="{Binding NewCommentText}" Watermark="Enter your comment..." Width="200" />
-                                <Button Classes="PrimaryButton" Command="{Binding PostCommentCommand}" Content="Post" />
-                            </StackPanel>
+                    <!--  Quick Comment  -->
+                    <Border Classes="Card" IsVisible="{Binding SelectedPullRequest, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <StackPanel Spacing="8">
+                            <TextBlock
+                                FontSize="14"
+                                FontWeight="SemiBold"
+                                Text="💬 Quick Comment" />
+                            <TextBox
+                                AcceptsReturn="True"
+                                MinHeight="60"
+                                Text="{Binding NewCommentText}"
+                                TextWrapping="Wrap"
+                                Watermark="Add a comment to the selected PR..." />
+                            <Button
+                                Classes="PrimaryButton"
+                                Command="{Binding PostCommentCommand}"
+                                Content="📤 Post Comment"
+                                HorizontalAlignment="Right" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
             </ScrollViewer>
 
-            <!-- Pull Request List and Comments -->
+            <!--  Pull Request List and Comments  -->
             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="16">
-                    <!-- PR List -->
+                    <!--  PR List  -->
                     <Border Classes="Card">
                         <StackPanel Spacing="12">
-                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="Pull Requests" />
+                            <TextBlock
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Text="Pull Requests" />
                             <ListBox
                                 DoubleTapped="PullRequests_DoubleTapped"
                                 ItemsSource="{Binding PullRequests}"
-                                SelectedItem="{Binding SelectedPullRequest}"
-                                MinHeight="200">
+                                MinHeight="300"
+                                SelectedItem="{Binding SelectedPullRequest}">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate x:DataType="model:PullRequestInfo">
-                                        <Border Background="Transparent" CornerRadius="6" Margin="0,0,0,4" Padding="12">
-                                            <StackPanel Spacing="4">
-                                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                                    <TextBlock
-                                                        FontSize="16"
-                                                        Foreground="{Binding Status, Converter={StaticResource StatusToBrush}}"
-                                                        Text="{Binding Status, Converter={StaticResource StatusToIcon}}" />
-                                                    <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
-                                                    <Border Background="{DynamicResource ErrorBrush}" Padding="2,0" CornerRadius="4" IsVisible="{Binding ShowDraftBadge}">
-                                                        <TextBlock Text="DRAFT" FontSize="10" Foreground="White" />
+                                        <Border
+                                            Background="{StaticResource SurfaceBrush}"
+                                            BorderBrush="{StaticResource BorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            Margin="0,0,0,4"
+                                            Padding="12">
+                                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                                <!--  Status & Priority Column  -->
+                                                <StackPanel
+                                                    Grid.Column="0"
+                                                    Margin="0,0,12,0"
+                                                    Spacing="4"
+                                                    VerticalAlignment="Center">
+                                                    <Border
+                                                        Background="{Binding Status, Converter={StaticResource StatusToBrush}}"
+                                                        CornerRadius="12"
+                                                        HorizontalAlignment="Center"
+                                                        Padding="6,2"
+                                                        ToolTip.Tip="{Binding Status, StringFormat='Status: {0}'}">
+                                                        <TextBlock
+                                                            FontSize="8"
+                                                            FontWeight="Bold"
+                                                            Foreground="White"
+                                                            HorizontalAlignment="Center"
+                                                            Text="{Binding Status}" />
                                                     </Border>
+                                                    <TextBlock
+                                                        FontSize="20"
+                                                        HorizontalAlignment="Center"
+                                                        IsVisible="{x:Static ff:FeatureFlagManager.LifecycleActionsEnabled}"
+                                                        Text="{Binding ReviewerVoteIcon}"
+                                                        ToolTip.Tip="{Binding ReviewerVote, StringFormat='My Review Status: {0}'}" />
                                                 </StackPanel>
-                                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                                    <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding Id, StringFormat='PR #{0}'}" />
-                                                    <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding Created, StringFormat='{}{0:yyyy-MM-dd}'}" />
+
+                                                <!--  Main Content Column  -->
+                                                <StackPanel Grid.Column="1" Spacing="6">
+                                                    <!--  Title & Draft Badge  -->
+                                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                                        <TextBlock
+                                                            FontSize="16"
+                                                            FontWeight="SemiBold"
+                                                            MaxWidth="450"
+                                                            Text="{Binding Title}"
+                                                            TextWrapping="Wrap"
+                                                            ToolTip.Tip="{Binding Title}" />
+                                                        <Border
+                                                            Background="{DynamicResource ErrorBrush}"
+                                                            CornerRadius="8"
+                                                            IsVisible="{Binding ShowDraftBadge}"
+                                                            Padding="4,1"
+                                                            ToolTip.Tip="This is a draft pull request - not ready for final review">
+                                                            <TextBlock
+                                                                FontSize="9"
+                                                                FontWeight="Bold"
+                                                                Foreground="White"
+                                                                Text="DRAFT" />
+                                                        </Border>
+                                                    </StackPanel>
+
+                                                    <!--  Compact Metadata Row  -->
+                                                    <StackPanel Orientation="Horizontal" Spacing="16">
+                                                        <TextBlock
+                                                            FontSize="11"
+                                                            FontWeight="Medium"
+                                                            Foreground="{StaticResource TextSecondaryBrush}"
+                                                            Text="{Binding Creator}"
+                                                            ToolTip.Tip="{Binding Creator, StringFormat='Created by: {0}'}" />
+                                                        <TextBlock
+                                                            FontSize="11"
+                                                            Foreground="{StaticResource TextSecondaryBrush}"
+                                                            Text="{Binding Created, StringFormat='{}{0:MMM dd}'}"
+                                                            ToolTip.Tip="{Binding Created, StringFormat='Created: {0:dddd, MMMM dd, yyyy at h:mm tt}'}" />
+                                                        <TextBlock
+                                                            FontSize="11"
+                                                            Foreground="{StaticResource TextSecondaryBrush}"
+                                                            Text="{Binding Reviewers.Count, StringFormat='{}{0} reviewers'}"
+                                                            ToolTip.Tip="{Binding ReviewersText}" />
+                                                        <StackPanel
+                                                            IsVisible="{x:Static ff:FeatureFlagManager.LifecycleActionsEnabled}"
+                                                            Orientation="Horizontal"
+                                                            Spacing="4">
+                                                            <TextBlock FontSize="11" Text="{Binding ReviewerVoteIcon}" />
+                                                            <TextBlock
+                                                                FontSize="11"
+                                                                Foreground="{StaticResource TextSecondaryBrush}"
+                                                                Text="{Binding ReviewerVote}" />
+                                                        </StackPanel>
+                                                    </StackPanel>
+
+                                                    <!--  Branch Info (Compact)  -->
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <TextBlock
+                                                            FontFamily="Consolas"
+                                                            FontSize="10"
+                                                            Foreground="{StaticResource TextSecondaryBrush}"
+                                                            Text="{Binding SourceBranch}"
+                                                            ToolTip.Tip="{Binding SourceBranch, StringFormat='Source Branch: {0}'}" />
+                                                        <TextBlock
+                                                            FontSize="10"
+                                                            Foreground="{StaticResource TextSecondaryBrush}"
+                                                            Text="→"
+                                                            ToolTip.Tip="Merge direction" />
+                                                        <TextBlock
+                                                            FontFamily="Consolas"
+                                                            FontSize="10"
+                                                            Foreground="{StaticResource TextSecondaryBrush}"
+                                                            Text="{Binding TargetBranch}"
+                                                            ToolTip.Tip="{Binding TargetBranch, StringFormat='Target Branch: {0}'}" />
+                                                    </StackPanel>
                                                 </StackPanel>
-                                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                                    <TextBlock FontSize="12" Text="👤" />
-                                                    <TextBlock FontSize="12" FontStyle="Italic" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding Creator}" />
-                                                </StackPanel>
-                                                <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding ReviewersText}" TextWrapping="Wrap" />
-                                                <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{x:Static ff:FeatureFlagManager.LifecycleActionsEnabled}">
-                                                    <TextBlock FontSize="11" Text="{Binding ReviewerVoteIcon}" />
-                                                    <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Text="{Binding ReviewerVote}" />
-                                                </StackPanel>
-                                            </StackPanel>
+
+                                                <!--  Right Column - PR ID  -->
+                                                <TextBlock
+                                                    FontSize="11"
+                                                    FontWeight="Medium"
+                                                    Foreground="{StaticResource TextSecondaryBrush}"
+                                                    Grid.Column="2"
+                                                    Margin="12,0,0,0"
+                                                    Text="{Binding Id, StringFormat='#{0}'}"
+                                                    ToolTip.Tip="{Binding Id, StringFormat='Pull Request ID: {0}'}"
+                                                    VerticalAlignment="Top" />
+                                            </Grid>
                                         </Border>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
+
+                            <!--  Empty State Message  -->
+                            <StackPanel
+                                HorizontalAlignment="Center"
+                                IsVisible="{Binding !PullRequests.Count}"
+                                MinHeight="300"
+                                Spacing="16"
+                                VerticalAlignment="Center">
+                                <TextBlock
+                                    FontSize="48"
+                                    HorizontalAlignment="Center"
+                                    Opacity="0.3"
+                                    Text="📝" />
+                                <TextBlock
+                                    FontSize="18"
+                                    FontWeight="SemiBold"
+                                    HorizontalAlignment="Center"
+                                    Text="No Pull Requests Found" />
+                                <TextBlock
+                                    FontSize="14"
+                                    Foreground="{StaticResource TextSecondaryBrush}"
+                                    HorizontalAlignment="Center"
+                                    MaxWidth="400"
+                                    Text="There are currently no pull requests matching your filters. Try adjusting your filter criteria or refresh to load the latest pull requests."
+                                    TextAlignment="Center"
+                                    TextWrapping="Wrap" />
+                                <Button
+                                    Classes="PrimaryButton"
+                                    Command="{Binding RefreshCommand}"
+                                    Content="🔄 Refresh Pull Requests"
+                                    HorizontalAlignment="Center" />
+                            </StackPanel>
                         </StackPanel>
                     </Border>
 
-                    <!-- Actions and Progress -->
-                    <Border Classes="Card">
-                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <Button Classes="SecondaryButton" Command="{Binding LoadCommentsCommand}" Content="Load Comments" Width="120" />
-                            <Button Classes="SuccessButton" Command="{Binding ApproveCommand}" Content="Approve" Width="120" />
-                            <Button Classes="SecondaryButton" Command="{Binding ApproveWithSuggestionsCommand}" Content="Approve w/ Suggestions" Width="160" IsVisible="{Binding LifecycleActionsEnabled}" />
-                            <Button Classes="SecondaryButton" Command="{Binding WaitForAuthorCommand}" Content="Wait for Author" Width="140" IsVisible="{Binding LifecycleActionsEnabled}" />
-                            <Button Classes="DangerButton" Command="{Binding RejectCommand}" Content="Reject" Width="120" IsVisible="{Binding LifecycleActionsEnabled}" />
-                            <Button Classes="SecondaryButton" Command="{Binding MarkDraftCommand}" Content="Mark Draft" Width="120" IsVisible="{Binding LifecycleActionsEnabled}" />
-                            <Button Classes="SecondaryButton" Command="{Binding MarkReadyCommand}" Content="Mark Ready" Width="120" IsVisible="{Binding LifecycleActionsEnabled}" />
-                            <Button Classes="SecondaryButton" Command="{Binding CompleteCommand}" Content="Complete" Width="120" IsVisible="{Binding LifecycleActionsEnabled}" />
-                            <Button Classes="DangerButton" Command="{Binding AbandonCommand}" Content="Abandon" Width="120" IsVisible="{Binding LifecycleActionsEnabled}" />
-                            <Button Classes="PrimaryButton" Command="{Binding ViewDetailsCommand}" Content="View Details" Width="120" />
-                            <Button Classes="SecondaryButton" Command="{Binding OpenInBrowserCommand}" CommandParameter="{Binding SelectedPullRequest}" Content="Open in Browser" Width="140" />
-                            <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoadingDiffs}" Width="120" />
+                    <!--  Quick Actions for Selected PR  -->
+                    <Border Classes="Card" IsVisible="{Binding SelectedPullRequest, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <StackPanel Spacing="16">
+                            <StackPanel
+                                Orientation="Horizontal"
+                                Spacing="8"
+                                VerticalAlignment="Center">
+                                <TextBlock
+                                    FontSize="14"
+                                    FontWeight="SemiBold"
+                                    Text="Quick Actions:" />
+                                <TextBlock
+                                    FontSize="12"
+                                    Foreground="{StaticResource TextSecondaryBrush}"
+                                    Text="{Binding SelectedPullRequest.Title}" />
+                            </StackPanel>
+
+                            <!--  Primary Review Actions  -->
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <Button
+                                    Classes="SuccessButton"
+                                    Command="{Binding ApproveCommand}"
+                                    Content="✅ Approve" />
+                                <Button
+                                    Classes="SecondaryButton"
+                                    Command="{Binding ApproveWithSuggestionsCommand}"
+                                    Content="📝 Approve w/ Suggestions"
+                                    IsVisible="{Binding LifecycleActionsEnabled}" />
+                                <Button
+                                    Classes="SecondaryButton"
+                                    Command="{Binding WaitForAuthorCommand}"
+                                    Content="⏳ Wait for Author"
+                                    IsVisible="{Binding LifecycleActionsEnabled}" />
+                                <Button
+                                    Classes="DangerButton"
+                                    Command="{Binding RejectCommand}"
+                                    Content="❌ Reject"
+                                    IsVisible="{Binding LifecycleActionsEnabled}" />
+                            </StackPanel>
+
+                            <!--  Secondary Actions  -->
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <Button
+                                    Classes="SecondaryButton"
+                                    Command="{Binding MarkDraftCommand}"
+                                    Content="📝 Mark Draft"
+                                    IsVisible="{Binding LifecycleActionsEnabled}" />
+                                <Button
+                                    Classes="SecondaryButton"
+                                    Command="{Binding MarkReadyCommand}"
+                                    Content="🚀 Mark Ready"
+                                    IsVisible="{Binding LifecycleActionsEnabled}" />
+                                <Button
+                                    Classes="SecondaryButton"
+                                    Command="{Binding CompleteCommand}"
+                                    Content="✔️ Complete"
+                                    IsVisible="{Binding LifecycleActionsEnabled}" />
+                                <Button
+                                    Classes="DangerButton"
+                                    Command="{Binding AbandonCommand}"
+                                    Content="🗑️ Abandon"
+                                    IsVisible="{Binding LifecycleActionsEnabled}" />
+                            </StackPanel>
+
+                            <!--  Loading Progress  -->
+                            <ProgressBar
+                                Height="4"
+                                IsIndeterminate="True"
+                                IsVisible="{Binding IsLoadingDiffs}"
+                                Margin="0,8,0,0" />
                         </StackPanel>
                     </Border>
 
-                    <!-- Comments -->
-                    <Border Classes="Card">
+                    <!--  PR Summary & Stats  -->
+                    <Border Classes="Card" IsVisible="{Binding PullRequests.Count, Converter={x:Static ObjectConverters.IsNotNull}}">
                         <StackPanel Spacing="12">
-                            <TextBlock FontSize="16" FontWeight="SemiBold" Text="Comments" />
-                            <ListBox ItemsSource="{Binding Comments}" MinHeight="150">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Background="{StaticResource BackgroundBrush}" CornerRadius="6" Margin="0,0,0,8" Padding="12">
-                                            <StackPanel Spacing="4">
-                                                <TextBlock FontSize="12" FontWeight="SemiBold" Text="{Binding Author}" />
-                                                <TextBlock Text="{Binding Content}" TextWrapping="Wrap" />
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
+                            <TextBlock
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Text="📊 Summary" />
+                            <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto">
+                                <StackPanel Grid.Column="0" Spacing="4">
+                                    <TextBlock
+                                        FontSize="20"
+                                        FontWeight="Bold"
+                                        HorizontalAlignment="Center"
+                                        Text="{Binding PullRequests.Count}" />
+                                    <TextBlock
+                                        FontSize="12"
+                                        Foreground="{StaticResource TextSecondaryBrush}"
+                                        HorizontalAlignment="Center"
+                                        Text="Total PRs" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="4">
+                                    <TextBlock
+                                        FontSize="20"
+                                        FontWeight="Bold"
+                                        HorizontalAlignment="Center"
+                                        Text="{Binding ActivePRCount}" />
+                                    <TextBlock
+                                        FontSize="12"
+                                        Foreground="{StaticResource TextSecondaryBrush}"
+                                        HorizontalAlignment="Center"
+                                        Text="Active" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Spacing="4">
+                                    <TextBlock
+                                        FontSize="20"
+                                        FontWeight="Bold"
+                                        HorizontalAlignment="Center"
+                                        Text="{Binding MyReviewPendingCount}" />
+                                    <TextBlock
+                                        FontSize="12"
+                                        Foreground="{StaticResource TextSecondaryBrush}"
+                                        HorizontalAlignment="Center"
+                                        Text="Need Review" />
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{StaticResource TextSecondaryBrush}"
+                                Text="💡 Tip: Use filters and presets in the sidebar to customize your workflow and focus on the most relevant pull requests."
+                                TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
             </ScrollViewer>
         </Grid>
 
-        <!-- Loading overlay while opening PR details -->
+        <!--  Loading overlay while opening PR details  -->
         <Border
             Background="#80000000"
             IsHitTestVisible="{Binding IsLoadingDiffs}"
             IsVisible="{Binding IsLoadingDiffs}"
             ZIndex="100">
             <ProgressBar
-                IsIndeterminate="True"
-                Width="160"
-                Height="20"
-                Foreground="{StaticResource PrimaryBrush}"
                 Background="{StaticResource SurfaceBrush}"
+                Foreground="{StaticResource PrimaryBrush}"
+                Height="20"
                 HorizontalAlignment="Center"
-                VerticalAlignment="Center" />
+                IsIndeterminate="True"
+                VerticalAlignment="Center"
+                Width="160" />
         </Border>
     </Grid>
 </Window>

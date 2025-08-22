@@ -2,6 +2,8 @@ using System;
 using AzurePrOps.AzureConnection.Models;
 using AzurePrOps.AzureConnection.Services;
 using AzurePrOps.Models;
+using AzurePrOps.Models.FilteringAndSorting;
+using AzurePrOps.Services;
 using AzurePrOps.ReviewLogic.Services;
 using ReviewModels = AzurePrOps.ReviewLogic.Models;
 using ReactiveUI;
@@ -26,12 +28,71 @@ public class MainWindowViewModel : ViewModelBase
     private readonly AzureDevOpsClient _client = new();
     private readonly IPullRequestService _pullRequestService;
     private readonly Models.ConnectionSettings _settings;
+    private readonly PullRequestFilteringSortingService _filterSortService = new();
 
     public ObservableCollection<PullRequestInfo> PullRequests { get; } = new();
     private readonly ObservableCollection<PullRequestInfo> _allPullRequests = new();
-    public ObservableCollection<PullRequestComment> Comments { get; } = new();
+
+    // Enhanced filtering and sorting
+    public FilterCriteria FilterCriteria { get; } = new();
+    public SortCriteria SortCriteria { get; } = new();
+    private FilterSortPreferences _preferences = new();
 
     public ObservableCollection<FilterView> FilterViews { get; } = new();
+    public ObservableCollection<SavedFilterView> SavedFilterViews { get; } = new();
+
+    // Available options for dropdowns
+    public ObservableCollection<string> AvailableStatuses { get; } = new();
+    public ObservableCollection<string> AvailableReviewerVotes { get; } = new();
+    public ObservableCollection<string> AvailableCreators { get; } = new();
+    public ObservableCollection<string> AvailableReviewers { get; } = new();
+    public ObservableCollection<string> AvailableSourceBranches { get; } = new();
+    public ObservableCollection<string> AvailableTargetBranches { get; } = new();
+
+    // Sort presets
+    public ObservableCollection<string> SortPresets { get; } = new()
+    {
+        "Newest First", "Oldest First", "Title A-Z", "Creator A-Z", 
+        "Status Priority", "Review Priority", "High Activity"
+    };
+
+    private string _selectedSortPreset = "Newest First";
+    public string SelectedSortPreset
+    {
+        get => _selectedSortPreset;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedSortPreset, value);
+            SortCriteria.ApplyPreset(value);
+            this.RaisePropertyChanged(nameof(SelectedSortPresetTooltip));
+            ApplyFiltersAndSorting();
+        }
+    }
+
+    public string SelectedSortPresetTooltip => 
+        Models.FilteringAndSorting.SortCriteria.GetSortPresetTooltip(SelectedSortPreset);
+
+    // Workflow presets
+    public ObservableCollection<string> WorkflowPresets { get; } = new()
+    {
+        "All Pull Requests", "Team Lead Overview", "My Pull Requests", "Need My Review", "Ready for QA"
+    };
+
+    private string _selectedWorkflowPreset = "All Pull Requests";
+    public string SelectedWorkflowPreset
+    {
+        get => _selectedWorkflowPreset;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedWorkflowPreset, value);
+            FilterCriteria.ApplyWorkflowPreset(value);
+            this.RaisePropertyChanged(nameof(SelectedWorkflowPresetTooltip));
+            ApplyFiltersAndSorting();
+        }
+    }
+
+    public string SelectedWorkflowPresetTooltip => 
+        Models.FilteringAndSorting.FilterCriteria.GetWorkflowPresetTooltip(SelectedWorkflowPreset);
 
     public ObservableCollection<string> TitleOptions { get; } = new();
     public ObservableCollection<string> CreatorOptions { get; } = new();
@@ -72,7 +133,8 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _titleFilter, value);
-            ApplyFilters();
+            FilterCriteria.TitleFilter = value;
+            ApplyFiltersAndSorting();
         }
     }
 
@@ -83,7 +145,8 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _creatorFilter, value);
-            ApplyFilters();
+            FilterCriteria.CreatorFilter = value;
+            ApplyFiltersAndSorting();
         }
     }
 
@@ -94,7 +157,8 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _sourceBranchFilter, value);
-            ApplyFilters();
+            FilterCriteria.SourceBranchFilter = value;
+            ApplyFiltersAndSorting();
         }
     }
 
@@ -105,7 +169,8 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _targetBranchFilter, value);
-            ApplyFilters();
+            FilterCriteria.TargetBranchFilter = value;
+            ApplyFiltersAndSorting();
         }
     }
 
@@ -116,7 +181,14 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _statusFilter, value);
-            ApplyFilters();
+            if (value == "All")
+                FilterCriteria.SelectedStatuses.Clear();
+            else
+            {
+                FilterCriteria.SelectedStatuses.Clear();
+                FilterCriteria.SelectedStatuses.Add(value);
+            }
+            ApplyFiltersAndSorting();
         }
     }
 
@@ -143,8 +215,14 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _selectedPullRequest, value);
     }
 
+    // Summary statistics properties
+    public int ActivePRCount => PullRequests.Count(pr => pr.Status.Equals("Active", StringComparison.OrdinalIgnoreCase));
+    
+    public int MyReviewPendingCount => PullRequests.Count(pr => 
+        pr.Reviewers.Any(r => r.Id.Equals(_settings.ReviewerId, StringComparison.OrdinalIgnoreCase) && 
+                              (r.Vote.Equals("No vote", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(r.Vote))));
+
     public ReactiveCommand<Unit, Unit> RefreshCommand { get; }
-    public ReactiveCommand<Unit, Unit> LoadCommentsCommand { get; }
     public ReactiveCommand<Unit, Unit> ApproveCommand { get; }
     public ReactiveCommand<Unit, Unit> PostCommentCommand { get; }
     public ReactiveCommand<Unit, Unit> ViewDetailsCommand { get; }
@@ -158,6 +236,15 @@ public class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> MarkReadyCommand { get; }
     public ReactiveCommand<Unit, Unit> CompleteCommand { get; }
     public ReactiveCommand<Unit, Unit> AbandonCommand { get; }
+    public ReactiveCommand<Unit, Unit> ResetFiltersCommand { get; }
+    public ReactiveCommand<Unit, Unit> ResetSortingCommand { get; }
+    
+    // Sort field options for dropdown
+    public ObservableCollection<string> SortFieldOptions { get; } = new()
+    {
+        "Title", "Creator", "Created Date", "Status", "Source Branch", 
+        "Target Branch", "Reviewer Vote", "PR ID", "Reviewer Count"
+    };
 
     private async Task ShowErrorMessage(string message)
     {
@@ -195,6 +282,14 @@ public class MainWindowViewModel : ViewModelBase
         foreach (var v in FilterViewStorage.Load())
             FilterViews.Add(v);
 
+        // Initialize new filtering and sorting system
+        LoadPreferences();
+        FilterCriteria.CurrentUserId = _settings.ReviewerId ?? string.Empty;
+        
+        // Set up property change handlers for real-time filtering
+        FilterCriteria.PropertyChanged += (_, _) => ApplyFiltersAndSorting();
+        SortCriteria.PropertyChanged += (_, _) => ApplyFiltersAndSorting();
+
         // Add error handling mechanism
         _client.SetErrorHandler(message => _ = ShowErrorMessage(message));
 
@@ -219,7 +314,8 @@ public class MainWindowViewModel : ViewModelBase
                     _allPullRequests.Add(pr with { ReviewerVote = vote, ShowDraftBadge = showDraft });
                 }
                 UpdateFilterOptions();
-                ApplyFilters();
+                UpdateAvailableOptions();
+                ApplyFiltersAndSorting();
             }
             catch (Exception ex)
             {
@@ -229,7 +325,6 @@ public class MainWindowViewModel : ViewModelBase
             }
         });
 
-        LoadCommentsCommand = ReactiveCommand.CreateFromTask(async () => await LoadCommentsAsync(), hasSelection);
 
         ApproveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -377,7 +472,7 @@ public class MainWindowViewModel : ViewModelBase
                 SelectedPullRequest.Id,
                 NewCommentText,
                 _settings.PersonalAccessToken);
-            NewCommentText = string.Empty;
+            await Dispatcher.UIThread.InvokeAsync(() => NewCommentText = string.Empty);
         },
         this.WhenAnyValue(x => x.SelectedPullRequest, x => x.NewCommentText,
             (pr, text) => pr != null && !string.IsNullOrWhiteSpace(text)));
@@ -387,62 +482,59 @@ public class MainWindowViewModel : ViewModelBase
             if (SelectedPullRequest == null)
                 return;
 
-            IsLoadingDiffs = true;
+            var pr = SelectedPullRequest;
 
-            try
+            // Create window immediately to avoid UI freeze
+            PullRequestDetailsWindowViewModel? vm = null;
+            await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                // First load comments - if this fails, we'll still try to show the window with diffs
+                vm = new PullRequestDetailsWindowViewModel(
+                    pr,
+                    _pullRequestService,
+                    _settings,
+                    null,
+                    null,
+                    new CommentsService(_client));
+                _logger.LogDebug("Created ViewModel for PR #{Id}", pr.Id);
+                var window = new PullRequestDetailsWindow { DataContext = vm };
+                window.Show();
+            });
+
+            // Start background loading of diffs without blocking UI
+            await Dispatcher.UIThread.InvokeAsync(() => IsLoadingDiffs = true);
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
                 try
                 {
-                    await LoadCommentsAsync();
+                    var diffs = await _pullRequestService.GetPullRequestDiffAsync(
+                        _settings.Organization,
+                        _settings.Project,
+                        _settings.Repository,
+                        pr.Id,
+                        _settings.PersonalAccessToken,
+                        null,
+                        null);
+
+                    _logger.LogDebug("Retrieved {Count} diffs for PR #{Id}", diffs.Count, pr.Id);
+                    foreach (var diff in diffs)
+                    {
+                        _logger.LogDebug("  - {Path}: OldText={Old} bytes, NewText={New} bytes, Diff={Diff} bytes", diff.FilePath, diff.OldText?.Length ?? 0, diff.NewText?.Length ?? 0, diff.Diff?.Length ?? 0);
+                    }
+
+                    if (vm != null)
+                    {
+                        await vm.LoadDiffsAsync(diffs);
+                    }
                 }
                 catch (Exception ex)
                 {
-                    await ShowErrorMessage($"Failed to load comments: {ex.Message}");
-                    // Continue - we'll just show the PR with empty comments
+                    await ShowErrorMessage($"Failed to load diffs: {ex.Message}");
                 }
-
-                // Try to get diffs
-                var diffs = await _pullRequestService.GetPullRequestDiffAsync(
-                    _settings.Organization,
-                    _settings.Project,
-                    _settings.Repository,
-                    SelectedPullRequest.Id,
-                    _settings.PersonalAccessToken,
-                    null,
-                    null);
-
-                // Log information about the diffs
-                _logger.LogDebug("Retrieved {Count} diffs for PR #{Id}", diffs.Count, SelectedPullRequest.Id);
-                foreach (var diff in diffs)
+                finally
                 {
-                    _logger.LogDebug("  - {Path}: OldText={Old} bytes, NewText={New} bytes, Diff={Diff} bytes", diff.FilePath, diff.OldText?.Length ?? 0, diff.NewText?.Length ?? 0, diff.Diff?.Length ?? 0);
+                    await Dispatcher.UIThread.InvokeAsync(() => IsLoadingDiffs = false);
                 }
-
-                // Always show the window, even if we couldn't get diffs
-                _ = Dispatcher.UIThread.InvokeAsync(() =>
-                {
-                    var vm = new PullRequestDetailsWindowViewModel(
-                        SelectedPullRequest,
-                        _pullRequestService,
-                        _settings,
-                        Comments,
-                        diffs,
-                        new CommentsService(_client));
-                    _logger.LogDebug("Created ViewModel with {Count} FileDiffs", vm.FileDiffs.Count);
-                    var window = new PullRequestDetailsWindow { DataContext = vm };
-                    window.Show();
-                });
-            }
-            catch (Exception ex)
-            {
-                // If we get here, something really went wrong
-                await ShowErrorMessage($"Failed to open pull request details: {ex.Message}");
-            }
-            finally
-            {
-                IsLoadingDiffs = false;
-            }
+            });
         }, hasSelection);
 
         SaveViewCommand = ReactiveCommand.Create(() =>
@@ -468,45 +560,105 @@ public class MainWindowViewModel : ViewModelBase
             SelectedFilterView = view;
         });
 
-        OpenSettingsCommand = ReactiveCommand.Create(() =>
+        OpenSettingsCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
             {
                 var vm = new SettingsWindowViewModel(_settings);
                 var window = new Views.SettingsWindow { DataContext = vm };
-                _ = vm.LoadAsync();
-                var old = desktop.MainWindow;
-                desktop.MainWindow = window;
-                window.Show();
-                old?.Close();
+                vm.DialogWindow = window;
+                await vm.LoadAsync();
+                await window.ShowDialog(desktop.MainWindow);
             }
+        });
+
+        ResetFiltersCommand = ReactiveCommand.Create(() =>
+        {
+            FilterCriteria.Reset();
+            ApplyFiltersAndSorting();
+        });
+
+        ResetSortingCommand = ReactiveCommand.Create(() =>
+        {
+            SortCriteria.Reset();
+            ApplyFiltersAndSorting();
         });
     }
 
-    private void ApplyFilters()
+    private void ApplyFiltersAndSorting()
     {
         PullRequests.Clear();
-        var filtered = _allPullRequests.AsEnumerable();
-
-        if (!string.IsNullOrWhiteSpace(TitleFilter))
-            filtered = filtered.Where(pr => pr.Title.Contains(TitleFilter, StringComparison.OrdinalIgnoreCase));
-
-        if (!string.IsNullOrWhiteSpace(CreatorFilter))
-            filtered = filtered.Where(pr => pr.Creator.Contains(CreatorFilter, StringComparison.OrdinalIgnoreCase));
-
-        if (!string.IsNullOrWhiteSpace(SourceBranchFilter))
-            filtered = filtered.Where(pr => pr.SourceBranch.Contains(SourceBranchFilter, StringComparison.OrdinalIgnoreCase));
-
-        if (!string.IsNullOrWhiteSpace(TargetBranchFilter))
-            filtered = filtered.Where(pr => pr.TargetBranch.Contains(TargetBranchFilter, StringComparison.OrdinalIgnoreCase));
-
-        if (!string.IsNullOrWhiteSpace(StatusFilter) && StatusFilter != "All")
-            filtered = filtered.Where(pr => pr.Status.Equals(StatusFilter, StringComparison.OrdinalIgnoreCase));
-
+        
+        // Apply enhanced filtering and sorting
+        var filtered = _filterSortService.ApplyFiltersAndSorting(_allPullRequests, FilterCriteria, SortCriteria);
+        
         foreach (var pr in filtered)
         {
             PullRequests.Add(pr);
         }
+        
+        // Notify summary statistics properties have changed
+        this.RaisePropertyChanged(nameof(ActivePRCount));
+        this.RaisePropertyChanged(nameof(MyReviewPendingCount));
+        
+        // Save preferences after applying filters
+        SavePreferences();
+    }
+
+    private void UpdateAvailableOptions()
+    {
+        // Update available options for dropdowns
+        var statuses = _filterSortService.GetAvailableStatuses(_allPullRequests);
+        AvailableStatuses.Clear();
+        foreach (var status in statuses) AvailableStatuses.Add(status);
+        
+        var votes = _filterSortService.GetAvailableReviewerVotes(_allPullRequests);
+        AvailableReviewerVotes.Clear();
+        foreach (var vote in votes) AvailableReviewerVotes.Add(vote);
+        
+        var creators = _filterSortService.GetAvailableCreators(_allPullRequests);
+        AvailableCreators.Clear();
+        foreach (var creator in creators) AvailableCreators.Add(creator);
+        
+        var reviewers = _filterSortService.GetAvailableReviewers(_allPullRequests);
+        AvailableReviewers.Clear();
+        foreach (var reviewer in reviewers) AvailableReviewers.Add(reviewer);
+        
+        var sourceBranches = _filterSortService.GetAvailableBranches(_allPullRequests, true);
+        AvailableSourceBranches.Clear();
+        foreach (var branch in sourceBranches) AvailableSourceBranches.Add(branch);
+        
+        var targetBranches = _filterSortService.GetAvailableBranches(_allPullRequests, false);
+        AvailableTargetBranches.Clear();
+        foreach (var branch in targetBranches) AvailableTargetBranches.Add(branch);
+    }
+
+    private async void LoadPreferences()
+    {
+        if (FilterSortPreferencesStorage.TryLoad(out var preferences) && preferences != null)
+        {
+            _preferences = preferences;
+            
+            // Apply loaded preferences
+            FilterCriteria.FromData(_preferences.FilterCriteria);
+            SortCriteria.FromData(_preferences.SortCriteria);
+            
+            // Load saved views
+            SavedFilterViews.Clear();
+            foreach (var view in _preferences.SavedViews)
+            {
+                SavedFilterViews.Add(view);
+            }
+        }
+    }
+
+    private void SavePreferences()
+    {
+        _preferences.FilterCriteria = FilterCriteria.ToData();
+        _preferences.SortCriteria = SortCriteria.ToData();
+        _preferences.SavedViews = SavedFilterViews.ToList();
+        
+        FilterSortPreferencesStorage.Save(_preferences);
     }
 
     private void UpdateFilterOptions()
@@ -529,22 +681,4 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task LoadCommentsAsync()
-    {
-        if (SelectedPullRequest == null)
-            return;
-
-        var comments = await _client.GetPullRequestCommentsAsync(
-            _settings.Organization,
-            _settings.Project,
-            _settings.Repository,
-            SelectedPullRequest.Id,
-            _settings.PersonalAccessToken);
-
-        Comments.Clear();
-        foreach (var c in comments)
-        {
-            Comments.Add(c);
-        }
-    }
 }
