@@ -15,7 +15,7 @@ public class PullRequestFilteringSortingService
         IEnumerable<PullRequestInfo> pullRequests,
         FilterCriteria filterCriteria,
         SortCriteria sortCriteria,
-        IReadOnlyList<string> userGroupMemberships = null)
+        IReadOnlyList<string>? userGroupMemberships = null)
     {
         var filtered = ApplyFilters(pullRequests, filterCriteria, userGroupMemberships);
         return ApplySorting(filtered, sortCriteria);
@@ -24,9 +24,20 @@ public class PullRequestFilteringSortingService
     public IEnumerable<PullRequestInfo> ApplyFilters(
         IEnumerable<PullRequestInfo> pullRequests,
         FilterCriteria criteria,
-        IReadOnlyList<string> userGroupMemberships = null)
+        IReadOnlyList<string>? userGroupMemberships = null)
     {
         var filtered = pullRequests.AsEnumerable();
+
+        // Global search filter - must be applied first
+        if (!string.IsNullOrWhiteSpace(criteria.GlobalSearchText))
+        {
+            var searchLower = criteria.GlobalSearchText.ToLowerInvariant();
+            filtered = filtered.Where(pr => 
+                pr.Title.ToLowerInvariant().Contains(searchLower) ||
+                pr.Creator.ToLowerInvariant().Contains(searchLower) ||
+                pr.SourceBranch.ToLowerInvariant().Contains(searchLower) ||
+                pr.TargetBranch.ToLowerInvariant().Contains(searchLower));
+        }
 
         // Text-based filters
         if (!string.IsNullOrWhiteSpace(criteria.TitleFilter))

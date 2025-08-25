@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 
 namespace AzurePrOps.Models.FilteringAndSorting;
 
@@ -12,6 +13,7 @@ public class FilterCriteria : INotifyPropertyChanged
     private string _sourceBranchFilter = string.Empty;
     private string _targetBranchFilter = string.Empty;
     private string _reviewerFilter = string.Empty;
+    private string _globalSearchText = string.Empty;
 
     // Status and vote filters
     private List<string> _selectedStatuses = new();
@@ -36,6 +38,23 @@ public class FilterCriteria : INotifyPropertyChanged
 
     // Filter presets for different roles/workflows
     private string _workflowPreset = "All"; // All, TeamLead, Developer, Reviewer, QA
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected virtual void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
+    {
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    public string GlobalSearchText
+    {
+        get => _globalSearchText;
+        set
+        {
+            _globalSearchText = value;
+            OnPropertyChanged();
+        }
+    }
 
     public string TitleFilter
     {
@@ -214,6 +233,7 @@ public class FilterCriteria : INotifyPropertyChanged
         SourceBranchFilter = string.Empty;
         TargetBranchFilter = string.Empty;
         ReviewerFilter = string.Empty;
+        GlobalSearchText = string.Empty;
         SelectedStatuses.Clear();
         SelectedReviewerVotes.Clear();
         CreatedAfter = null;
@@ -224,52 +244,125 @@ public class FilterCriteria : INotifyPropertyChanged
         NeedsMyReviewOnly = false;
         EnableGroupsWithoutVoteFilter = false;
         SelectedGroupsWithoutVote.Clear();
-        WorkflowPreset = "All Pull Requests";
+        WorkflowPreset = "All";
     }
 
     public void ApplyWorkflowPreset(string preset)
     {
-        Reset();
         WorkflowPreset = preset;
         
-        switch (preset)
-        {
-            case "Team Lead Overview":
-                SelectedStatuses.AddRange(new[] { "Active", "Completed" });
-                CreatedAfter = DateTimeOffset.Now.AddDays(-30); // Last 30 days
-                break;
-            case "My Pull Requests":
-                MyPullRequestsOnly = true;
-                SelectedStatuses.AddRange(new[] { "Active", "Draft" });
-                break;
-            case "Need My Review":
-                NeedsMyReviewOnly = true;
-                SelectedStatuses.Add("Active");
-                break;
-            case "Ready for QA":
-                SelectedReviewerVotes.Add("Approved");
-                SelectedStatuses.Add("Active");
-                break;
-        }
+        // The actual implementation of workflow logic is handled in the ViewModel
+        // This method just stores the preset selection
     }
 
     public static string GetWorkflowPresetTooltip(string preset)
     {
         return preset switch
         {
-            "All Pull Requests" => "Shows all pull requests with no filters applied.",
-            "Team Lead Overview" => "Team Lead view: Shows Active & Completed PRs from the last 30 days for team oversight.",
-            "My Pull Requests" => "Developer view: Shows only your own Active & Draft pull requests.",
-            "Need My Review" => "Reviewer view: Shows Active pull requests that need your review.",
-            "Ready for QA" => "QA view: Shows Active pull requests that have been Approved and are ready for testing.",
+            "All Pull Requests" => "Show all pull requests without any filters",
+            "Team Lead Overview" => "Active PRs from the last 7 days for team oversight",
+            "My Pull Requests" => "Show only pull requests created by you",
+            "Need My Review" => "Active PRs where you haven't voted yet",
+            "Ready for QA" => "Active PRs that have been approved and are ready for QA",
+            "Awaiting Author" => "PRs waiting for author response",
+            "Recently Updated" => "PRs updated in the last 7 days, sorted by most recent",
+            "High Priority" => "PRs that need immediate attention",
             _ => "Custom workflow preset"
         };
     }
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    protected virtual void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
+    /// <summary>
+    /// Checks if the filter criteria matches the given pull request
+    /// </summary>
+    public bool Matches(AzurePrOps.AzureConnection.Models.PullRequestInfo pr)
     {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        // Global search - searches across title, creator, and branch names
+        if (!string.IsNullOrWhiteSpace(GlobalSearchText))
+        {
+            var searchLower = GlobalSearchText.ToLowerInvariant();
+            var matchesGlobal = pr.Title.ToLowerInvariant().Contains(searchLower) ||
+                               pr.Creator.ToLowerInvariant().Contains(searchLower) ||
+                               pr.SourceBranch.ToLowerInvariant().Contains(searchLower) ||
+                               pr.TargetBranch.ToLowerInvariant().Contains(searchLower);
+            
+            if (!matchesGlobal) return false;
+        }
+
+        // Text filters
+        if (!string.IsNullOrWhiteSpace(TitleFilter) && 
+            !pr.Title.Contains(TitleFilter, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(CreatorFilter) && 
+            !pr.Creator.Contains(CreatorFilter, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(SourceBranchFilter) && 
+            !pr.SourceBranch.Contains(SourceBranchFilter, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(TargetBranchFilter) && 
+            !pr.TargetBranch.Contains(TargetBranchFilter, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(ReviewerFilter))
+        {
+            var hasMatchingReviewer = pr.Reviewers.Any(r => 
+                r.DisplayName.Contains(ReviewerFilter, StringComparison.OrdinalIgnoreCase));
+            if (!hasMatchingReviewer) return false;
+        }
+
+        // Status filter
+        if (SelectedStatuses.Any() && !SelectedStatuses.Contains(pr.Status))
+            return false;
+
+        // Reviewer vote filter
+        if (SelectedReviewerVotes.Any())
+        {
+            var currentUserReviewer = pr.Reviewers.FirstOrDefault(r => r.Id == CurrentUserId);
+            var currentVote = currentUserReviewer?.Vote ?? "No vote";
+            
+            if (!SelectedReviewerVotes.Contains(currentVote))
+                return false;
+        }
+
+        // Date filters
+        if (CreatedAfter.HasValue && pr.Created < CreatedAfter.Value)
+            return false;
+
+        if (CreatedBefore.HasValue && pr.Created > CreatedBefore.Value)
+            return false;
+
+        // Draft filter
+        if (IsDraft.HasValue && pr.IsDraft != IsDraft.Value)
+            return false;
+
+        // Personal filters
+        if (MyPullRequestsOnly && pr.Creator != CurrentUserId)
+            return false;
+
+        if (AssignedToMeOnly && !pr.Reviewers.Any(r => r.Id == CurrentUserId))
+            return false;
+
+        if (NeedsMyReviewOnly)
+        {
+            var myReviewer = pr.Reviewers.FirstOrDefault(r => r.Id == CurrentUserId);
+            if (myReviewer == null || 
+                (!string.IsNullOrWhiteSpace(myReviewer.Vote) && myReviewer.Vote != "No vote"))
+                return false;
+        }
+
+        // Groups without vote filter
+        if (EnableGroupsWithoutVoteFilter && SelectedGroupsWithoutVote.Any())
+        {
+            var hasMatchingGroupWithoutVote = pr.Reviewers.Any(r => 
+                r.IsGroup && 
+                SelectedGroupsWithoutVote.Contains(r.DisplayName) &&
+                (string.IsNullOrWhiteSpace(r.Vote) || r.Vote == "No vote"));
+            
+            if (!hasMatchingGroupWithoutVote) return false;
+        }
+
+        return true;
     }
 }

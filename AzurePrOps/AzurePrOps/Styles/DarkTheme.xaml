@@ -7,6 +7,9 @@
         <SolidColorBrush Color="#1C5ED6" x:Key="PrimaryHoverBrush" />
         <SolidColorBrush Color="#1E2A3E" x:Key="PrimaryLightBrush" />
 
+        <!--  Accent color for highlights and draft badges - dark theme  -->
+        <SolidColorBrush Color="#A855F7" x:Key="AccentBrush" />
+
         <!--  Semantic colors adapted for dark theme  -->
         <SolidColorBrush Color="#3FB950" x:Key="SuccessBrush" />
         <SolidColorBrush Color="#0D2117" x:Key="SuccessLightBrush" />

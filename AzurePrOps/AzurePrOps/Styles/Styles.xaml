@@ -5,6 +5,9 @@
         <SolidColorBrush Color="#0860CA" x:Key="PrimaryHoverBrush" />
         <SolidColorBrush Color="#DDF4FF" x:Key="PrimaryLightBrush" />
 
+        <!--  Accent color for highlights and draft badges  -->
+        <SolidColorBrush Color="#8B5CF6" x:Key="AccentBrush" />
+
         <!--  Semantic colors  -->
         <SolidColorBrush Color="#1A7F37" x:Key="SuccessBrush" />
         <SolidColorBrush Color="#DCFFE4" x:Key="SuccessLightBrush" />

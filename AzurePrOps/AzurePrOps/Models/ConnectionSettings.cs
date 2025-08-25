@@ -10,9 +10,9 @@ public record ConnectionSettings(
     string ReviewerId,
     string EditorCommand = "code",
     bool UseGitDiff = true,
-    List<string> SelectedReviewerGroups = null,
+    List<string>? SelectedReviewerGroups = null,
     bool IncludeGroupReviews = true,
-    List<string> SelectedGroupsForFiltering = null,
+    List<string>? SelectedGroupsForFiltering = null,
     bool EnableGroupFiltering = false)
 {
     public List<string> SelectedReviewerGroups { get; init; } = SelectedReviewerGroups ?? new List<string>();
