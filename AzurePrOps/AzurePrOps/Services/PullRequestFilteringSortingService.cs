@@ -133,6 +133,26 @@ public class PullRequestFilteringSortingService
             });
         }
 
+        // Groups Without Vote filter - show PRs where selected groups are reviewers but haven't voted
+        if (criteria.EnableGroupsWithoutVoteFilter && criteria.SelectedGroupsWithoutVote.Any())
+        {
+            _logger.LogInformation("[DEBUG_LOG] Applying Groups Without Vote filter for {GroupCount} groups: {Groups}", 
+                criteria.SelectedGroupsWithoutVote.Count, string.Join(", ", criteria.SelectedGroupsWithoutVote));
+
+            filtered = filtered.Where(pr => 
+            {
+                // Check if any of the selected groups are reviewers on this PR and haven't voted
+                var hasGroupWithoutVote = pr.Reviewers.Any(reviewer =>
+                    reviewer.IsGroup && 
+                    criteria.SelectedGroupsWithoutVote.Contains(reviewer.DisplayName, StringComparer.OrdinalIgnoreCase) &&
+                    (reviewer.Vote.Equals("No vote", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(reviewer.Vote)));
+
+                _logger.LogInformation("[DEBUG_LOG] PR #{PrId} has group without vote: {HasGroupWithoutVote}", pr.Id, hasGroupWithoutVote);
+                
+                return hasGroupWithoutVote;
+            });
+        }
+
         return filtered;
     }
 

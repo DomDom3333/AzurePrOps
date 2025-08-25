@@ -151,6 +151,72 @@
                                     </ComboBox>
                                 </StackPanel>
                             </StackPanel>
+
+                            <!--  Group Filtering  -->
+                            <StackPanel Spacing="4">
+                                <TextBlock
+                                    FontSize="12"
+                                    FontWeight="Medium"
+                                    Text="Group Filtering" />
+                                <CheckBox
+                                    Content="Enable Group Filtering"
+                                    IsChecked="{Binding EnableGroupFiltering}"
+                                    ToolTip.Tip="Filter PRs to only show those where selected groups are reviewers" />
+                                <StackPanel IsVisible="{Binding EnableGroupFiltering}" Spacing="4">
+                                    <TextBlock
+                                        FontSize="10"
+                                        Foreground="{StaticResource TextSecondaryBrush}"
+                                        Text="{Binding SelectedGroupsText}"
+                                        TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <Button
+                                            Classes="SecondaryButton"
+                                            Command="{Binding SelectGroupsCommand}"
+                                            Content="Select Groups"
+                                            FontSize="10"
+                                            Padding="6,2" />
+                                        <Button
+                                            Classes="SecondaryButton"
+                                            Command="{Binding ClearGroupSelectionCommand}"
+                                            Content="Clear"
+                                            FontSize="10"
+                                            Padding="6,2" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!--  Groups Without Vote Filtering  -->
+                            <StackPanel Spacing="4">
+                                <TextBlock
+                                    FontSize="12"
+                                    FontWeight="Medium"
+                                    Text="Groups Without Vote" />
+                                <CheckBox
+                                    Content="Show PRs with Groups Pending Vote"
+                                    IsChecked="{Binding EnableGroupsWithoutVoteFilter}"
+                                    ToolTip.Tip="Filter PRs to only show those where selected groups are reviewers but haven't voted yet" />
+                                <StackPanel IsVisible="{Binding EnableGroupsWithoutVoteFilter}" Spacing="4">
+                                    <TextBlock
+                                        FontSize="10"
+                                        Foreground="{StaticResource TextSecondaryBrush}"
+                                        Text="{Binding SelectedGroupsWithoutVoteText}"
+                                        TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <Button
+                                            Classes="SecondaryButton"
+                                            Command="{Binding SelectGroupsWithoutVoteCommand}"
+                                            Content="Select Groups"
+                                            FontSize="10"
+                                            Padding="6,2" />
+                                        <Button
+                                            Classes="SecondaryButton"
+                                            Command="{Binding ClearGroupsWithoutVoteSelectionCommand}"
+                                            Content="Clear"
+                                            FontSize="10"
+                                            Padding="6,2" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
 

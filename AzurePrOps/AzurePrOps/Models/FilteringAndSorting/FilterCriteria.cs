@@ -30,6 +30,10 @@ public class FilterCriteria : INotifyPropertyChanged
     private bool _needsMyReviewOnly;
     private string _currentUserId = string.Empty;
 
+    // Group filtering for "no vote" scenario
+    private bool _enableGroupsWithoutVoteFilter;
+    private List<string> _selectedGroupsWithoutVote = new();
+
     // Filter presets for different roles/workflows
     private string _workflowPreset = "All"; // All, TeamLead, Developer, Reviewer, QA
 
@@ -173,6 +177,26 @@ public class FilterCriteria : INotifyPropertyChanged
         }
     }
 
+    public bool EnableGroupsWithoutVoteFilter
+    {
+        get => _enableGroupsWithoutVoteFilter;
+        set
+        {
+            _enableGroupsWithoutVoteFilter = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public List<string> SelectedGroupsWithoutVote
+    {
+        get => _selectedGroupsWithoutVote;
+        set
+        {
+            _selectedGroupsWithoutVote = value;
+            OnPropertyChanged();
+        }
+    }
+
     public string WorkflowPreset
     {
         get => _workflowPreset;
@@ -198,6 +222,8 @@ public class FilterCriteria : INotifyPropertyChanged
         MyPullRequestsOnly = false;
         AssignedToMeOnly = false;
         NeedsMyReviewOnly = false;
+        EnableGroupsWithoutVoteFilter = false;
+        SelectedGroupsWithoutVote.Clear();
         WorkflowPreset = "All Pull Requests";
     }
 

@@ -1,0 +1,133 @@
+<Window
+    Height="500"
+    MinHeight="400"
+    MinWidth="300"
+    Title="Select Groups"
+    Width="400"
+    WindowStartupLocation="CenterOwner"
+    mc:Ignorable="d"
+    x:Class="AzurePrOps.Views.GroupSelectionWindow"
+    x:DataType="vm:GroupSelectionViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:AzurePrOps.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Design.DataContext>
+        <vm:GroupSelectionViewModel />
+    </Design.DataContext>
+
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!--  Header  -->
+        <Border
+            Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Grid.Row="0"
+            Padding="20">
+            <StackPanel Spacing="8">
+                <TextBlock
+                    FontSize="18"
+                    FontWeight="Bold"
+                    Text="Select Groups for Filtering" />
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{DynamicResource TextSecondaryBrush}"
+                    Text="Choose which groups you want to filter pull requests by. Only PRs where these groups are reviewers will be shown."
+                    TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <!--  Group List  -->
+        <ScrollViewer Grid.Row="1" Margin="20">
+            <StackPanel Spacing="16">
+                <!--  Quick Actions  -->
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <Button
+                        Classes="SecondaryButton"
+                        Command="{Binding SelectAllCommand}"
+                        Content="Select All"
+                        FontSize="12"
+                        Padding="8,4" />
+                    <Button
+                        Classes="SecondaryButton"
+                        Command="{Binding SelectNoneCommand}"
+                        Content="Select None"
+                        FontSize="12"
+                        Padding="8,4" />
+                </StackPanel>
+
+                <!--  Groups  -->
+                <ItemsControl ItemsSource="{Binding Groups}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border
+                                Background="{DynamicResource SurfaceBrush}"
+                                BorderBrush="{DynamicResource BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Margin="0,2"
+                                Padding="12,8">
+                                <CheckBox
+                                    Content="{Binding Name}"
+                                    FontSize="14"
+                                    IsChecked="{Binding IsSelected}" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!--  Empty State  -->
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    IsVisible="{Binding !Groups.Count}"
+                    Spacing="12"
+                    VerticalAlignment="Center">
+                    <TextBlock
+                        FontSize="36"
+                        HorizontalAlignment="Center"
+                        Opacity="0.3"
+                        Text="👥" />
+                    <TextBlock
+                        FontSize="16"
+                        FontWeight="SemiBold"
+                        HorizontalAlignment="Center"
+                        Text="No Groups Available" />
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{DynamicResource TextSecondaryBrush}"
+                        HorizontalAlignment="Center"
+                        Text="No groups were found in the current pull requests."
+                        TextAlignment="Center" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!--  Footer Buttons  -->
+        <Border
+            Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,1,0,0"
+            Grid.Row="2"
+            Padding="20">
+            <StackPanel
+                HorizontalAlignment="Right"
+                Orientation="Horizontal"
+                Spacing="12">
+                <Button
+                    Classes="SecondaryButton"
+                    Command="{Binding CancelCommand}"
+                    Content="Cancel"
+                    MinWidth="80"
+                    Name="CancelButton" />
+                <Button
+                    Classes="PrimaryButton"
+                    Command="{Binding ConfirmCommand}"
+                    Content="OK"
+                    MinWidth="80"
+                    Name="ConfirmButton" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
