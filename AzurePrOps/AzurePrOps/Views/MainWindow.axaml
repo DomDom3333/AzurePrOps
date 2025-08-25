@@ -146,6 +146,11 @@
                                     Content="Assigned to Me"
                                     FontWeight="Medium"
                                     IsChecked="{Binding ShowAssignedToMeOnly}" />
+                                <CheckBox
+                                    Content="Exclude My PRs"
+                                    FontWeight="Medium"
+                                    IsChecked="{Binding ExcludeMyPullRequests}"
+                                    ToolTip.Tip="Hide PRs created by me to focus on reviews" />
                             </StackPanel>
 
                             <!--  Quick Action Buttons  -->
@@ -509,11 +514,9 @@
 
                 <!--  Results Summary  -->
                 <Border
-                    Background="{DynamicResource SurfaceBrush}"
-                    BorderBrush="{DynamicResource BorderBrush}"
-                    BorderThickness="0,0,0,1"
+                    Classes="Card"
                     Grid.Row="0"
-                    Padding="16,12">
+                    Margin="0,0,0,16">
                     <Grid ColumnDefinitions="*,Auto">
                         <StackPanel Orientation="Horizontal" Spacing="16">
                             <TextBlock FontWeight="SemiBold" Text="{Binding PullRequests.Count, StringFormat='Showing {0} pull requests'}" />
@@ -540,13 +543,7 @@
                     SelectedItem="{Binding SelectedPullRequest}">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="model:PullRequestInfo">
-                            <Border
-                                Background="{DynamicResource CardBrush}"
-                                BorderBrush="{DynamicResource BorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Margin="8"
-                                Padding="16">
+                            <Border Classes="Card" Margin="8">
                                 <Grid ColumnDefinitions="*,Auto">
                                     <StackPanel
                                         Grid.Column="0"

@@ -75,12 +75,36 @@ public class PullRequestFilteringSortingService
         if (criteria.IsDraft.HasValue)
             filtered = filtered.Where(pr => pr.IsDraft == criteria.IsDraft.Value);
 
-        // User-specific filters
+        // User-specific filters with comprehensive user identification
         if (criteria.MyPullRequestsOnly && !string.IsNullOrWhiteSpace(criteria.CurrentUserId))
-            filtered = filtered.Where(pr => pr.Creator.Equals(criteria.CurrentUserId, StringComparison.OrdinalIgnoreCase));
+        {
+            _logger.LogInformation("[DEBUG_LOG] MyPullRequestsOnly filter - CurrentUserId: {CurrentUserId}", criteria.CurrentUserId);
+            
+            // Log some sample PR creators to understand the format
+            var sampleCreators = pullRequests.Take(3).Select(pr => pr.Creator).ToList();
+            _logger.LogInformation("[DEBUG_LOG] Sample PR creators: {Creators}", string.Join(", ", sampleCreators));
+            
+            // Multiple strategies to identify current user's PRs
+            filtered = filtered.Where(pr => IsCurrentUserPR(pr, criteria, pullRequests));
+            
+            var filteredCount = filtered.Count();
+            _logger.LogInformation("[DEBUG_LOG] MyPullRequestsOnly filter result count: {Count}", filteredCount);
+        }
 
         if (criteria.AssignedToMeOnly && !string.IsNullOrWhiteSpace(criteria.CurrentUserId))
             filtered = filtered.Where(pr => pr.Reviewers.Any(r => r.Id.Equals(criteria.CurrentUserId, StringComparison.OrdinalIgnoreCase)));
+
+        // Exclude my pull requests filter - helps focus on PRs that need reviewing
+        if (criteria.ExcludeMyPullRequests && !string.IsNullOrWhiteSpace(criteria.CurrentUserId))
+        {
+            _logger.LogInformation("[DEBUG_LOG] ExcludeMyPullRequests filter - CurrentUserId: {CurrentUserId}", criteria.CurrentUserId);
+            
+            // Multiple strategies to identify current user's PRs
+            filtered = filtered.Where(pr => !IsCurrentUserPR(pr, criteria, pullRequests));
+            
+            var filteredCount = filtered.Count();
+            _logger.LogInformation("[DEBUG_LOG] ExcludeMyPullRequests filter result count: {Count}", filteredCount);
+        }
 
         if (criteria.NeedsMyReviewOnly && !string.IsNullOrWhiteSpace(criteria.CurrentUserId))
         {
@@ -308,5 +332,124 @@ public class PullRequestFilteringSortingService
         return source 
             ? pullRequests.Select(pr => pr.SourceBranch).Distinct().OrderBy(b => b).ToList()
             : pullRequests.Select(pr => pr.TargetBranch).Distinct().OrderBy(b => b).ToList();
+    }
+
+    /// <summary>
+    /// Comprehensive method to determine if a PR belongs to the current user
+    /// Uses the CreatorId field for direct ID matching with fallback strategies
+    /// </summary>
+    private bool IsCurrentUserPR(PullRequestInfo pr, FilterCriteria criteria, IEnumerable<PullRequestInfo> allPullRequests)
+    {
+        _logger.LogInformation("[DEBUG_LOG] Checking if PR #{PrId} '{Title}' belongs to user {UserId}", pr.Id, pr.Title, criteria.CurrentUserId);
+        _logger.LogInformation("[DEBUG_LOG] PR Creator: '{Creator}', CreatorId: '{CreatorId}'", pr.Creator, pr.CreatorId);
+        _logger.LogInformation("[DEBUG_LOG] Configured UserDisplayName: '{UserDisplayName}'", criteria.UserDisplayName);
+        
+        // Strategy 1: Direct CreatorId match (most reliable)
+        if (!string.IsNullOrWhiteSpace(pr.CreatorId) && pr.CreatorId.Equals(criteria.CurrentUserId, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogInformation("[DEBUG_LOG] Match found - Direct CreatorId match");
+            return true;
+        }
+        
+        // Strategy 2: Use configured UserDisplayName if available
+        if (!string.IsNullOrWhiteSpace(criteria.UserDisplayName))
+        {
+            _logger.LogInformation("[DEBUG_LOG] Using configured UserDisplayName: '{UserDisplayName}'", criteria.UserDisplayName);
+            if (pr.Creator.Equals(criteria.UserDisplayName, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("[DEBUG_LOG] Match found - Configured display name match with creator");
+                return true;
+            }
+        }
+        
+        // Strategy 3: Direct ID match with creator (in case Creator field stores IDs)
+        if (pr.Creator.Equals(criteria.CurrentUserId, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogInformation("[DEBUG_LOG] Match found - Direct ID match with creator");
+            return true;
+        }
+        
+        // Strategy 4: Find current user's display name from reviewer data and match with creator
+        var currentUserDisplayName = allPullRequests
+            .SelectMany(p => p.Reviewers)
+            .Where(r => !r.IsGroup && r.Id.Equals(criteria.CurrentUserId, StringComparison.OrdinalIgnoreCase))
+            .Select(r => r.DisplayName)
+            .FirstOrDefault();
+            
+        if (!string.IsNullOrWhiteSpace(currentUserDisplayName))
+        {
+            _logger.LogInformation("[DEBUG_LOG] Found current user display name from reviewer data: '{DisplayName}'", currentUserDisplayName);
+            if (pr.Creator.Equals(currentUserDisplayName, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("[DEBUG_LOG] Match found - Reviewer display name match with creator");
+                return true;
+            }
+        }
+        else
+        {
+            _logger.LogInformation("[DEBUG_LOG] Could not find current user display name in reviewer data - trying alternative approaches");
+            
+            // Log all unique reviewer IDs and names to help debug
+            var allReviewers = allPullRequests
+                .SelectMany(p => p.Reviewers)
+                .Where(r => !r.IsGroup)
+                .GroupBy(r => r.Id)
+                .Select(g => new { Id = g.Key, DisplayName = g.First().DisplayName })
+                .ToList();
+            
+            _logger.LogInformation("[DEBUG_LOG] All reviewer IDs found: {ReviewerCount} unique reviewers", allReviewers.Count);
+            foreach (var reviewer in allReviewers.Take(10)) // Log first 10 to avoid spam
+            {
+                _logger.LogInformation("[DEBUG_LOG] Reviewer: '{DisplayName}' (ID: '{Id}')", reviewer.DisplayName, reviewer.Id);
+            }
+        }
+        
+        // Strategy 5: Check if current user ID appears anywhere in the creator string (email scenarios)
+        if (criteria.CurrentUserId.Contains("@") && pr.Creator.Contains(criteria.CurrentUserId, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogInformation("[DEBUG_LOG] Match found - Email substring match");
+            return true;
+        }
+        
+        // Strategy 6: Try to extract name parts and match
+        if (criteria.CurrentUserId.Contains("@"))
+        {
+            var emailPrefix = criteria.CurrentUserId.Split('@')[0];
+            if (pr.Creator.Contains(emailPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("[DEBUG_LOG] Match found - Email prefix match with '{EmailPrefix}'", emailPrefix);
+                return true;
+            }
+        }
+        
+        // Strategy 7: Enhanced partial name matching - try common name formats
+        if (!string.IsNullOrWhiteSpace(criteria.UserDisplayName))
+        {
+            var userNameParts = criteria.UserDisplayName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (userNameParts.Length >= 2)
+            {
+                var firstName = userNameParts[0];
+                var lastName = userNameParts[^1]; // Last element
+                
+                // Check if creator contains both first and last name
+                if (pr.Creator.Contains(firstName, StringComparison.OrdinalIgnoreCase) && 
+                    pr.Creator.Contains(lastName, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation("[DEBUG_LOG] Match found - Partial name match with '{FirstName}' and '{LastName}'", firstName, lastName);
+                    return true;
+                }
+                
+                // Check common enterprise format: "LASTNAME Firstname"
+                var enterpriseFormat = $"{lastName.ToUpper()} {firstName}";
+                if (pr.Creator.Equals(enterpriseFormat, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation("[DEBUG_LOG] Match found - Enterprise format match with '{EnterpriseFormat}'", enterpriseFormat);
+                    return true;
+                }
+            }
+        }
+        
+        _logger.LogInformation("[DEBUG_LOG] No match found for PR #{PrId} - this may indicate the user never appears as a reviewer or the PR is not theirs", pr.Id);
+        return false;
     }
 }

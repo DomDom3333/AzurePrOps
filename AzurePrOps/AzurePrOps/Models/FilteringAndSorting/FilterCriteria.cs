@@ -30,7 +30,9 @@ public class FilterCriteria : INotifyPropertyChanged
     private bool _myPullRequestsOnly;
     private bool _assignedToMeOnly;
     private bool _needsMyReviewOnly;
+    private bool _excludeMyPullRequests;
     private string _currentUserId = string.Empty;
+    private string _userDisplayName = string.Empty;
 
     // Group filtering for "no vote" scenario
     private bool _enableGroupsWithoutVoteFilter;
@@ -186,12 +188,32 @@ public class FilterCriteria : INotifyPropertyChanged
         }
     }
 
+    public bool ExcludeMyPullRequests
+    {
+        get => _excludeMyPullRequests;
+        set
+        {
+            _excludeMyPullRequests = value;
+            OnPropertyChanged();
+        }
+    }
+
     public string CurrentUserId
     {
         get => _currentUserId;
         set
         {
             _currentUserId = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public string UserDisplayName
+    {
+        get => _userDisplayName;
+        set
+        {
+            _userDisplayName = value;
             OnPropertyChanged();
         }
     }
@@ -242,6 +264,7 @@ public class FilterCriteria : INotifyPropertyChanged
         MyPullRequestsOnly = false;
         AssignedToMeOnly = false;
         NeedsMyReviewOnly = false;
+        ExcludeMyPullRequests = false;
         EnableGroupsWithoutVoteFilter = false;
         SelectedGroupsWithoutVote.Clear();
         WorkflowPreset = "All";
@@ -351,6 +374,10 @@ public class FilterCriteria : INotifyPropertyChanged
                 (!string.IsNullOrWhiteSpace(myReviewer.Vote) && myReviewer.Vote != "No vote"))
                 return false;
         }
+
+        // Exclude my pull requests filter
+        if (ExcludeMyPullRequests && pr.Creator == CurrentUserId)
+            return false;
 
         // Groups without vote filter
         if (EnableGroupsWithoutVoteFilter && SelectedGroupsWithoutVote.Any())

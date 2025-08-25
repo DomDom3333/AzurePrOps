@@ -86,8 +86,14 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
                     var title = pr.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? string.Empty : string.Empty;
 
                     var createdBy = string.Empty;
-                    if (pr.TryGetProperty("createdBy", out var createdByProp) && createdByProp.TryGetProperty("displayName", out var displayNameProp))
-                        createdBy = displayNameProp.GetString() ?? string.Empty;
+                    var createdById = string.Empty;
+                    if (pr.TryGetProperty("createdBy", out var createdByProp))
+                    {
+                        if (createdByProp.TryGetProperty("displayName", out var displayNameProp))
+                            createdBy = displayNameProp.GetString() ?? string.Empty;
+                        if (createdByProp.TryGetProperty("id", out var creatorIdProp))
+                            createdById = creatorIdProp.GetString() ?? string.Empty;
+                    }
 
                     var sourceBranch = pr.TryGetProperty("sourceRefName", out var sourceBranchProp) ? sourceBranchProp.GetString() ?? string.Empty : string.Empty;
                     var targetBranch = pr.TryGetProperty("targetRefName", out var targetBranchProp) ? targetBranchProp.GetString() ?? string.Empty : string.Empty;
@@ -143,7 +149,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
                         }
                     }
 
-                    result.Add(new PullRequestInfo(id, title, createdBy, createdDate, status, reviewers, sourceBranch, targetBranch, url, isDraft));
+                    result.Add(new PullRequestInfo(id, title, createdBy, createdById, createdDate, status, reviewers, sourceBranch, targetBranch, url, isDraft));
                 }
                 catch (Exception ex)
                 {
@@ -916,7 +922,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
             // The token might be valid but we just don't have access to the specific resources
             return Guid.NewGuid().ToString();
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex)
         {
             // This catches network errors, which are different from authorization errors
             throw new Exception($"Network error while validating Personal Access Token: {ex.Message}", ex);
@@ -1372,5 +1378,90 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         using var response = await _httpClient.SendAsync(request);
         NotifyAuthIfNeeded(response);
         response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<UserInfo> GetCurrentUserAsync(string organization, string personalAccessToken)
+    {
+        if (string.IsNullOrWhiteSpace(organization) || string.IsNullOrWhiteSpace(personalAccessToken))
+        {
+            _logger.LogWarning("Organization or personal access token is null or empty");
+            return UserInfo.Empty;
+        }
+
+        var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+        
+        try
+        {
+            // Try the profile API first (most reliable for getting current user info)
+            var profileRequestUri = "https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=6.0";
+            
+            using var profileRequest = new HttpRequestMessage(HttpMethod.Get, profileRequestUri);
+            profileRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+            using var profileResponse = await _httpClient.SendAsync(profileRequest);
+            
+            if (profileResponse.IsSuccessStatusCode)
+            {
+                using var profileStream = await profileResponse.Content.ReadAsStreamAsync();
+                var profileJson = await JsonDocument.ParseAsync(profileStream);
+
+                var id = profileJson.RootElement.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? string.Empty : string.Empty;
+                var displayName = profileJson.RootElement.TryGetProperty("displayName", out var displayNameProp) ? displayNameProp.GetString() ?? string.Empty : string.Empty;
+                var email = profileJson.RootElement.TryGetProperty("emailAddress", out var emailProp) ? emailProp.GetString() ?? string.Empty : string.Empty;
+                var uniqueName = profileJson.RootElement.TryGetProperty("publicAlias", out var aliasProp) ? aliasProp.GetString() ?? string.Empty : email;
+
+                if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(displayName))
+                {
+                    _logger.LogInformation("Successfully retrieved user profile: {DisplayName} ({Id})", displayName, id);
+                    return new UserInfo(id, displayName, email, uniqueName);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get user profile from profile API");
+        }
+
+        try
+        {
+            // Fallback: Try the connection data API
+            var encodedOrg = Uri.EscapeDataString(organization);
+            var connectionRequestUri = $"https://dev.azure.com/{encodedOrg}/_apis/connectionData?api-version=6.0";
+            
+            using var connectionRequest = new HttpRequestMessage(HttpMethod.Get, connectionRequestUri);
+            connectionRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+            using var connectionResponse = await _httpClient.SendAsync(connectionRequest);
+            NotifyAuthIfNeeded(connectionResponse);
+            
+            if (connectionResponse.IsSuccessStatusCode)
+            {
+                using var connectionStream = await connectionResponse.Content.ReadAsStreamAsync();
+                var connectionJson = await JsonDocument.ParseAsync(connectionStream);
+
+                if (connectionJson.RootElement.TryGetProperty("authenticatedUser", out var userProp))
+                {
+                    var id = userProp.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? string.Empty : string.Empty;
+                    var displayName = userProp.TryGetProperty("displayName", out var displayNameProp) ? displayNameProp.GetString() ?? string.Empty : string.Empty;
+                    var uniqueName = userProp.TryGetProperty("uniqueName", out var uniqueNameProp) ? uniqueNameProp.GetString() ?? string.Empty : string.Empty;
+                    
+                    // Extract email from uniqueName if it contains an email format
+                    var email = uniqueName.Contains("@") ? uniqueName : string.Empty;
+
+                    if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(displayName))
+                    {
+                        _logger.LogInformation("Successfully retrieved user info from connection data: {DisplayName} ({Id})", displayName, id);
+                        return new UserInfo(id, displayName, email, uniqueName);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get user info from connection data API");
+        }
+
+        _logger.LogWarning("Could not retrieve current user information from Azure DevOps");
+        return UserInfo.Empty;
     }
 }

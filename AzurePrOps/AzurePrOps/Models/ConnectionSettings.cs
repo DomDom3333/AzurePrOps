@@ -13,7 +13,8 @@ public record ConnectionSettings(
     List<string>? SelectedReviewerGroups = null,
     bool IncludeGroupReviews = true,
     List<string>? SelectedGroupsForFiltering = null,
-    bool EnableGroupFiltering = false)
+    bool EnableGroupFiltering = false,
+    string UserDisplayName = "")
 {
     public List<string> SelectedReviewerGroups { get; init; } = SelectedReviewerGroups ?? new List<string>();
     public List<string> SelectedGroupsForFiltering { get; init; } = SelectedGroupsForFiltering ?? new List<string>();

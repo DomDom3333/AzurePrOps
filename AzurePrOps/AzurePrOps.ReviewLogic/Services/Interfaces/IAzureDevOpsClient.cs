@@ -4,6 +4,8 @@ namespace AzurePrOps.ReviewLogic.Services;
 
 public interface IAzureDevOpsClient
 {
+    void SetErrorHandler(Action<string> handler);
+    
     Task<IReadOnlyList<CommentThread>> GetPullRequestThreadsAsync(
         string organization,
         string project,
@@ -56,6 +58,42 @@ public interface IAzureDevOpsClient
         string reviewerId,
         int vote,
         string personalAccessToken);
+
+    Task ApprovePullRequestAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        string reviewerId,
+        string personalAccessToken);
+
+    Task ApproveWithSuggestionsAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        string reviewerId,
+        string personalAccessToken);
+
+    Task RejectPullRequestAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        string reviewerId,
+        string personalAccessToken);
+
+    Task PostPullRequestCommentAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        string content,
+        string personalAccessToken);
+
+    Task<IReadOnlyList<string>> GetUserGroupMembershipsAsync(string organization, string personalAccessToken);
+
+    Task<string> GetUserIdAsync(string personalAccessToken);
 
     Task SetPullRequestDraftAsync(
         string organization,

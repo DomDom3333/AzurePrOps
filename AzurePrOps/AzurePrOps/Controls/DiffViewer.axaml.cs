@@ -99,6 +99,12 @@ namespace AzurePrOps.Controls
         private Dictionary<int, CommentThread> _threadsByLine = new();
         private Popup? _commentPopup;
 
+        // Line alignment support for better diff comparison
+        private Dictionary<int, int> _lineMapping = new(); // Maps old editor lines to new editor lines
+        private Dictionary<int, int> _reverseLineMapping = new(); // Maps new editor lines to old editor lines
+        private bool _lineAlignmentEnabled = true;
+        private ToggleButton? _lineAlignmentButton;
+
         static DiffViewer()
         {
             ViewModeProperty.Changed.AddClassHandler<DiffViewer>((x, e) =>
@@ -314,6 +320,7 @@ namespace AzurePrOps.Controls
             _ignoreNewlinesButton = this.FindControl<ToggleButton>("PART_IgnoreNewlinesButton");
             _wrapLinesButton = this.FindControl<ToggleButton>("PART_WrapLinesButton");
             var copyDiffButton = this.FindControl<Button>("PART_CopyDiffButton");
+            _lineAlignmentButton = this.FindControl<ToggleButton>("PART_LineAlignmentButton");
 
             // Wire up events with enhanced feedback
             if (_searchBox != null)
@@ -473,6 +480,17 @@ namespace AzurePrOps.Controls
                 {
                     CopyDiff();
                     UpdateStatus("Copied diff to clipboard");
+                };
+            }
+
+            if (_lineAlignmentButton != null)
+            {
+                _lineAlignmentButton.IsChecked = _lineAlignmentEnabled;
+                _lineAlignmentButton.IsCheckedChanged += (_, __) =>
+                {
+                    _lineAlignmentEnabled = _lineAlignmentButton.IsChecked == true;
+                    Render();
+                    UpdateStatus(_lineAlignmentEnabled ? "Line alignment enabled" : "Line alignment disabled");
                 };
             }
         }
@@ -723,6 +741,18 @@ namespace AzurePrOps.Controls
                     _newLineTypes = newMap;
                     // For backward compatibility some features use _lineTypes; use new side
                     _lineTypes = newMap;
+
+                    // Build line alignment mappings for better diff comparison
+                    if (_lineAlignmentEnabled)
+                    {
+                        BuildLineAlignmentMappings(oldMap, newMap);
+                    }
+                    else
+                    {
+                        // Clear mappings when alignment is disabled
+                        _lineMapping.Clear();
+                        _reverseLineMapping.Clear();
+                    }
 
                     ApplyDiffVisualization(oldMap, newMap, oldWord, newWord);
 
@@ -1251,8 +1281,347 @@ namespace AzurePrOps.Controls
                 return;
 
             _syncScrollInProgress = true;
-            target.Offset = target.Offset.WithY(source.Offset.Y);
+            
+            if (_lineAlignmentEnabled && _lineMapping.Count > 0)
+            {
+                // Use intelligent line alignment for scroll synchronization
+                SyncScrollWithLineAlignment(source, target);
+            }
+            else
+            {
+                // Fall back to simple position matching
+                target.Offset = target.Offset.WithY(source.Offset.Y);
+            }
+            
             _syncScrollInProgress = false;
+        }
+
+        /// <summary>
+        /// Builds line alignment mappings between old and new editors for better diff comparison.
+        /// This creates mappings that align corresponding changed lines for easier review.
+        /// </summary>
+        private void BuildLineAlignmentMappings(Dictionary<int, DiffLineType> oldMap, Dictionary<int, DiffLineType> newMap)
+        {
+            _lineMapping.Clear();
+            _reverseLineMapping.Clear();
+
+            _logger.LogDebug("Building line alignment mappings. Old lines: {OldCount}, New lines: {NewCount}", 
+                oldMap.Count, newMap.Count);
+
+            // Get lists of changed lines in each editor
+            var oldChangedLines = oldMap.Where(kv => kv.Value != DiffLineType.Unchanged)
+                                       .Select(kv => kv.Key)
+                                       .OrderBy(line => line)
+                                       .ToList();
+
+            var newChangedLines = newMap.Where(kv => kv.Value != DiffLineType.Unchanged)
+                                       .Select(kv => kv.Key)
+                                       .OrderBy(line => line)
+                                       .ToList();
+
+            // Strategy 1: Align modified lines that correspond to each other
+            AlignModifiedLines(oldMap, newMap);
+
+            // Strategy 2: Align consecutive change blocks
+            AlignChangeBlocks(oldChangedLines, newChangedLines, oldMap, newMap);
+
+            // Strategy 3: Fill in gaps with proportional alignment for unchanged regions
+            FillUnchangedRegions(oldMap, newMap);
+
+            _logger.LogDebug("Line alignment completed. Created {MappingCount} mappings", _lineMapping.Count);
+        }
+
+        /// <summary>
+        /// Aligns modified lines that likely correspond to each other based on position and content.
+        /// </summary>
+        private void AlignModifiedLines(Dictionary<int, DiffLineType> oldMap, Dictionary<int, DiffLineType> newMap)
+        {
+            var oldModified = oldMap.Where(kv => kv.Value == DiffLineType.Modified)
+                                   .Select(kv => kv.Key)
+                                   .OrderBy(line => line)
+                                   .ToList();
+
+            var newModified = newMap.Where(kv => kv.Value == DiffLineType.Modified)
+                                   .Select(kv => kv.Key)
+                                   .OrderBy(line => line)
+                                   .ToList();
+
+            // Simple 1:1 alignment of modified lines based on order
+            int minCount = Math.Min(oldModified.Count, newModified.Count);
+            for (int i = 0; i < minCount; i++)
+            {
+                int oldLine = oldModified[i];
+                int newLine = newModified[i];
+                
+                _lineMapping[oldLine] = newLine;
+                _reverseLineMapping[newLine] = oldLine;
+            }
+        }
+
+        /// <summary>
+        /// Aligns consecutive blocks of changes to improve visual correspondence.
+        /// </summary>
+        private void AlignChangeBlocks(List<int> oldChangedLines, List<int> newChangedLines, 
+                                     Dictionary<int, DiffLineType> oldMap, Dictionary<int, DiffLineType> newMap)
+        {
+            if (oldChangedLines.Count == 0 || newChangedLines.Count == 0) return;
+
+            // Group consecutive lines into blocks
+            var oldBlocks = GroupConsecutiveLines(oldChangedLines);
+            var newBlocks = GroupConsecutiveLines(newChangedLines);
+
+            // Align blocks based on position and size
+            for (int i = 0; i < Math.Min(oldBlocks.Count, newBlocks.Count); i++)
+            {
+                var oldBlock = oldBlocks[i];
+                var newBlock = newBlocks[i];
+
+                // Align the start of each block
+                if (!_lineMapping.ContainsKey(oldBlock.start))
+                {
+                    _lineMapping[oldBlock.start] = newBlock.start;
+                    _reverseLineMapping[newBlock.start] = oldBlock.start;
+                }
+
+                // If blocks are similar in size, align them proportionally
+                if (Math.Abs(oldBlock.length - newBlock.length) <= 2)
+                {
+                    AlignBlocksProportionally(oldBlock, newBlock);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Groups consecutive line numbers into blocks for better alignment.
+        /// </summary>
+        private List<(int start, int length)> GroupConsecutiveLines(List<int> lines)
+        {
+            var blocks = new List<(int start, int length)>();
+            if (lines.Count == 0) return blocks;
+
+            int blockStart = lines[0];
+            int blockLength = 1;
+
+            for (int i = 1; i < lines.Count; i++)
+            {
+                if (lines[i] == lines[i - 1] + 1)
+                {
+                    // Consecutive line, extend current block
+                    blockLength++;
+                }
+                else
+                {
+                    // Gap found, end current block and start new one
+                    blocks.Add((blockStart, blockLength));
+                    blockStart = lines[i];
+                    blockLength = 1;
+                }
+            }
+
+            // Add the final block
+            blocks.Add((blockStart, blockLength));
+            return blocks;
+        }
+
+        /// <summary>
+        /// Aligns lines within blocks proportionally when they have similar sizes.
+        /// </summary>
+        private void AlignBlocksProportionally((int start, int length) oldBlock, (int start, int length) newBlock)
+        {
+            if (oldBlock.length <= 1 || newBlock.length <= 1) return;
+
+            for (int i = 1; i < Math.Min(oldBlock.length, newBlock.length); i++)
+            {
+                int oldLine = oldBlock.start + i;
+                int newLine = newBlock.start + i;
+
+                if (!_lineMapping.ContainsKey(oldLine) && !_reverseLineMapping.ContainsKey(newLine))
+                {
+                    _lineMapping[oldLine] = newLine;
+                    _reverseLineMapping[newLine] = oldLine;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Fills gaps in unchanged regions with proportional alignment to maintain context.
+        /// </summary>
+        private void FillUnchangedRegions(Dictionary<int, DiffLineType> oldMap, Dictionary<int, DiffLineType> newMap)
+        {
+            int oldLineCount = _oldEditor?.Document.LineCount ?? 0;
+            int newLineCount = _newEditor?.Document.LineCount ?? 0;
+
+            if (oldLineCount == 0 || newLineCount == 0) return;
+
+            // Find ranges between mapped lines and fill them proportionally
+            var mappedOldLines = _lineMapping.Keys.OrderBy(x => x).ToList();
+            
+            int lastOldLine = 0;
+            int lastNewLine = 0;
+
+            foreach (int currentOldLine in mappedOldLines)
+            {
+                int currentNewLine = _lineMapping[currentOldLine];
+
+                // Fill the gap between lastOldLine and currentOldLine
+                FillProportionalGap(lastOldLine + 1, currentOldLine - 1, lastNewLine + 1, currentNewLine - 1);
+
+                lastOldLine = currentOldLine;
+                lastNewLine = currentNewLine;
+            }
+
+            // Fill the gap from the last mapped line to the end
+            FillProportionalGap(lastOldLine + 1, oldLineCount, lastNewLine + 1, newLineCount);
+        }
+
+        /// <summary>
+        /// Fills a gap between two mapped regions with proportional alignment.
+        /// </summary>
+        private void FillProportionalGap(int oldStart, int oldEnd, int newStart, int newEnd)
+        {
+            if (oldStart > oldEnd || newStart > newEnd) return;
+
+            int oldRange = oldEnd - oldStart + 1;
+            int newRange = newEnd - newStart + 1;
+
+            if (oldRange <= 0 || newRange <= 0) return;
+
+            // Create proportional mappings within the gap
+            for (int i = 0; i < oldRange; i++)
+            {
+                int oldLine = oldStart + i;
+                int newLine = newStart + (int)Math.Round((double)i * newRange / oldRange);
+                
+                // Ensure newLine is within bounds
+                newLine = Math.Min(newLine, newEnd);
+                
+                if (!_lineMapping.ContainsKey(oldLine) && !_reverseLineMapping.ContainsKey(newLine))
+                {
+                    _lineMapping[oldLine] = newLine;
+                    _reverseLineMapping[newLine] = oldLine;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Enhanced scroll synchronization that uses line alignment mappings for better diff comparison.
+        /// </summary>
+        private void SyncScrollWithLineAlignment(ScrollViewer source, ScrollViewer target)
+        {
+            if (_oldEditor == null || _newEditor == null || _oldScrollViewer == null || _newScrollViewer == null)
+            {
+                // Fall back to simple sync if editors aren't ready
+                target.Offset = target.Offset.WithY(source.Offset.Y);
+                return;
+            }
+
+            try
+            {
+                // Calculate which line is currently at the top of the source editor
+                double lineHeight = GetLineHeight(source == _oldScrollViewer ? _oldEditor : _newEditor);
+                if (lineHeight <= 0)
+                {
+                    target.Offset = target.Offset.WithY(source.Offset.Y);
+                    return;
+                }
+
+                int sourceTopLine = (int)Math.Round(source.Offset.Y / lineHeight) + 1;
+                
+                // Find the corresponding line in the target editor
+                int targetLine = GetCorrespondingLine(sourceTopLine, source == _oldScrollViewer);
+                
+                // Calculate the target scroll position
+                double targetY = Math.Max(0, (targetLine - 1) * lineHeight);
+                
+                target.Offset = target.Offset.WithY(targetY);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error in line-aligned scroll sync, falling back to simple sync");
+                target.Offset = target.Offset.WithY(source.Offset.Y);
+            }
+        }
+
+        /// <summary>
+        /// Gets the line height for a given editor.
+        /// </summary>
+        private double GetLineHeight(TextEditor editor)
+        {
+            try
+            {
+                if (editor.Document.LineCount > 0)
+                {
+                    var firstLine = editor.Document.GetLineByNumber(1);
+                    var firstLinePosition = new TextViewPosition(1, 1);
+                    var linePosition = editor.TextArea.TextView.GetVisualPosition(firstLinePosition, VisualYPosition.LineTop);
+                    
+                    var nextLinePosition = editor.Document.LineCount > 1 
+                        ? editor.TextArea.TextView.GetVisualPosition(new TextViewPosition(2, 1), VisualYPosition.LineTop)
+                        : new Point(0, linePosition.Y + 16); // fallback height
+
+                    return Math.Max(1, nextLinePosition.Y - linePosition.Y);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Could not calculate line height, using default");
+            }
+
+            return 16; // Default line height fallback
+        }
+
+        /// <summary>
+        /// Gets the corresponding line in the other editor using the line alignment mapping.
+        /// </summary>
+        private int GetCorrespondingLine(int sourceLine, bool isOldEditor)
+        {
+            Dictionary<int, int> mapping = isOldEditor ? _lineMapping : _reverseLineMapping;
+            
+            // Try direct mapping first
+            if (mapping.TryGetValue(sourceLine, out int directMatch))
+            {
+                return directMatch;
+            }
+
+            // Find the closest mapped line
+            var mappedLines = mapping.Keys.OrderBy(x => x).ToList();
+            if (mappedLines.Count == 0)
+            {
+                // No mappings available, return the same line number
+                return sourceLine;
+            }
+
+            // Find the nearest mapped lines before and after the source line
+            int beforeLine = mappedLines.LastOrDefault(x => x < sourceLine);
+            int afterLine = mappedLines.FirstOrDefault(x => x > sourceLine);
+
+            if (beforeLine == 0 && afterLine == 0)
+            {
+                // All mapped lines are after the source line
+                afterLine = mappedLines.First();
+                int offset = afterLine - sourceLine;
+                return Math.Max(1, mapping[afterLine] - offset);
+            }
+            else if (afterLine == 0)
+            {
+                // All mapped lines are before the source line
+                int offset = sourceLine - beforeLine;
+                return mapping[beforeLine] + offset;
+            }
+            else if (beforeLine == 0)
+            {
+                // All mapped lines are after the source line
+                int offset = afterLine - sourceLine;
+                return Math.Max(1, mapping[afterLine] - offset);
+            }
+            else
+            {
+                // Interpolate between the before and after lines
+                double ratio = (double)(sourceLine - beforeLine) / (afterLine - beforeLine);
+                int targetBefore = mapping[beforeLine];
+                int targetAfter = mapping[afterLine];
+                return (int)Math.Round(targetBefore + ratio * (targetAfter - targetBefore));
+            }
         }
 
         private static T? FindDescendant<T>(Visual? root) where T : class
@@ -1260,6 +1629,19 @@ namespace AzurePrOps.Controls
             return root?.FindDescendantOfType<T>();
         }
 
+        private void ResetFoldingManagers()
+        {
+            if (_oldFoldingManager != null)
+            {
+                FoldingManager.Uninstall(_oldFoldingManager);
+                _oldFoldingManager = null;
+            }
+            if (_newFoldingManager != null)
+            {
+                FoldingManager.Uninstall(_newFoldingManager);
+                _newFoldingManager = null;
+            }
+        }
 
         private void ApplyFolding()
         {
@@ -1274,8 +1656,25 @@ namespace AzurePrOps.Controls
             _oldFoldingManager ??= FoldingManager.Install(_oldEditor.TextArea);
             _newFoldingManager ??= FoldingManager.Install(_newEditor.TextArea);
 
-            var foldsOld = GetFoldRegionsAroundChangesForMap(_oldLineTypes);
-            var foldsNew = GetFoldRegionsAroundChangesForMap(_newLineTypes);
+            // Ensure both line type maps are populated - if one is empty, use a unified approach
+            if (_oldLineTypes.Count == 0 && _newLineTypes.Count > 0)
+            {
+                // If old line types are empty, create a default unchanged map for the old editor
+                var oldLines = _oldEditor.Text.Split('\n');
+                _oldLineTypes = oldLines.Select((_, i) => new { Line = i + 1, Type = DiffLineType.Unchanged })
+                                      .ToDictionary(x => x.Line, x => x.Type);
+            }
+            
+            if (_newLineTypes.Count == 0 && _oldLineTypes.Count > 0)
+            {
+                // If new line types are empty, create a default unchanged map for the new editor
+                var newLines = _newEditor.Text.Split('\n');
+                _newLineTypes = newLines.Select((_, i) => new { Line = i + 1, Type = DiffLineType.Unchanged })
+                                      .ToDictionary(x => x.Line, x => x.Type);
+            }
+
+            var foldsOld = GetFoldRegionsAroundChangesForMap(_oldLineTypes, _oldEditor.Document.LineCount);
+            var foldsNew = GetFoldRegionsAroundChangesForMap(_newLineTypes, _newEditor.Document.LineCount);
             var newFoldingsOld = new List<NewFolding>();
             var newFoldingsNew = new List<NewFolding>();
 
@@ -1326,30 +1725,10 @@ namespace AzurePrOps.Controls
             _newFoldingManager?.Clear();
         }
 
-        /// <summary>
-        /// Uninstalls folding managers so they can be recreated for a new document.
-        /// </summary>
-        private void ResetFoldingManagers()
-        {
-            if (_oldFoldingManager != null)
-            {
-                FoldingManager.Uninstall(_oldFoldingManager);
-                _oldFoldingManager = null;
-            }
-            if (_newFoldingManager != null)
-            {
-                FoldingManager.Uninstall(_newFoldingManager);
-                _newFoldingManager = null;
-            }
-        }
-
-        private IEnumerable<(int Start, int End)> GetFoldRegionsAroundChangesForMap(Dictionary<int, DiffLineType> map, int context = 2)
+        private IEnumerable<(int Start, int End)> GetFoldRegionsAroundChangesForMap(Dictionary<int, DiffLineType> map, int lineCount, int context = 2)
         {
             if (_oldEditor is null || _newEditor is null)
                 yield break;
-
-            // Determine line count per corresponding editor is done by caller; here use the max available
-            int lineCount = Math.Max(_oldEditor?.Document.LineCount ?? 0, _newEditor?.Document.LineCount ?? 0);
 
             _logger.LogDebug("GetFoldRegionsAroundChangesForMap: lineCount={LineCount}, map.Count={MapCount}",
                 lineCount, map.Count);

@@ -211,12 +211,8 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
         LoadingProgress = 0.0;
         LoadingStatus = "Initializing...";
         
-        if (diffs != null)
-        {
-            _ = LoadDiffsAsync(diffs);
-        }
-
-        _ = LoadThreadsAsync();
+        // Start loading tasks and coordinate completion
+        _ = InitializeAsync(diffs);
 
         OpenInBrowserCommand = ReactiveCommand.Create(() =>
         {
@@ -890,5 +886,74 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
         }
 
         return (oldContent, newContent);
+    }
+
+    private async Task InitializeAsync(IEnumerable<ReviewModels.FileDiff>? diffs)
+    {
+        try
+        {
+            LoadingStatus = "Loading pull request details...";
+            LoadingProgress = 5.0;
+
+            // Start both loading tasks
+            var diffsTask = diffs != null ? LoadDiffsAsync(diffs) : LoadPullRequestDiffsAsync();
+            var threadsTask = LoadThreadsAsync();
+
+            // Wait for threads to complete first (usually faster)
+            await threadsTask;
+            
+            LoadingStatus = "Loading file differences...";
+            LoadingProgress = 50.0;
+
+            // Wait for diffs to complete
+            await diffsTask;
+
+            // Final completion
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                IsLoading = false;
+                LoadingStatus = "Load complete";
+                LoadingProgress = 100.0;
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to initialize pull request details");
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                IsLoading = false;
+                LoadingStatus = "Load failed";
+                LoadingProgress = 0.0;
+            });
+        }
+    }
+
+    private async Task LoadPullRequestDiffsAsync()
+    {
+        try
+        {
+            LoadingStatus = "Fetching file differences from Azure DevOps...";
+            LoadingProgress = 20.0;
+
+            var diffs = await _pullRequestService.GetPullRequestDiffAsync(
+                _settings.Organization,
+                _settings.Project,
+                _settings.Repository,
+                PullRequest.Id,
+                _settings.PersonalAccessToken,
+                null,
+                null);
+
+            await LoadDiffsAsync(diffs);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load pull request diffs");
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                LoadingStatus = "Failed to load diffs";
+                // Don't set IsLoading = false here, let InitializeAsync handle it
+            });
+        }
     }
 }

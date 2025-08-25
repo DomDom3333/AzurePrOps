@@ -844,8 +844,14 @@ namespace AzurePrOps.ReviewLogic.Services
                         var title = pr.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? string.Empty : string.Empty;
 
                         var createdBy = string.Empty;
-                        if (pr.TryGetProperty("createdBy", out var createdByProp) && createdByProp.TryGetProperty("displayName", out var displayNameProp))
-                            createdBy = displayNameProp.GetString() ?? string.Empty;
+                        var createdById = string.Empty;
+                        if (pr.TryGetProperty("createdBy", out var createdByProp))
+                        {
+                            if (createdByProp.TryGetProperty("displayName", out var displayNameProp))
+                                createdBy = displayNameProp.GetString() ?? string.Empty;
+                            if (createdByProp.TryGetProperty("id", out var creatorIdProp))
+                                createdById = creatorIdProp.GetString() ?? string.Empty;
+                        }
 
                         var sourceBranch = pr.TryGetProperty("sourceRefName", out var sourceBranchProp) ? sourceBranchProp.GetString() ?? string.Empty : string.Empty;
                         var targetBranch = pr.TryGetProperty("targetRefName", out var targetBranchProp) ? targetBranchProp.GetString() ?? string.Empty : string.Empty;
@@ -881,7 +887,7 @@ namespace AzurePrOps.ReviewLogic.Services
                             }
                         }
 
-                        result.Add(new PullRequestInfo(id, title, createdBy, createdDate, status, reviewers, sourceBranch, targetBranch, url, isDraft));
+                        result.Add(new PullRequestInfo(id, title, createdBy, createdById, createdDate, status, reviewers, sourceBranch, targetBranch, url, isDraft));
                     }
                     catch (Exception ex)
                     {

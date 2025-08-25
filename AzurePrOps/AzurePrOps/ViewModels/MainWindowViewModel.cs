@@ -66,7 +66,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _showMyPullRequestsOnly, value);
             FilterCriteria.MyPullRequestsOnly = value;
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -78,7 +78,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _showAssignedToMeOnly, value);
             FilterCriteria.AssignedToMeOnly = value;
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -90,7 +90,19 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _showNeedsMyReviewOnly, value);
             FilterCriteria.NeedsMyReviewOnly = value;
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
+        }
+    }
+
+    private bool _excludeMyPullRequests = false;
+    public bool ExcludeMyPullRequests
+    {
+        get => _excludeMyPullRequests;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _excludeMyPullRequests, value);
+            FilterCriteria.ExcludeMyPullRequests = value;
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -108,7 +120,7 @@ public class MainWindowViewModel : ViewModelBase
                 "Non-Drafts Only" => false,
                 _ => null
             };
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -122,7 +134,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _enableGroupFiltering, value);
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -141,7 +153,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _enableGroupsWithoutVoteFilter, value);
             FilterCriteria.EnableGroupsWithoutVoteFilter = value;
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -165,7 +177,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _globalSearchText, value);
             FilterCriteria.GlobalSearchText = value;
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -178,7 +190,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _titleFilter, value);
             FilterCriteria.TitleFilter = value;
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -190,7 +202,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _creatorFilter, value);
             FilterCriteria.CreatorFilter = value;
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -202,7 +214,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _reviewerFilter, value);
             FilterCriteria.ReviewerFilter = value;
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -214,7 +226,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _sourceBranchFilter, value);
             FilterCriteria.SourceBranchFilter = value;
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -226,7 +238,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _targetBranchFilter, value);
             FilterCriteria.TargetBranchFilter = value;
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -240,7 +252,7 @@ public class MainWindowViewModel : ViewModelBase
             var safeValue = value ?? "All";
             this.RaiseAndSetIfChanged(ref _statusFilter, safeValue);
             UpdateStatusFilter(safeValue);
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -252,7 +264,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _reviewerVoteFilter, value);
             UpdateReviewerVoteFilter(value);
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -268,7 +280,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _createdAfter, value);
             FilterCriteria.CreatedAfter = value;
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -280,7 +292,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             this.RaiseAndSetIfChanged(ref _createdBefore, value);
             FilterCriteria.CreatedBefore = value;
-            ApplyFiltersAndSorting();
+            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
 
@@ -365,11 +377,47 @@ public class MainWindowViewModel : ViewModelBase
             this.RaiseAndSetIfChanged(ref _selectedFilterView, value);
             if (value != null)
             {
-                TitleFilter = value.Title;
-                CreatorFilter = value.Creator;
-                SourceBranchFilter = value.SourceBranch;
-                TargetBranchFilter = value.TargetBranch;
-                StatusFilter = string.IsNullOrWhiteSpace(value.Status) ? "All" : value.Status;
+                // Check if this is actually a comprehensive saved filter disguised as a simple FilterView
+                var matchingSavedView = SavedFilterViews.FirstOrDefault(sv => sv.Name == value.Name);
+                if (matchingSavedView != null)
+                {
+                    // Apply the comprehensive saved filter instead
+                    ApplySavedFilterView(matchingSavedView);
+                }
+                else
+                {
+                    // Apply as a simple filter view (original behavior)
+                    _isApplyingFilterView = true;
+                    
+                    // Reset filters first to ensure clean state
+                    ResetFiltersToDefaults();
+                    
+                    // Apply the simple filter properties
+                    TitleFilter = value.Title;
+                    CreatorFilter = value.Creator;
+                    SourceBranchFilter = value.SourceBranch;
+                    TargetBranchFilter = value.TargetBranch;
+                    StatusFilter = string.IsNullOrWhiteSpace(value.Status) ? "All" : value.Status;
+                    
+                    _isApplyingFilterView = false;
+                    
+                    // Apply the filters after setting all filter properties
+                    ApplyFiltersAndSorting();
+                }
+            }
+        }
+    }
+
+    private SavedFilterView? _selectedSavedFilterView;
+    public SavedFilterView? SelectedSavedFilterView
+    {
+        get => _selectedSavedFilterView;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedSavedFilterView, value);
+            if (value != null)
+            {
+                ApplySavedFilterView(value);
             }
         }
     }
@@ -580,8 +628,11 @@ public class MainWindowViewModel : ViewModelBase
 
         // Initialize new filtering and sorting system
         LoadPreferences();
-        FilterCriteria.CurrentUserId = _settings.ReviewerId ?? string.Empty;
         
+        // Initialize user information - will be updated automatically when app starts
+        FilterCriteria.CurrentUserId = _settings.ReviewerId ?? string.Empty;
+        FilterCriteria.UserDisplayName = _settings.UserDisplayName ?? string.Empty;
+
         // Initialize the status filter to ensure "All" works properly
         UpdateStatusFilter(_statusFilter);
         UpdateReviewerVoteFilter(_reviewerVoteFilter);
@@ -592,6 +643,9 @@ public class MainWindowViewModel : ViewModelBase
 
         // Add error handling mechanism
         _client.SetErrorHandler(message => _ = ShowErrorMessage(message));
+
+        // Automatically retrieve current user information when app starts
+        _ = InitializeUserInformationAsync();
 
         var hasSelection = this.WhenAnyValue(x => x.SelectedPullRequest)
             .Select(pr => pr != null);
@@ -780,28 +834,31 @@ public class MainWindowViewModel : ViewModelBase
             IsLoadingDiffs = true;
             try
             {
-                // Create a simple details view since PullRequestDetailsViewModel might not exist
-                // This is a placeholder - you may need to implement the details window
-                await Task.Delay(100); // Simulate loading
+                // Create and show the PullRequestDetailsWindow
+                var detailsViewModel = new PullRequestDetailsWindowViewModel(
+                    pr, 
+                    _pullRequestService, 
+                    _settings);
                 
-                // Open in browser as fallback
-                var url = $"https://dev.azure.com/{_settings.Organization}/{_settings.Project}/_git/{_settings.Repository}/pullrequest/{pr.Id}";
-                try
+                var detailsWindow = new PullRequestDetailsWindow 
+                { 
+                    DataContext = detailsViewModel 
+                };
+
+                // Show the window
+                if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
                 {
-                    Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                    detailsWindow.Show(desktop.MainWindow);
                 }
-                catch
+                else
                 {
-                    // Fallback approaches for different platforms
-                    try
-                    {
-                        Process.Start("cmd", $"/c start {url}");
-                    }
-                    catch
-                    {
-                        Process.Start("xdg-open", url);
-                    }
+                    detailsWindow.Show();
                 }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open pull request details window");
+                await ShowErrorMessage($"Failed to open details window: {ex.Message}");
             }
             finally
             {
@@ -1008,12 +1065,150 @@ public class MainWindowViewModel : ViewModelBase
                 _logger.LogError(ex, "Failed to initialize group filtering");
             }
         });
+
+        // Automatically retrieve and set user information
+        Task.Run(async () =>
+        {
+            try
+            {
+                await InitializeUserInformationAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to initialize user information");
+            }
+        });
     }
 
     private void LoadPreferences()
     {
-        // Load saved preferences for filters and sorting
-        // Implementation would depend on your preferences storage mechanism
+        try
+        {
+            // Load saved preferences for filters and sorting
+            if (FilterSortPreferencesStorage.TryLoad(out var preferences) && preferences != null)
+            {
+                _preferences = preferences;
+            }
+            else
+            {
+                _preferences = new FilterSortPreferences();
+            }
+            
+            // Load saved filter views into the collection
+            SavedFilterViews.Clear();
+            foreach (var savedView in _preferences.SavedViews)
+            {
+                SavedFilterViews.Add(savedView);
+            }
+            
+            // Apply the last selected view if it exists
+            if (!string.IsNullOrEmpty(_preferences.LastSelectedView))
+            {
+                var lastSelectedView = SavedFilterViews.FirstOrDefault(v => v.Name == _preferences.LastSelectedView);
+                if (lastSelectedView != null)
+                {
+                    SelectedSavedFilterView = lastSelectedView;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to load preferences");
+            // Continue with default preferences if loading fails
+            _preferences = new FilterSortPreferences();
+        }
+    }
+
+    private bool _isApplyingFilterView = false;
+
+    private void ApplySavedFilterView(SavedFilterView savedView)
+    {
+        try
+        {
+            _logger.LogInformation("Starting to apply saved filter view: {ViewName}", savedView.Name);
+            
+            // Set flag to prevent multiple filter applications during this process
+            _isApplyingFilterView = true;
+            
+            // Apply filter criteria from saved view
+            var filterData = savedView.FilterCriteria;
+
+            _logger.LogInformation("Filter data - MyPRs: {MyPRs}, AssignedToMe: {AssignedToMe}, NeedsMyReview: {NeedsMyReview}", 
+                filterData.MyPullRequestsOnly, filterData.AssignedToMeOnly, filterData.NeedsMyReviewOnly);
+            _logger.LogInformation("Filter data - Statuses: [{Statuses}], Votes: [{Votes}]", 
+                string.Join(", ", filterData.SelectedStatuses), string.Join(", ", filterData.SelectedReviewerVotes));
+            
+            // Reset all filters first (like workflow presets do)
+            ResetFiltersToDefaults();
+            
+            // Apply all filter properties directly
+            // Property setters won't trigger ApplyFiltersAndSorting due to the flag
+            TitleFilter = filterData.TitleFilter ?? string.Empty;
+            CreatorFilter = filterData.CreatorFilter ?? string.Empty;
+            SourceBranchFilter = filterData.SourceBranchFilter ?? string.Empty;
+            TargetBranchFilter = filterData.TargetBranchFilter ?? string.Empty;
+            ReviewerFilter = filterData.ReviewerFilter ?? string.Empty;
+            
+            // Apply status and vote filters using the UI properties
+            StatusFilter = filterData.SelectedStatuses.Any() 
+                ? filterData.SelectedStatuses.First() 
+                : "All";
+            
+            ReviewerVoteFilter = filterData.SelectedReviewerVotes.Any() 
+                ? filterData.SelectedReviewerVotes.First() 
+                : "All";
+            
+            // Apply date filters
+            CreatedAfter = filterData.CreatedAfter;
+            CreatedBefore = filterData.CreatedBefore;
+            
+            // Apply draft filter
+            DraftFilter = filterData.IsDraft switch
+            {
+                true => "Drafts Only",
+                false => "Non-Drafts Only",
+                _ => "All"
+            };
+            
+            // Apply boolean filters
+            ShowMyPullRequestsOnly = filterData.MyPullRequestsOnly;
+            ShowAssignedToMeOnly = filterData.AssignedToMeOnly;
+            ShowNeedsMyReviewOnly = filterData.NeedsMyReviewOnly;
+            
+            _logger.LogInformation("[DEBUG_SAVED_FILTER] Applied boolean filters - ShowMyPullRequestsOnly: {ShowMyPRs}, FilterCriteria.MyPullRequestsOnly: {CriteriaMyPRs}", 
+                ShowMyPullRequestsOnly, FilterCriteria.MyPullRequestsOnly);
+            
+            // Apply workflow preset if specified
+            if (!string.IsNullOrEmpty(filterData.WorkflowPreset))
+            {
+                SelectedWorkflowPreset = filterData.WorkflowPreset;
+            }
+            
+            // Apply sort criteria from saved view
+            var sortData = savedView.SortCriteria;
+            SelectedSortPreset = sortData.CurrentPreset ?? "Most Recent";
+            
+            // Clear the flag before applying filters
+            _isApplyingFilterView = false;
+            
+            // Now apply the filters once
+            ApplyFiltersAndSorting();
+            
+            // Update last used timestamp
+            savedView.LastUsed = DateTime.Now;
+            
+            // Save the updated preferences
+            _preferences.LastSelectedView = savedView.Name;
+            FilterSortPreferencesStorage.Save(_preferences);
+            
+            _logger.LogInformation("Successfully applied saved filter view: {ViewName}", savedView.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to apply saved filter view: {ViewName}", savedView.Name);
+            // Ensure flag is cleared even if an error occurs
+            _isApplyingFilterView = false;
+        }
     }
 
     private void UpdateFilterOptions()
@@ -1277,5 +1472,52 @@ public class MainWindowViewModel : ViewModelBase
             "High Priority" => "PRs that need immediate attention",
             _ => "Custom workflow preset"
         };
+    }
+
+    private async Task InitializeUserInformationAsync()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_settings.Organization) || string.IsNullOrWhiteSpace(_settings.PersonalAccessToken))
+            {
+                _logger.LogWarning("Cannot retrieve user information: Organization or Personal Access Token is missing");
+                return;
+            }
+
+            _logger.LogInformation("Automatically retrieving current user information from Azure DevOps...");
+            
+            var userInfo = await _client.GetCurrentUserAsync(_settings.Organization, _settings.PersonalAccessToken);
+            
+            if (userInfo != UserInfo.Empty && !string.IsNullOrEmpty(userInfo.Id) && !string.IsNullOrEmpty(userInfo.DisplayName))
+            {
+                // Update filter criteria with automatically retrieved user information
+                FilterCriteria.CurrentUserId = userInfo.Id;
+                FilterCriteria.UserDisplayName = userInfo.DisplayName;
+                
+                _logger.LogInformation("Successfully retrieved user information: {DisplayName} (ID: {UserId})", 
+                    userInfo.DisplayName, userInfo.Id);
+
+                // Update connection settings to store the retrieved user information for future use
+                var updatedSettings = _settings with 
+                { 
+                    ReviewerId = userInfo.Id, 
+                    UserDisplayName = userInfo.DisplayName 
+                };
+                
+                // Save the updated settings so the user doesn't need to enter this information manually
+                ConnectionSettingsStorage.Save(updatedSettings);
+                
+                _logger.LogInformation("User information has been automatically saved to settings");
+            }
+            else
+            {
+                _logger.LogWarning("Could not retrieve user information from Azure DevOps. Using existing settings if available.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to automatically retrieve user information from Azure DevOps");
+            // Continue with existing settings - this is not a critical failure
+        }
     }
 }

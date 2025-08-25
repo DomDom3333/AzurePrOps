@@ -8,6 +8,7 @@ public record PullRequestInfo(
     int Id,
     string Title,
     string Creator,
+    string CreatorId,
     DateTime Created,
     string Status,
     IReadOnlyList<ReviewerInfo> Reviewers,
