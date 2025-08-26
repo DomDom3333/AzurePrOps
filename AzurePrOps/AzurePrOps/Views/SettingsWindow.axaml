@@ -1,344 +1,534 @@
 ﻿<Window
-    Height="650"
-    MinHeight="500"
-    MinWidth="600"
-    Title="Settings"
-    Width="800"
+    Background="{DynamicResource BackgroundBrush}"
+    Height="750"
+    MinHeight="600"
+    MinWidth="700"
+    Title="AzurePrOps Settings"
+    Width="900"
     WindowStartupLocation="CenterOwner"
-    d:DesignHeight="650"
-    d:DesignWidth="800"
+    d:DesignHeight="750"
+    d:DesignWidth="900"
     mc:Ignorable="d"
     x:Class="AzurePrOps.Views.SettingsWindow"
     x:DataType="vm:SettingsWindowViewModel"
     xmlns="https://github.com/avaloniaui"
+    xmlns:converters="using:AzurePrOps.Converters"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="using:AzurePrOps.ViewModels"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <Window.Resources>
+        <converters:StringNotEmptyConverter x:Key="StringNotEmptyConverter" />
+    </Window.Resources>
+
     <Window.Styles>
+        <!--  Modern Settings Group Style  -->
         <Style Selector="Border.SettingsGroup">
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Padding" Value="20" />
-            <Setter Property="Margin" Value="0,0,0,16" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="24" />
+            <Setter Property="Margin" Value="0,0,0,20" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Duration="0:0:0.2" Property="Background" />
+                </Transitions>
+            </Setter>
         </Style>
 
-        <Style Selector="TextBlock.GroupHeader">
-            <Setter Property="FontSize" Value="16" />
+        <Style Selector="Border.SettingsGroup:pointerover">
+            <Setter Property="Background" Value="{DynamicResource CardHoverBrush}" />
+        </Style>
+
+        <!--  Enhanced Group Header Style  -->
+        <Style Selector="StackPanel.GroupHeaderSection">
+            <Setter Property="Orientation" Value="Horizontal" />
+            <Setter Property="Spacing" Value="12" />
+            <Setter Property="Margin" Value="0,0,0,20" />
+        </Style>
+
+        <Style Selector="TextBlock.GroupIcon">
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+        </Style>
+
+        <Style Selector="StackPanel.GroupTitleSection">
+            <Setter Property="Spacing" Value="4" />
+        </Style>
+
+        <Style Selector="TextBlock.GroupTitle">
+            <Setter Property="FontSize" Value="18" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Margin" Value="0,0,0,12" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        </Style>
+
+        <Style Selector="TextBlock.GroupDescription">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+        </Style>
+
+        <!--  Enhanced Field Styles  -->
+        <Style Selector="StackPanel.FieldContainer">
+            <Setter Property="Spacing" Value="8" />
+            <Setter Property="Margin" Value="0,0,0,16" />
         </Style>
 
         <Style Selector="TextBlock.FieldLabel">
-            <Setter Property="FontWeight" Value="Medium" />
-            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
 
-        <Style Selector="CheckBox.SettingCheckBox">
-            <Setter Property="Margin" Value="0,0,0,12" />
+        <Style Selector="TextBlock.FieldDescription">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,4,0,0" />
         </Style>
 
-        <Style Selector="ComboBox.SettingComboBox">
+        <!--  Enhanced Checkbox Style  -->
+        <Style Selector="CheckBox.ModernCheckBox">
+            <Setter Property="Margin" Value="0,0,0,16" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Padding" Value="8,0,0,0" />
+        </Style>
+
+        <!--  Enhanced ComboBox Style  -->
+        <Style Selector="ComboBox.ModernComboBox">
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="MinWidth" Value="200" />
-            <Setter Property="Margin" Value="0,0,0,16" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+
+        <!--  Loading Indicator Style  -->
+        <Style Selector="StackPanel.LoadingContainer">
+            <Setter Property="Orientation" Value="Horizontal" />
+            <Setter Property="Spacing" Value="8" />
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
 
         <Style Selector="ProgressBar.LoadingIndicator">
-            <Setter Property="Height" Value="20" />
-            <Setter Property="Width" Value="20" />
-            <Setter Property="Margin" Value="8,0,0,0" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="Width" Value="16" />
+        </Style>
+
+        <Style Selector="TextBlock.LoadingText">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!--  Enhanced Button Styles  -->
+        <Style Selector="StackPanel.ButtonContainer">
+            <Setter Property="Orientation" Value="Horizontal" />
+            <Setter Property="Spacing" Value="12" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+        </Style>
+
+        <!--  Info Banner Style  -->
+        <Style Selector="Border.InfoBanner">
+            <Setter Property="Background" Value="{DynamicResource PrimaryLightBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="Margin" Value="0,0,0,24" />
         </Style>
     </Window.Styles>
 
-    <ScrollViewer Padding="24" VerticalScrollBarVisibility="Auto">
-        <StackPanel MaxWidth="750">
-            <!--  Azure DevOps Connection Settings  -->
-            <Border Classes="SettingsGroup">
-                <StackPanel>
-                    <TextBlock Classes="GroupHeader" Text="Azure DevOps Connection" />
+    <Grid>
+        <!--  Main content area with modern background  -->
+        <Border
+            Background="{DynamicResource SurfaceBrush}"
+            CornerRadius="12"
+            Margin="20">
 
-                    <!--  Organization Selection  -->
-                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,12">
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Classes="FieldLabel" Text="Organization" />
-                            <ComboBox
-                                Classes="SettingComboBox"
-                                IsEnabled="{Binding !IsLoadingOrganizations}"
-                                IsTextSearchEnabled="True"
-                                ItemsSource="{Binding Organizations}"
-                                PlaceholderText="Select Organization"
-                                SelectedItem="{Binding SelectedOrganization}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Name}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                        </StackPanel>
-                        <ProgressBar
-                            Classes="LoadingIndicator"
-                            Grid.Column="1"
-                            IsIndeterminate="True"
-                            IsVisible="{Binding IsLoadingOrganizations}" />
-                    </Grid>
-
-                    <!--  Project Selection  -->
-                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,12">
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Classes="FieldLabel" Text="Project" />
-                            <ComboBox
-                                Classes="SettingComboBox"
-                                IsEnabled="{Binding !IsLoadingProjects}"
-                                IsTextSearchEnabled="True"
-                                ItemsSource="{Binding Projects}"
-                                PlaceholderText="Select Project"
-                                SelectedItem="{Binding SelectedProject}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Name}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                        </StackPanel>
-                        <ProgressBar
-                            Classes="LoadingIndicator"
-                            Grid.Column="1"
-                            IsIndeterminate="True"
-                            IsVisible="{Binding IsLoadingProjects}" />
-                    </Grid>
-
-                    <!--  Repository Selection  -->
-                    <Grid ColumnDefinitions="*,Auto">
-                        <StackPanel Grid.Column="0">
-                            <TextBlock Classes="FieldLabel" Text="Repository" />
-                            <ComboBox
-                                Classes="SettingComboBox"
-                                IsEnabled="{Binding !IsLoadingRepositories}"
-                                IsTextSearchEnabled="True"
-                                ItemsSource="{Binding Repositories}"
-                                PlaceholderText="Select Repository"
-                                SelectedItem="{Binding SelectedRepository}">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Name}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                        </StackPanel>
-                        <ProgressBar
-                            Classes="LoadingIndicator"
-                            Grid.Column="1"
-                            IsIndeterminate="True"
-                            IsVisible="{Binding IsLoadingRepositories}" />
-                    </Grid>
-
-                    <!--  Error Message  -->
-                    <Border
-                        Background="{DynamicResource ErrorBackgroundBrush}"
-                        BorderBrush="{DynamicResource ErrorBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="4"
-                        IsVisible="{Binding !!ErrorMessage}"
-                        Margin="0,12,0,0"
-                        Padding="12">
+            <Grid RowDefinitions="Auto,*,Auto">
+                <!--  Header Section  -->
+                <StackPanel
+                    Grid.Row="0"
+                    Margin="32,32,32,24"
+                    Spacing="12">
+                    <StackPanel HorizontalAlignment="Center" Spacing="8">
                         <TextBlock
-                            Foreground="{DynamicResource ErrorBrush}"
-                            Text="{Binding ErrorMessage}"
-                            TextWrapping="Wrap" />
+                            FontSize="28"
+                            FontWeight="Bold"
+                            Foreground="{DynamicResource PrimaryBrush}"
+                            HorizontalAlignment="Center"
+                            Text="⚙️ Settings" />
+                        <TextBlock
+                            FontSize="15"
+                            Foreground="{DynamicResource TextSecondaryBrush}"
+                            HorizontalAlignment="Center"
+                            Text="Configure your AzurePrOps experience"
+                            TextAlignment="Center" />
+                    </StackPanel>
+
+                    <!--  Quick Info Banner  -->
+                    <Border Classes="InfoBanner">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <TextBlock
+                                FontSize="16"
+                                Foreground="{DynamicResource PrimaryBrush}"
+                                Text="💡"
+                                VerticalAlignment="Top" />
+                            <StackPanel Spacing="4">
+                                <TextBlock
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource PrimaryBrush}"
+                                    Text="Most settings apply immediately" />
+                                <TextBlock
+                                    FontSize="13"
+                                    Foreground="{DynamicResource TextSecondaryBrush}"
+                                    Text="Feature and display preferences are saved automatically. Connection settings require clicking Save to apply changes."
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
                     </Border>
                 </StackPanel>
-            </Border>
 
-            <!--  Diff Viewer Settings  -->
-            <Border Classes="SettingsGroup">
-                <StackPanel>
-                    <TextBlock Classes="GroupHeader" Text="Diff Viewer" />
+                <!--  Scrollable content area  -->
+                <ScrollViewer
+                    Grid.Row="1"
+                    Padding="32,0,32,24"
+                    VerticalScrollBarVisibility="Auto">
+                    <StackPanel MaxWidth="800" Spacing="20">
 
-                    <CheckBox
-                        Classes="SettingCheckBox"
-                        Content="Use Git client for diffs"
-                        IsChecked="{Binding UseGitDiff}"
-                        ToolTip.Tip="Use external Git client instead of built-in diff viewer" />
-
-                    <CheckBox
-                        Classes="SettingCheckBox"
-                        Content="Expand all diffs on open"
-                        IsChecked="{Binding ExpandAllDiffsOnOpen}"
-                        ToolTip.Tip="Automatically expand all file diffs when opening pull request details" />
-
-                    <CheckBox
-                        Classes="SettingCheckBox"
-                        Content="Ignore whitespace changes"
-                        IsChecked="{Binding IgnoreWhitespace}"
-                        ToolTip.Tip="Hide whitespace-only changes in diff view" />
-
-                    <CheckBox
-                        Classes="SettingCheckBox"
-                        Content="Wrap long lines"
-                        IsChecked="{Binding WrapLines}"
-                        ToolTip.Tip="Wrap long lines in diff editor instead of horizontal scrolling" />
-
-                    <CheckBox
-                        Classes="SettingCheckBox"
-                        Content="Ignore line ending differences"
-                        IsChecked="{Binding IgnoreNewlines}"
-                        ToolTip.Tip="Treat CRLF and LF line endings as equivalent" />
-                </StackPanel>
-            </Border>
-
-            <!--  Features Settings  -->
-            <Border Classes="SettingsGroup">
-                <StackPanel>
-                    <TextBlock Classes="GroupHeader" Text="Features" />
-
-                    <CheckBox
-                        Classes="SettingCheckBox"
-                        Content="Enable inline comments"
-                        IsChecked="{Binding InlineCommentsEnabled}"
-                        ToolTip.Tip="Allow adding comments directly in diff view" />
-
-                    <CheckBox
-                        Classes="SettingCheckBox"
-                        Content="Enable lifecycle actions"
-                        IsChecked="{Binding LifecycleActionsEnabled}"
-                        ToolTip.Tip="Show approve, complete, and abandon actions in pull request view" />
-
-                    <CheckBox
-                        Classes="SettingCheckBox"
-                        Content="Auto-refresh pull requests"
-                        IsChecked="{Binding AutoRefreshEnabled}"
-                        ToolTip.Tip="Automatically refresh pull request list periodically" />
-                </StackPanel>
-            </Border>
-
-            <!--  External Editor Settings  -->
-            <Border Classes="SettingsGroup">
-                <StackPanel>
-                    <TextBlock Classes="GroupHeader" Text="External Editor" />
-
-                    <TextBlock Classes="FieldLabel" Text="Default Editor" />
-                    <ComboBox
-                        Classes="SettingComboBox"
-                        ItemsSource="{Binding EditorOptions}"
-                        SelectedItem="{Binding SelectedEditorOption}">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <TextBlock FontWeight="Medium" Text="{Binding DisplayName}" />
-                                    <TextBlock Foreground="{DynamicResource TextSecondaryBrush}" Text="{Binding Command, StringFormat={}({0})}" />
+                        <!--  Azure DevOps Connection Settings  -->
+                        <Border Classes="SettingsGroup">
+                            <StackPanel>
+                                <StackPanel Classes="GroupHeaderSection">
+                                    <TextBlock Classes="GroupIcon" Text="🔗" />
+                                    <StackPanel Classes="GroupTitleSection">
+                                        <TextBlock Classes="GroupTitle" Text="Azure DevOps Connection" />
+                                        <TextBlock Classes="GroupDescription" Text="Configure your connection to Azure DevOps services" />
+                                    </StackPanel>
                                 </StackPanel>
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
 
-                    <StackPanel IsVisible="{Binding ShowCustomEditorPath}" Margin="0,8,0,0">
-                        <TextBlock Classes="FieldLabel" Text="Custom Editor Path" />
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBox
-                                Grid.Column="0"
-                                Margin="0,0,8,0"
-                                Text="{Binding CustomEditorPath}"
-                                Watermark="Enter path to editor executable" />
-                            <Button
-                                Command="{Binding BrowseEditorCommand}"
-                                Content="Browse..."
-                                Grid.Column="1" />
-                        </Grid>
+                                <!--  Organization Selection  -->
+                                <StackPanel Classes="FieldContainer">
+                                    <TextBlock Classes="FieldLabel" Text="Organization" />
+                                    <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                                        <ComboBox
+                                            Classes="ModernComboBox"
+                                            Grid.Column="0"
+                                            IsEnabled="{Binding !IsLoadingOrganizations}"
+                                            IsTextSearchEnabled="True"
+                                            ItemsSource="{Binding Organizations}"
+                                            PlaceholderText="Select your Azure DevOps organization"
+                                            SelectedItem="{Binding SelectedOrganization}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Name}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <StackPanel
+                                            Classes="LoadingContainer"
+                                            Grid.Column="1"
+                                            IsVisible="{Binding IsLoadingOrganizations}"
+                                            Margin="12,0,0,0">
+                                            <ProgressBar Classes="LoadingIndicator" IsIndeterminate="True" />
+                                            <TextBlock Classes="LoadingText" Text="Loading..." />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Classes="FieldDescription" Text="Choose the Azure DevOps organization that contains your projects" />
+                                </StackPanel>
+
+                                <!--  Project Selection  -->
+                                <StackPanel Classes="FieldContainer">
+                                    <TextBlock Classes="FieldLabel" Text="Project" />
+                                    <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                                        <ComboBox
+                                            Classes="ModernComboBox"
+                                            Grid.Column="0"
+                                            IsEnabled="{Binding !IsLoadingProjects}"
+                                            IsTextSearchEnabled="True"
+                                            ItemsSource="{Binding Projects}"
+                                            PlaceholderText="Select project"
+                                            SelectedItem="{Binding SelectedProject}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Name}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <StackPanel
+                                            Classes="LoadingContainer"
+                                            Grid.Column="1"
+                                            IsVisible="{Binding IsLoadingProjects}"
+                                            Margin="12,0,0,0">
+                                            <ProgressBar Classes="LoadingIndicator" IsIndeterminate="True" />
+                                            <TextBlock Classes="LoadingText" Text="Loading..." />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Classes="FieldDescription" Text="Select the project you want to manage pull requests for" />
+                                </StackPanel>
+
+                                <!--  Repository Selection  -->
+                                <StackPanel Classes="FieldContainer">
+                                    <TextBlock Classes="FieldLabel" Text="Repository" />
+                                    <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                                        <ComboBox
+                                            Classes="ModernComboBox"
+                                            Grid.Column="0"
+                                            IsEnabled="{Binding !IsLoadingRepositories}"
+                                            IsTextSearchEnabled="True"
+                                            ItemsSource="{Binding Repositories}"
+                                            PlaceholderText="Select repository"
+                                            SelectedItem="{Binding SelectedRepository}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Name}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <StackPanel
+                                            Classes="LoadingContainer"
+                                            Grid.Column="1"
+                                            IsVisible="{Binding IsLoadingRepositories}"
+                                            Margin="12,0,0,0">
+                                            <ProgressBar Classes="LoadingIndicator" IsIndeterminate="True" />
+                                            <TextBlock Classes="LoadingText" Text="Loading..." />
+                                        </StackPanel>
+                                    </Grid>
+                                    <TextBlock Classes="FieldDescription" Text="Choose the repository to focus on for pull request management" />
+                                </StackPanel>
+
+                                <!--  Error Message  -->
+                                <Border
+                                    Background="{DynamicResource DangerLightBrush}"
+                                    BorderBrush="{DynamicResource DangerBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}}"
+                                    Margin="0,12,0,0"
+                                    Padding="16">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock
+                                            FontSize="14"
+                                            Foreground="{DynamicResource DangerBrush}"
+                                            Text="⚠️"
+                                            VerticalAlignment="Top" />
+                                        <TextBlock
+                                            Foreground="{DynamicResource DangerBrush}"
+                                            Text="{Binding ErrorMessage}"
+                                            TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <!--  Diff Viewer Settings  -->
+                        <Border Classes="SettingsGroup">
+                            <StackPanel>
+                                <StackPanel Classes="GroupHeaderSection">
+                                    <TextBlock Classes="GroupIcon" Text="📄" />
+                                    <StackPanel Classes="GroupTitleSection">
+                                        <TextBlock Classes="GroupTitle" Text="Diff Viewer" />
+                                        <TextBlock Classes="GroupDescription" Text="Customize how code differences are displayed" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <CheckBox Classes="ModernCheckBox" IsChecked="{Binding UseGitDiff}">
+                                    <StackPanel>
+                                        <TextBlock FontWeight="SemiBold" Text="Use external Git client for diffs" />
+                                        <TextBlock
+                                            Classes="FieldDescription"
+                                            Margin="0,2,0,0"
+                                            Text="Open diffs in your preferred Git client instead of the built-in diff viewer" />
+                                    </StackPanel>
+                                </CheckBox>
+
+                                <CheckBox Classes="ModernCheckBox" IsChecked="{Binding ExpandAllDiffsOnOpen}">
+                                    <StackPanel>
+                                        <TextBlock FontWeight="SemiBold" Text="Expand all diffs on open" />
+                                        <TextBlock
+                                            Classes="FieldDescription"
+                                            Margin="0,2,0,0"
+                                            Text="Automatically expand all file diffs when opening pull request details" />
+                                    </StackPanel>
+                                </CheckBox>
+
+                                <CheckBox Classes="ModernCheckBox" IsChecked="{Binding IgnoreWhitespace}">
+                                    <StackPanel>
+                                        <TextBlock FontWeight="SemiBold" Text="Ignore whitespace changes" />
+                                        <TextBlock
+                                            Classes="FieldDescription"
+                                            Margin="0,2,0,0"
+                                            Text="Hide whitespace-only changes in diff view for cleaner comparison" />
+                                    </StackPanel>
+                                </CheckBox>
+
+                                <CheckBox Classes="ModernCheckBox" IsChecked="{Binding WrapLines}">
+                                    <StackPanel>
+                                        <TextBlock FontWeight="SemiBold" Text="Wrap long lines" />
+                                        <TextBlock
+                                            Classes="FieldDescription"
+                                            Margin="0,2,0,0"
+                                            Text="Wrap long lines in diff editor instead of requiring horizontal scrolling" />
+                                    </StackPanel>
+                                </CheckBox>
+
+                                <CheckBox Classes="ModernCheckBox" IsChecked="{Binding IgnoreNewlines}">
+                                    <StackPanel>
+                                        <TextBlock FontWeight="SemiBold" Text="Ignore line ending differences" />
+                                        <TextBlock
+                                            Classes="FieldDescription"
+                                            Margin="0,2,0,0"
+                                            Text="Treat CRLF and LF line endings as equivalent to reduce noise" />
+                                    </StackPanel>
+                                </CheckBox>
+                            </StackPanel>
+                        </Border>
+
+                        <!--  Features Settings  -->
+                        <Border Classes="SettingsGroup">
+                            <StackPanel>
+                                <StackPanel Classes="GroupHeaderSection">
+                                    <TextBlock Classes="GroupIcon" Text="✨" />
+                                    <StackPanel Classes="GroupTitleSection">
+                                        <TextBlock Classes="GroupTitle" Text="Features" />
+                                        <TextBlock Classes="GroupDescription" Text="Enable or disable application features" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <CheckBox Classes="ModernCheckBox" IsChecked="{Binding InlineCommentsEnabled}">
+                                    <StackPanel>
+                                        <TextBlock FontWeight="SemiBold" Text="Enable inline comments" />
+                                        <TextBlock
+                                            Classes="FieldDescription"
+                                            Margin="0,2,0,0"
+                                            Text="Show comments directly in the diff view for better context" />
+                                    </StackPanel>
+                                </CheckBox>
+
+                                <CheckBox Classes="ModernCheckBox" IsChecked="{Binding LifecycleActionsEnabled}">
+                                    <StackPanel>
+                                        <TextBlock FontWeight="SemiBold" Text="Enable lifecycle actions" />
+                                        <TextBlock
+                                            Classes="FieldDescription"
+                                            Margin="0,2,0,0"
+                                            Text="Allow pull request actions like approve, abandon, and complete" />
+                                    </StackPanel>
+                                </CheckBox>
+
+                                <CheckBox Classes="ModernCheckBox" IsChecked="{Binding ShowNotifications}">
+                                    <StackPanel>
+                                        <TextBlock FontWeight="SemiBold" Text="Enable notifications" />
+                                        <TextBlock
+                                            Classes="FieldDescription"
+                                            Margin="0,2,0,0"
+                                            Text="Show desktop notifications for pull request updates and changes" />
+                                    </StackPanel>
+                                </CheckBox>
+
+                                <CheckBox Classes="ModernCheckBox" IsChecked="{Binding AutoRefreshEnabled}">
+                                    <StackPanel>
+                                        <TextBlock FontWeight="SemiBold" Text="Auto-refresh data" />
+                                        <TextBlock
+                                            Classes="FieldDescription"
+                                            Margin="0,2,0,0"
+                                            Text="Automatically refresh pull request data every few minutes" />
+                                    </StackPanel>
+                                </CheckBox>
+
+                                <CheckBox Classes="ModernCheckBox" IsChecked="{Binding MinimizeToTray}">
+                                    <StackPanel>
+                                        <TextBlock FontWeight="SemiBold" Text="Minimize to system tray" />
+                                        <TextBlock
+                                            Classes="FieldDescription"
+                                            Margin="0,2,0,0"
+                                            Text="Minimize the application to the system tray instead of taskbar" />
+                                    </StackPanel>
+                                </CheckBox>
+                            </StackPanel>
+                        </Border>
+
+                        <!--  External Editor Settings  -->
+                        <Border Classes="SettingsGroup">
+                            <StackPanel>
+                                <StackPanel Classes="GroupHeaderSection">
+                                    <TextBlock Classes="GroupIcon" Text="💻" />
+                                    <StackPanel Classes="GroupTitleSection">
+                                        <TextBlock Classes="GroupTitle" Text="External Editor" />
+                                        <TextBlock Classes="GroupDescription" Text="Configure your preferred code editor" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <StackPanel Classes="FieldContainer">
+                                    <TextBlock Classes="FieldLabel" Text="Preferred Editor" />
+                                    <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                                        <ComboBox
+                                            Classes="ModernComboBox"
+                                            Grid.Column="0"
+                                            ItemsSource="{Binding EditorOptions}"
+                                            PlaceholderText="Select your preferred editor"
+                                            SelectedItem="{Binding SelectedEditorOption}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding DisplayName}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <Button
+                                            Classes="SecondaryButton"
+                                            Command="{Binding BrowseEditorCommand}"
+                                            Content="📁 Browse..."
+                                            Grid.Column="1"
+                                            Margin="12,0,0,0"
+                                            Padding="12,8" />
+                                    </Grid>
+                                    <TextBlock Classes="FieldDescription" Text="Choose your preferred code editor for opening files from pull requests" />
+                                </StackPanel>
+
+                                <StackPanel Classes="FieldContainer" IsVisible="{Binding ShowCustomEditorPath}">
+                                    <TextBlock Classes="FieldLabel" Text="Custom Editor Path" />
+                                    <TextBox
+                                        Classes="ModernTextBox"
+                                        IsReadOnly="True"
+                                        Margin="0,4,0,0"
+                                        Text="{Binding CustomEditorPath}" />
+                                    <TextBlock Classes="FieldDescription" Text="Currently configured custom editor executable" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
                     </StackPanel>
-                </StackPanel>
-            </Border>
+                </ScrollViewer>
 
-            <!--  Interface Settings  -->
-            <Border Classes="SettingsGroup">
-                <StackPanel>
-                    <TextBlock Classes="GroupHeader" Text="Interface" />
-
-                    <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,12">
-                        <TextBlock
-                            Classes="FieldLabel"
-                            Grid.Column="0"
-                            Margin="0,0,12,0"
-                            Text="Theme:" />
-                        <ComboBox
-                            Grid.Column="1"
-                            HorizontalAlignment="Left"
-                            MinWidth="150"
-                            SelectedIndex="{Binding SelectedThemeIndex}">
-                            <ComboBoxItem Content="System" />
-                            <ComboBoxItem Content="Light" />
-                            <ComboBoxItem Content="Dark" />
-                        </ComboBox>
-                    </Grid>
-
-                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12">
-                        <TextBlock
-                            Classes="FieldLabel"
-                            Grid.Column="0"
-                            Margin="0,0,12,0"
-                            Text="Auto-refresh interval:" />
-                        <Slider
-                            Grid.Column="1"
-                            Maximum="300"
-                            Minimum="30"
-                            TickFrequency="30"
-                            Value="{Binding RefreshIntervalSeconds}" />
-                        <TextBlock
-                            Grid.Column="2"
-                            Margin="8,0,0,0"
-                            Text="{Binding RefreshIntervalSeconds, StringFormat={}{0}s}" />
-                    </Grid>
-
-                    <CheckBox
-                        Classes="SettingCheckBox"
-                        Content="Show notifications"
-                        IsChecked="{Binding ShowNotifications}"
-                        ToolTip.Tip="Show desktop notifications for pull request updates" />
-
-                    <CheckBox
-                        Classes="SettingCheckBox"
-                        Content="Minimize to system tray"
-                        IsChecked="{Binding MinimizeToTray}"
-                        ToolTip.Tip="Minimize application to system tray instead of taskbar" />
-                </StackPanel>
-            </Border>
-
-            <!--  Action Buttons  -->
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,24,0,0">
-                <Button
-                    Classes="SecondaryButton"
-                    Command="{Binding ResetToDefaultsCommand}"
-                    Content="Reset to Defaults"
-                    Grid.Column="0"
-                    Width="140" />
-
-                <Button
-                    Classes="SecondaryButton"
-                    Command="{Binding CancelCommand}"
-                    Content="Cancel"
-                    Grid.Column="2"
-                    Margin="0,0,12,0"
-                    Width="100" />
-
-                <Button
-                    Classes="SecondaryButton"
-                    Command="{Binding LogoutCommand}"
-                    Content="Logout"
-                    Grid.Column="3"
-                    Margin="0,0,12,0"
-                    Width="100" />
-
-                <Button
-                    Classes="PrimaryButton"
-                    Command="{Binding SaveCommand}"
-                    Content="Save"
-                    Grid.Column="4"
-                    IsEnabled="{Binding !!SelectedRepository}"
-                    Width="100" />
+                <!--  Fixed button row at bottom  -->
+                <Border
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,1,0,0"
+                    Grid.Row="2"
+                    Padding="32,16">
+                    <StackPanel Classes="ButtonContainer">
+                        <Button
+                            Classes="SecondaryButton"
+                            Command="{Binding ResetToDefaultsCommand}"
+                            Content="🔄 Reset to Defaults"
+                            Padding="16,10" />
+                        <Button
+                            Classes="PrimaryButton"
+                            Command="{Binding SaveCommand}"
+                            IsDefault="True"
+                            Padding="20,10">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="💾" />
+                                <TextBlock Text="Save Connection Settings" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Border>
             </Grid>
-        </StackPanel>
-    </ScrollViewer>
+        </Border>
+    </Grid>
+
 </Window>

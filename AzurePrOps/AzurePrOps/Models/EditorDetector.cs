@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
+using System.Collections.Concurrent;
 
 namespace AzurePrOps.Models;
 
@@ -35,21 +37,65 @@ public static class EditorDetector
         "devenv"          // Visual Studio IDE
     };
 
+    // Cache for detected editors to avoid repeated file system operations
+    private static readonly Lazy<Task<IReadOnlyList<string>>> _cachedEditorsTask = 
+        new(() => DetectAvailableEditorsAsync());
+    
+    private static readonly ConcurrentDictionary<string, string> _editorPathCache = new();
+    
+    // Synchronous method for backward compatibility - uses cached results if available
     public static IReadOnlyList<string> GetAvailableEditors()
     {
-        var result = new List<string>();
-        foreach (var cmd in CandidateCommands)
+        if (_cachedEditorsTask.Value.IsCompleted)
         {
-            var fullPath = GetEditorFullPath(cmd);
-            if (!string.IsNullOrEmpty(fullPath))
-                result.Add(fullPath);
+            return _cachedEditorsTask.Value.Result;
         }
-        return result;
+        
+        // Fallback: return a minimal set of common editors if cache isn't ready
+        return new[] { "code", "notepad" };
     }
 
-    public static string GetDefaultEditor() => GetAvailableEditors().FirstOrDefault() ?? "code";
+    // Async method for optimal performance
+    public static async Task<IReadOnlyList<string>> GetAvailableEditorsAsync()
+    {
+        return await _cachedEditorsTask.Value;
+    }
+
+    // Background detection method
+    private static async Task<IReadOnlyList<string>> DetectAvailableEditorsAsync()
+    {
+        return await Task.Run(() =>
+        {
+            var result = new List<string>();
+            foreach (var cmd in CandidateCommands)
+            {
+                var fullPath = GetEditorFullPathInternal(cmd);
+                if (!string.IsNullOrEmpty(fullPath))
+                    result.Add(fullPath);
+            }
+            return (IReadOnlyList<string>)result;
+        });
+    }
+
+    public static string GetDefaultEditor() 
+    {
+        // Use cached results if available, otherwise return a sensible default
+        var editors = GetAvailableEditors();
+        return editors.FirstOrDefault() ?? "code";
+    }
 
     public static string GetEditorFullPath(string command)
+    {
+        // Check cache first
+        if (_editorPathCache.TryGetValue(command, out var cachedPath))
+            return cachedPath;
+            
+        var path = GetEditorFullPathInternal(command);
+        _editorPathCache.TryAdd(command, path);
+        return path;
+    }
+
+    private static string GetEditorFullPathInternal(string command)
     {
         // First check PATH
         var paths = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)

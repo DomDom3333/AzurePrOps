@@ -13,13 +13,13 @@ using Avalonia.Platform.Storage;
 using System.Reactive.Linq;
 using System.IO;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace AzurePrOps.ViewModels;
 
 public class SettingsWindowViewModel : ViewModelBase
 {
     private readonly AzureDevOpsClient _client = new();
-    private readonly string _personalAccessToken;
     private readonly string _reviewerId;
     private readonly ConnectionSettings _initialSettings;
     
@@ -75,18 +75,30 @@ public class SettingsWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _useGitDiff, value);
     }
 
-    private bool _inlineCommentsEnabled = FeatureFlagManager.InlineCommentsEnabled;
     public bool InlineCommentsEnabled
     {
-        get => _inlineCommentsEnabled;
-        set => this.RaiseAndSetIfChanged(ref _inlineCommentsEnabled, value);
+        get => FeatureFlagManager.InlineCommentsEnabled;
+        set
+        {
+            if (FeatureFlagManager.InlineCommentsEnabled != value)
+            {
+                FeatureFlagManager.InlineCommentsEnabled = value;
+                this.RaisePropertyChanged();
+            }
+        }
     }
 
-    private bool _lifecycleActionsEnabled = FeatureFlagManager.LifecycleActionsEnabled;
     public bool LifecycleActionsEnabled
     {
-        get => _lifecycleActionsEnabled;
-        set => this.RaiseAndSetIfChanged(ref _lifecycleActionsEnabled, value);
+        get => FeatureFlagManager.LifecycleActionsEnabled;
+        set
+        {
+            if (FeatureFlagManager.LifecycleActionsEnabled != value)
+            {
+                FeatureFlagManager.LifecycleActionsEnabled = value;
+                this.RaisePropertyChanged();
+            }
+        }
     }
 
     public bool ExpandAllDiffsOnOpen
@@ -241,6 +253,34 @@ public class SettingsWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _selectedEditor, value);
     }
 
+    // Save status properties
+    private bool _isSaving;
+    public bool IsSaving
+    {
+        get => _isSaving;
+        set 
+        { 
+            this.RaiseAndSetIfChanged(ref _isSaving, value);
+            this.RaisePropertyChanged(nameof(SaveButtonText));
+        }
+    }
+
+    public string SaveButtonText => IsSaving ? "Saving..." : "Save";
+
+    private string _saveStatusMessage = string.Empty;
+    public string SaveStatusMessage
+    {
+        get => _saveStatusMessage;
+        set => this.RaiseAndSetIfChanged(ref _saveStatusMessage, value);
+    }
+
+    private bool _showSaveStatus;
+    public bool ShowSaveStatus
+    {
+        get => _showSaveStatus;
+        set => this.RaiseAndSetIfChanged(ref _showSaveStatus, value);
+    }
+
     // Commands
     public ReactiveCommand<Unit, Unit> BrowseEditorCommand { get; }
     public ReactiveCommand<Unit, Unit> ResetToDefaultsCommand { get; }
@@ -249,19 +289,16 @@ public class SettingsWindowViewModel : ViewModelBase
     public SettingsWindowViewModel(ConnectionSettings currentSettings)
     {
         _initialSettings = currentSettings;
-        _personalAccessToken = currentSettings.PersonalAccessToken;
         _reviewerId = currentSettings.ReviewerId;
         _useGitDiff = currentSettings.UseGitDiff;
         
-        // Initialize legacy editor list for backward compatibility
-        foreach (var e in EditorDetector.GetAvailableEditors())
-            Editors.Add(e);
+        // Initialize selected editor from current settings
         _selectedEditor = string.IsNullOrWhiteSpace(currentSettings.EditorCommand)
             ? EditorDetector.GetDefaultEditor()
             : currentSettings.EditorCommand;
-
-        // Initialize editor options with user-friendly names
-        InitializeEditorOptions();
+        
+        // Initialize editor options asynchronously to avoid blocking UI
+        _ = InitializeEditorOptionsAsync();
 
         // Initialize commands
         BrowseEditorCommand = ReactiveCommand.Create(BrowseForEditor);
@@ -271,53 +308,107 @@ public class SettingsWindowViewModel : ViewModelBase
             DialogWindow?.Close();
         });
 
-        SaveCommand = ReactiveCommand.Create(() =>
+        SaveCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            // Determine the editor command to save
-            var editorCommand = SelectedEditor; // Default fallback
-            if (_selectedEditorOption != null)
+            try
             {
-                if (_selectedEditorOption.Command == "custom")
+                IsSaving = true;
+                ShowSaveStatus = false;
+
+                // Determine the editor command to save
+                var editorCommand = SelectedEditor; // Default fallback
+                if (_selectedEditorOption != null)
                 {
-                    editorCommand = !string.IsNullOrWhiteSpace(_customEditorPath) ? _customEditorPath : SelectedEditor;
+                    if (_selectedEditorOption.Command == "custom")
+                    {
+                        editorCommand = !string.IsNullOrWhiteSpace(_customEditorPath) ? _customEditorPath : SelectedEditor;
+                    }
+                    else
+                    {
+                        editorCommand = _selectedEditorOption.Command;
+                    }
                 }
-                else
+
+                // Save connection settings
+                var settings = new ConnectionSettings(
+                    SelectedOrganization?.Name ?? string.Empty,
+                    SelectedProject?.Name ?? string.Empty,
+                    SelectedRepository?.Id ?? string.Empty,
+                    _reviewerId,
+                    editorCommand,
+                    UseGitDiff);
+                ConnectionSettingsStorage.Save(settings);
+
+                // Note: Feature flags, diff preferences, and UI preferences are now automatically saved
+                // when their properties are changed, so no explicit saving is needed here
+
+                // Save diff preferences (redundant but kept for explicit consistency)
+                var diffPreferences = new DiffPreferencesData(
+                    IgnoreWhitespace,
+                    WrapLines,
+                    IgnoreNewlines,
+                    ExpandAllDiffsOnOpen);
+                DiffPreferencesStorage.Save(diffPreferences);
+
+                // Save UI preferences (redundant but kept for explicit consistency)
+                var uiPreferences = new UIPreferencesData(
+                    AutoRefreshEnabled,
+                    SelectedThemeIndex,
+                    RefreshIntervalSeconds,
+                    ShowNotifications,
+                    MinimizeToTray);
+                UIPreferencesStorage.Save(uiPreferences);
+
+                ConnectionSettings = settings;
+
+                // Show brief success message and close immediately
+                SaveStatusMessage = "Settings saved successfully!";
+                ShowSaveStatus = true;
+
+                // Close the dialog immediately with the saved settings
+                DialogWindow?.Close(settings);
+                
+                // Hide the status message in background (for cleanup, though window will be closed)
+                _ = Task.Run(async () =>
                 {
-                    editorCommand = _selectedEditorOption.Command;
-                }
+                    await Task.Delay(500);
+                    ShowSaveStatus = false;
+                });
+                
+                return settings;
             }
-
-            var settings = new ConnectionSettings(
-                SelectedOrganization?.Name ?? string.Empty,
-                SelectedProject?.Name ?? string.Empty,
-                SelectedRepository?.Id ?? string.Empty,
-                _personalAccessToken,
-                _reviewerId,
-                editorCommand,
-                UseGitDiff);
-            ConnectionSettingsStorage.Save(settings);
-            FeatureFlagManager.InlineCommentsEnabled = InlineCommentsEnabled;
-            FeatureFlagManager.LifecycleActionsEnabled = LifecycleActionsEnabled;
-            ConnectionSettings = settings;
-
-            if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+            catch (Exception ex)
             {
-                var mainWindow = new Views.MainWindow
+                SaveStatusMessage = $"Error saving settings: {ex.Message}";
+                ShowSaveStatus = true;
+                
+                // For errors, show message longer but still close relatively quickly
+                _ = Task.Run(async () =>
                 {
-                    DataContext = new MainWindowViewModel(settings)
-                };
-                var oldWindow = desktop.MainWindow;
-                desktop.MainWindow = mainWindow;
-                mainWindow.Show();
-                oldWindow?.Close();
+                    await Task.Delay(2000);
+                    ShowSaveStatus = false;
+                    
+                    // Close dialog even on error after showing error message
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        DialogWindow?.Close();
+                    });
+                });
+                
+                throw;
             }
-
-            return settings;
+            finally
+            {
+                IsSaving = false;
+            }
         });
 
         LogoutCommand = ReactiveCommand.Create(() =>
         {
+            // Remove the secure token and settings
+            ConnectionSettingsStorage.RemovePersonalAccessToken();
             ConnectionSettingsStorage.Delete();
+            
             if (Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
             {
                 var loginWindow = new Views.LoginWindow
@@ -349,7 +440,15 @@ public class SettingsWindowViewModel : ViewModelBase
 
             Organizations.Clear();
             var userId = _reviewerId;
-            var orgs = await _client.GetOrganizationsAsync(userId, _personalAccessToken);
+            var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
+            
+            if (string.IsNullOrEmpty(personalAccessToken))
+            {
+                ErrorMessage = "No Personal Access Token found. Please log in again.";
+                return;
+            }
+            
+            var orgs = await _client.GetOrganizationsAsync(userId, personalAccessToken);
             foreach (var o in orgs)
                 Organizations.Add(o);
             SelectedOrganization = Organizations.FirstOrDefault(o => o.Name == _initialSettings.Organization) ??
@@ -414,7 +513,14 @@ public class SettingsWindowViewModel : ViewModelBase
             if (SelectedOrganization == null)
                 return;
 
-            var projects = await _client.GetProjectsAsync(SelectedOrganization.Name, _personalAccessToken);
+            var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
+            if (string.IsNullOrEmpty(personalAccessToken))
+            {
+                ErrorMessage = "No Personal Access Token found. Please log in again.";
+                return;
+            }
+
+            var projects = await _client.GetProjectsAsync(SelectedOrganization.Name, personalAccessToken);
             foreach (var p in projects)
                 Projects.Add(p);
             SelectedProject = Projects.FirstOrDefault(p => p.Name == _initialSettings.Project) ??
@@ -441,7 +547,14 @@ public class SettingsWindowViewModel : ViewModelBase
             if (SelectedOrganization == null || SelectedProject == null)
                 return;
 
-            var repos = await _client.GetRepositoriesAsync(SelectedOrganization.Name, SelectedProject.Name, _personalAccessToken);
+            var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
+            if (string.IsNullOrEmpty(personalAccessToken))
+            {
+                ErrorMessage = "No Personal Access Token found. Please log in again.";
+                return;
+            }
+
+            var repos = await _client.GetRepositoriesAsync(SelectedOrganization.Name, SelectedProject.Name, personalAccessToken);
             foreach (var r in repos)
                 Repositories.Add(r);
             SelectedRepository = Repositories.FirstOrDefault(r => r.Id == _initialSettings.Repository) ??
@@ -457,9 +570,67 @@ public class SettingsWindowViewModel : ViewModelBase
         }
     }
 
-    private void InitializeEditorOptions()
+    private async Task InitializeEditorOptionsAsync()
     {
-        // Add available editors with user-friendly names
+        try
+        {
+            // Start with basic editor list for immediate UI responsiveness
+            var basicEditors = new[] { "code", "notepad", "devenv" };
+            foreach (var editor in basicEditors)
+            {
+                var displayName = GetEditorDisplayName(editor);
+                Editors.Add(editor);
+                EditorOptions.Add(new EditorOption(displayName, editor));
+            }
+            
+            // Add custom option
+            EditorOptions.Add(new EditorOption("Custom...", "custom"));
+            
+            // Set initial selection
+            SetInitialEditorSelection();
+            
+            // Load full editor list in background
+            var availableEditors = await EditorDetector.GetAvailableEditorsAsync();
+            
+            // Update UI on main thread
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                // Clear and rebuild with actual detected editors
+                Editors.Clear();
+                EditorOptions.Clear();
+                
+                foreach (var editor in availableEditors)
+                {
+                    var displayName = GetEditorDisplayName(editor);
+                    Editors.Add(editor);
+                    EditorOptions.Add(new EditorOption(displayName, editor));
+                }
+                
+                // Re-add custom option
+                EditorOptions.Add(new EditorOption("Custom...", "custom"));
+                
+                // Restore selection
+                SetInitialEditorSelection();
+            });
+        }
+        catch (Exception ex)
+        {
+            // Log error but don't block initialization
+            System.Diagnostics.Debug.WriteLine($"Error initializing editor options: {ex.Message}");
+        }
+    }
+
+    private void SetInitialEditorSelection()
+    {
+        var currentEditor = _selectedEditor;
+        _selectedEditorOption = EditorOptions.FirstOrDefault(e => e.Command == currentEditor) ??
+                               EditorOptions.FirstOrDefault();
+        this.RaisePropertyChanged(nameof(SelectedEditorOption));
+        this.RaisePropertyChanged(nameof(ShowCustomEditorPath));
+    }
+
+    private string GetEditorDisplayName(string editor)
+    {
         var editorMappings = new Dictionary<string, string>
         {
             { "code", "Visual Studio Code" },
@@ -480,29 +651,15 @@ public class SettingsWindowViewModel : ViewModelBase
             { "nano", "Nano" },
             { "emacs", "Emacs" }
         };
-
-        foreach (var editor in EditorDetector.GetAvailableEditors())
-        {
-            var displayName = editorMappings.TryGetValue(editor, out var name) ? name : editor;
-            EditorOptions.Add(new EditorOption(displayName, editor));
-        }
-
-        // Add custom option
-        EditorOptions.Add(new EditorOption("Custom...", "custom"));
-
-        // Set selected editor
-        var currentEditor = _selectedEditor;
-        _selectedEditorOption = EditorOptions.FirstOrDefault(e => e.Command == currentEditor) ??
-                               EditorOptions.FirstOrDefault();
-        this.RaisePropertyChanged(nameof(SelectedEditorOption));
-        this.RaisePropertyChanged(nameof(ShowCustomEditorPath));
+        
+        return editorMappings.TryGetValue(Path.GetFileNameWithoutExtension(editor), out var name) ? name : editor;
     }
 
     private async void BrowseForEditor()
     {
         try
         {
-            var storageProvider = App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+            var storageProvider = App.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.ClassicDesktopStyleApplicationLifetime desktop
                 ? desktop.MainWindow?.StorageProvider
                 : null;
 

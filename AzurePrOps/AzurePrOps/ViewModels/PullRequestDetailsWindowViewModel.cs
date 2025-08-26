@@ -768,7 +768,13 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to load threads");
-            // Ensure we still show the 
+            // Ensure we still show the UI even if threads fail to load
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                Threads.Clear();
+                this.RaisePropertyChanged(nameof(FilteredThreads));
+                this.RaisePropertyChanged(nameof(FilteredThreadsCount));
+            });
         }
     }
 

@@ -83,14 +83,33 @@
     </Style>
 
     <Style Selector="Button.SecondaryButton:pointerover">
-        <Setter Property="Background" Value="{StaticResource HoverBrush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+        <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+    </Style>
+
+    <!--  Link Button Style for subtle actions  -->
+    <Style Selector="Button.LinkButton">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="4,2" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Duration="0:0:0.15" Property="Foreground" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <Style Selector="Button.LinkButton:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryHoverBrush}" />
     </Style>
 
     <Style Selector="Button.SuccessButton">
-        <Setter Property="Background" Value="{StaticResource SuccessBrush}" />
+        <Setter Property="Background" Value="{DynamicResource SuccessBrush}" />
         <Setter Property="Foreground" Value="White" />
-        <Setter Property="BorderBrush" Value="{StaticResource SuccessBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource SuccessBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="6" />
         <Setter Property="Padding" Value="12,8" />
@@ -128,6 +147,32 @@
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
         <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
         <Setter Property="Padding" Value="8,6" />
+    </Style>
+
+    <!--  Modern TextBox Style  -->
+    <Style Selector="TextBox.ModernTextBox">
+        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource PrimaryBrush}" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Duration="0:0:0.15" Property="BorderBrush" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <Style Selector="TextBox.ModernTextBox:focus">
+        <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+        <Setter Property="BorderThickness" Value="2" />
+    </Style>
+
+    <Style Selector="TextBox.ModernTextBox:pointerover">
+        <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
     </Style>
 
     <!--  ListBox styles  -->

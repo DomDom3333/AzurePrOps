@@ -8,11 +8,14 @@ using System.Reactive;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using AzurePrOps.Logging;
 
 namespace AzurePrOps.ViewModels;
 
 public class ProjectSelectionWindowViewModel : ViewModelBase
 {
+    private static readonly ILogger _logger = AppLogger.CreateLogger<ProjectSelectionWindowViewModel>();
     private readonly AzureDevOpsClient _client = new();
     private readonly string _personalAccessToken;
     private readonly string _reviewerId;
@@ -70,10 +73,9 @@ public class ProjectSelectionWindowViewModel : ViewModelBase
                 SelectedOrganization?.Name ?? string.Empty,
                 SelectedProject?.Name ?? string.Empty,
                 SelectedRepository?.Id ?? string.Empty,
-                _personalAccessToken,
                 _reviewerId,
                 EditorDetector.GetDefaultEditor(),
-                UseGitDiff: true);
+                true); // UseGitDiff parameter in correct position
             ConnectionSettingsStorage.Save(settings);
             ConnectionSettings = settings;
 
@@ -116,17 +118,20 @@ public class ProjectSelectionWindowViewModel : ViewModelBase
         catch (UnauthorizedAccessException ex)
         {
             ErrorMessage = "Unable to connect to Azure DevOps: Invalid credentials. Please check your Personal Access Token.";
-            throw new InvalidOperationException(ErrorMessage, ex);
+            _logger.LogWarning(ex, "Authentication failed in ProjectSelectionWindowViewModel");
+            // Don't throw - let the UI handle the error message
         }
         catch (HttpRequestException ex)
         {
             ErrorMessage = $"Unable to connect to Azure DevOps: {ex.Message}";
-            throw new InvalidOperationException(ErrorMessage, ex);
+            _logger.LogWarning(ex, "HTTP request failed in ProjectSelectionWindowViewModel");
+            // Don't throw - let the UI handle the error message
         }
         catch (Exception ex)
         {
             ErrorMessage = $"An unexpected error occurred: {ex.Message}";
-            throw new InvalidOperationException(ErrorMessage, ex);
+            _logger.LogError(ex, "Unexpected error in ProjectSelectionWindowViewModel");
+            // Don't throw - let the UI handle the error message
         }
         finally
         {

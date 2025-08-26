@@ -41,5 +41,6 @@
         <PackageReference Include="Markdown.Avalonia" Version="11.0.2" />
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
         <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.6" />
+        <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
     </ItemGroup>
 </Project>

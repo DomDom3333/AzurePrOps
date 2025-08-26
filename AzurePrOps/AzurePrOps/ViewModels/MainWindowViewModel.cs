@@ -20,6 +20,7 @@ using AzurePrOps.Views;
 using Microsoft.Extensions.Logging;
 using AzurePrOps.Logging;
 using System.Linq;
+using AzurePrOps.Infrastructure;
 
 namespace AzurePrOps.ViewModels;
 
@@ -28,8 +29,9 @@ public class MainWindowViewModel : ViewModelBase
     private static readonly ILogger _logger = AppLogger.CreateLogger<MainWindowViewModel>();
     private readonly AzureDevOpsClient _client = new();
     private readonly IPullRequestService _pullRequestService;
-    private readonly Models.ConnectionSettings _settings;
+    private Models.ConnectionSettings _settings; // Remove readonly to allow updates
     private readonly PullRequestFilteringSortingService _filterSortService = new();
+    private readonly AuthenticationService _authService;
     private IReadOnlyList<string> _userGroupMemberships = new List<string>();
 
     public ObservableCollection<PullRequestInfo> PullRequests { get; } = new();
@@ -532,12 +534,26 @@ public class MainWindowViewModel : ViewModelBase
             // Load cached group settings
             _groupSettings = await GroupSettingsStorage.LoadAsync();
 
+            // Validate PAT before making API calls
+            if (!await _authService.ValidateAndRedirectIfNeededAsync())
+            {
+                return; // User was redirected to login
+            }
+
+            var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
+            if (string.IsNullOrEmpty(personalAccessToken))
+            {
+                _logger.LogWarning("No Personal Access Token found for loading groups");
+                _authService.RedirectToLogin();
+                return;
+            }
+
             // Get pull requests to extract groups from
             var prs = await _client.GetPullRequestsAsync(
                 _settings.Organization,
                 _settings.Project,
                 _settings.Repository,
-                _settings.PersonalAccessToken);
+                personalAccessToken);
 
             // Extract available groups from pull requests
             var allGroups = new HashSet<string>();
@@ -580,6 +596,14 @@ public class MainWindowViewModel : ViewModelBase
             }
             UpdateSelectedGroupsText();
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            _authService.HandlePatValidationError(ex, "LoadAndCacheGroupsAsync");
+        }
+        catch (System.Net.Http.HttpRequestException ex) when (ex.Message.Contains("401") || ex.Message.Contains("403"))
+        {
+            _authService.HandlePatValidationError(ex, "LoadAndCacheGroupsAsync");
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to load and cache groups");
@@ -613,6 +637,9 @@ public class MainWindowViewModel : ViewModelBase
     public MainWindowViewModel(Models.ConnectionSettings settings)
     {
         _settings = settings;
+        
+        // Get the AuthenticationService from the service registry
+        _authService = ServiceRegistry.Resolve<AuthenticationService>() ?? new AuthenticationService();
 
         _pullRequestService = PullRequestServiceFactory.Create(
             PullRequestServiceType.AzureDevOps);
@@ -654,17 +681,30 @@ public class MainWindowViewModel : ViewModelBase
         {
             try
             {
+                // Validate PAT before making API calls
+                if (!await _authService.ValidateAndRedirectIfNeededAsync())
+                {
+                    return; // User was redirected to login
+                }
+
+                var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
+                if (string.IsNullOrEmpty(personalAccessToken))
+                {
+                    _authService.RedirectToLogin();
+                    return;
+                }
+
                 var prs = await _client.GetPullRequestsAsync(
                     _settings.Organization,
                     _settings.Project,
                     _settings.Repository,
-                    _settings.PersonalAccessToken);
+                    personalAccessToken);
 
                 // Fetch user group memberships for filtering
                 // TODO: Re-enable when performance is improved - currently takes too long
                 // _userGroupMemberships = await _client.GetUserGroupMembershipsAsync(
                 //     _settings.Organization,
-                //     _settings.PersonalAccessToken);
+                //     personalAccessToken);
                 
                 // Temporarily disabled due to performance issues - return empty list
                 _userGroupMemberships = new List<string>();
@@ -704,13 +744,41 @@ public class MainWindowViewModel : ViewModelBase
             if (SelectedPullRequest == null)
                 return;
 
-            await _client.ApprovePullRequestAsync(
-                _settings.Organization,
-                _settings.Project,
-                _settings.Repository,
-                SelectedPullRequest.Id,
-                _settings.ReviewerId,
-                _settings.PersonalAccessToken);
+            try
+            {
+                // Validate PAT before making API calls
+                if (!await _authService.ValidateAndRedirectIfNeededAsync())
+                {
+                    return; // User was redirected to login
+                }
+
+                var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
+                if (string.IsNullOrEmpty(personalAccessToken))
+                {
+                    _authService.RedirectToLogin();
+                    return;
+                }
+
+                await _client.ApprovePullRequestAsync(
+                    _settings.Organization,
+                    _settings.Project,
+                    _settings.Repository,
+                    SelectedPullRequest.Id,
+                    _settings.ReviewerId,
+                    personalAccessToken);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _authService.HandlePatValidationError(ex, "ApproveCommand");
+            }
+            catch (System.Net.Http.HttpRequestException ex) when (ex.Message.Contains("401") || ex.Message.Contains("403"))
+            {
+                _authService.HandlePatValidationError(ex, "ApproveCommand");
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorMessage($"Failed to approve pull request: {ex.Message}");
+            }
         }, hasSelection);
 
         ApproveWithSuggestionsCommand = ReactiveCommand.CreateFromTask(async () =>
@@ -718,19 +786,33 @@ public class MainWindowViewModel : ViewModelBase
             if (SelectedPullRequest == null)
                 return;
 
+            var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
+            if (string.IsNullOrEmpty(personalAccessToken))
+            {
+                await ShowErrorMessage("No Personal Access Token found. Please log in again.");
+                return;
+            }
+
             await _client.ApproveWithSuggestionsAsync(
                 _settings.Organization,
                 _settings.Project,
                 _settings.Repository,
                 SelectedPullRequest.Id,
                 _settings.ReviewerId,
-                _settings.PersonalAccessToken);
+                personalAccessToken);
         }, hasSelection);
 
         WaitForAuthorCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             if (SelectedPullRequest == null)
                 return;
+
+            var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
+            if (string.IsNullOrEmpty(personalAccessToken))
+            {
+                await ShowErrorMessage("No Personal Access Token found. Please log in again.");
+                return;
+            }
 
             await _client.SetPullRequestVoteAsync(
                 _settings.Organization,
@@ -739,7 +821,7 @@ public class MainWindowViewModel : ViewModelBase
                 SelectedPullRequest.Id,
                 _settings.ReviewerId,
                 -5,
-                _settings.PersonalAccessToken);
+                personalAccessToken);
         }, hasSelection);
 
         RejectCommand = ReactiveCommand.CreateFromTask(async () =>
@@ -747,19 +829,33 @@ public class MainWindowViewModel : ViewModelBase
             if (SelectedPullRequest == null)
                 return;
 
+            var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
+            if (string.IsNullOrEmpty(personalAccessToken))
+            {
+                await ShowErrorMessage("No Personal Access Token found. Please log in again.");
+                return;
+            }
+
             await _client.RejectPullRequestAsync(
                 _settings.Organization,
                 _settings.Project,
                 _settings.Repository,
                 SelectedPullRequest.Id,
                 _settings.ReviewerId,
-                _settings.PersonalAccessToken);
+                personalAccessToken);
         }, hasSelection);
 
         MarkDraftCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             if (SelectedPullRequest == null)
                 return;
+
+            var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
+            if (string.IsNullOrEmpty(personalAccessToken))
+            {
+                await ShowErrorMessage("No Personal Access Token found. Please log in again.");
+                return;
+            }
 
             // Since MarkAsDraftAsync doesn't exist, use SetPullRequestVoteAsync or similar approach
             // This is a placeholder - you may need to implement the actual draft marking logic
@@ -770,13 +866,20 @@ public class MainWindowViewModel : ViewModelBase
                 SelectedPullRequest.Id,
                 _settings.ReviewerId ?? string.Empty,
                 0, // No vote for draft
-                _settings.PersonalAccessToken);
+                personalAccessToken);
         }, hasSelection);
 
         MarkReadyCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             if (SelectedPullRequest == null)
                 return;
+
+            var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
+            if (string.IsNullOrEmpty(personalAccessToken))
+            {
+                await ShowErrorMessage("No Personal Access Token found. Please log in again.");
+                return;
+            }
 
             // Since MarkAsReadyAsync doesn't exist, use SetPullRequestVoteAsync or similar approach
             // This is a placeholder - you may need to implement the actual ready marking logic
@@ -787,7 +890,7 @@ public class MainWindowViewModel : ViewModelBase
                 SelectedPullRequest.Id,
                 _settings.ReviewerId ?? string.Empty,
                 0, // No vote for ready
-                _settings.PersonalAccessToken);
+                personalAccessToken);
         }, hasSelection);
 
         CompleteCommand = ReactiveCommand.CreateFromTask(async () =>
@@ -815,13 +918,20 @@ public class MainWindowViewModel : ViewModelBase
             if (SelectedPullRequest == null || string.IsNullOrWhiteSpace(NewCommentText))
                 return;
 
+            var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
+            if (string.IsNullOrEmpty(personalAccessToken))
+            {
+                await ShowErrorMessage("No Personal Access Token found. Please log in again.");
+                return;
+            }
+
             await _client.PostPullRequestCommentAsync(
                 _settings.Organization,
                 _settings.Project,
                 _settings.Repository,
                 SelectedPullRequest.Id,
                 NewCommentText,
-                _settings.PersonalAccessToken);
+                personalAccessToken);
 
             NewCommentText = string.Empty;
         }, hasSelection);
@@ -910,12 +1020,65 @@ public class MainWindowViewModel : ViewModelBase
             NewViewName = string.Empty;
         });
 
-        OpenSettingsCommand = ReactiveCommand.Create(() =>
+        OpenSettingsCommand = ReactiveCommand.CreateFromTask(async () =>
         {
-            var settingsWindow = new SettingsWindow();
+            var settingsViewModel = new SettingsWindowViewModel(_settings);
+            var settingsWindow = new SettingsWindow
+            {
+                DataContext = settingsViewModel
+            };
+            settingsViewModel.DialogWindow = settingsWindow;
+            
+            // Load Azure DevOps data asynchronously
+            try
+            {
+                await settingsViewModel.LoadAsync();
+            }
+            catch (Exception ex)
+            {
+                // If loading fails, the settings window will still open but show error messages
+                // The ViewModel handles error display internally
+            }
+            
             if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
-                settingsWindow.ShowDialog(desktop.MainWindow);
+                var result = await settingsWindow.ShowDialog<ConnectionSettings?>(desktop.MainWindow);
+                
+                // If settings were saved, refresh the main window
+                if (result != null)
+                {
+                    // Store the old settings for comparison
+                    var oldSettings = _settings;
+                    
+                    // Update the current settings reference
+                    _settings = result;
+                    
+                    // Update the pull request service with new settings
+                    if (_pullRequestService is AzureDevOpsPullRequestService azService)
+                    {
+                        azService.UseGitClient = _settings.UseGitDiff;
+                    }
+                    
+                    // Update user information in filter criteria
+                    FilterCriteria.CurrentUserId = _settings.ReviewerId ?? string.Empty;
+                    FilterCriteria.UserDisplayName = _settings.UserDisplayName ?? string.Empty;
+                    
+                    // Check if connection details changed
+                    bool connectionChanged = oldSettings.Organization != result.Organization || 
+                                           oldSettings.Project != result.Project || 
+                                           oldSettings.Repository != result.Repository;
+                    
+                    // Always refresh the data after settings change to ensure UI reflects new preferences
+                    // This covers cases like diff preferences, UI preferences, feature flags, etc.
+                    try
+                    {
+                        await RefreshCommand.Execute();
+                    }
+                    catch (Exception ex)
+                    {
+                        await ShowErrorMessage($"Settings saved successfully, but failed to refresh data: {ex.Message}");
+                    }
+                }
             }
         });
 
@@ -1478,15 +1641,19 @@ public class MainWindowViewModel : ViewModelBase
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(_settings.Organization) || string.IsNullOrWhiteSpace(_settings.PersonalAccessToken))
+            var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
+            if (string.IsNullOrWhiteSpace(_settings.Organization) || string.IsNullOrWhiteSpace(personalAccessToken))
             {
                 _logger.LogWarning("Cannot retrieve user information: Organization or Personal Access Token is missing");
+                // Don't redirect to login here - the user just successfully logged in
+                // If there's really an issue, other operations will catch it
                 return;
             }
 
             _logger.LogInformation("Automatically retrieving current user information from Azure DevOps...");
             
-            var userInfo = await _client.GetCurrentUserAsync(_settings.Organization, _settings.PersonalAccessToken);
+            // Try to get user info without aggressive PAT validation that could cause redirect loops
+            var userInfo = await _client.GetCurrentUserAsync(_settings.Organization, personalAccessToken);
             
             if (userInfo != UserInfo.Empty && !string.IsNullOrEmpty(userInfo.Id) && !string.IsNullOrEmpty(userInfo.DisplayName))
             {
@@ -1513,6 +1680,17 @@ public class MainWindowViewModel : ViewModelBase
             {
                 _logger.LogWarning("Could not retrieve user information from Azure DevOps. Using existing settings if available.");
             }
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Failed to retrieve user information - unauthorized. Will continue with existing settings.");
+            // Don't redirect to login during initialization - this could cause redirect loops
+            // The user just successfully logged in, so let other operations handle auth issues if they persist
+        }
+        catch (System.Net.Http.HttpRequestException ex) when (ex.Message.Contains("401") || ex.Message.Contains("403"))
+        {
+            _logger.LogWarning(ex, "Failed to retrieve user information - HTTP auth error. Will continue with existing settings.");
+            // Don't redirect to login during initialization - this could cause redirect loops
         }
         catch (Exception ex)
         {

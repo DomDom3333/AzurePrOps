@@ -1,23 +1,327 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:vm="using:AzurePrOps.ViewModels"
-        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="250"
-        x:Class="AzurePrOps.Views.LoginWindow"
-        x:DataType="vm:LoginWindowViewModel"
-        Title="Login">
-    <StackPanel Margin="10" Spacing="6">
-        <TextBox Watermark="Email" Text="{Binding Email}" />
-        <TextBox Watermark="PAT" Text="{Binding PersonalAccessToken}" />
-        <Button Classes="PrimaryButton"
-                Content="Login"
-                Command="{Binding LoginCommand}"
-                Width="100"
-                HorizontalAlignment="Right" />
-        <TextBlock Text="{Binding ErrorMessage}"
-                   Foreground="{DynamicResource ErrorBrush}"
-                   TextWrapping="Wrap"
-                   IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-    </StackPanel>
+<Window
+    Background="{DynamicResource BackgroundBrush}"
+    CanResize="False"
+    Height="600"
+    Icon="/Assets/avalonia-logo.ico"
+    Title="AzurePrOps - Connect to Azure DevOps"
+    Width="500"
+    WindowStartupLocation="CenterScreen"
+    d:DesignHeight="600"
+    d:DesignWidth="500"
+    mc:Ignorable="d"
+    x:Class="AzurePrOps.Views.LoginWindow"
+    x:DataType="vm:LoginWindowViewModel"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:converters="using:AzurePrOps.Converters"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:AzurePrOps.ViewModels"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Design.DataContext>
+        <vm:LoginWindowViewModel />
+    </Design.DataContext>
+
+    <Window.Resources>
+        <converters:StringNotEmptyConverter x:Key="StringNotEmptyConverter" />
+    </Window.Resources>
+
+    <Grid>
+        <!--  Main content area  -->
+        <Border
+            Background="{DynamicResource SurfaceBrush}"
+            CornerRadius="8"
+            Margin="24">
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="32" Spacing="24">
+
+                    <!--  Header Section  -->
+                    <StackPanel HorizontalAlignment="Center" Spacing="8">
+                        <TextBlock
+                            FontSize="32"
+                            FontWeight="Bold"
+                            Foreground="{DynamicResource PrimaryBrush}"
+                            HorizontalAlignment="Center"
+                            Text="AzurePrOps" />
+                        <TextBlock
+                            FontSize="16"
+                            Foreground="{DynamicResource TextSecondaryBrush}"
+                            HorizontalAlignment="Center"
+                            Text="Connect to Azure DevOps"
+                            TextAlignment="Center" />
+                    </StackPanel>
+
+                    <!--  Welcome Message  -->
+                    <Border
+                        Background="{DynamicResource PrimaryLightBrush}"
+                        CornerRadius="6"
+                        Padding="16">
+                        <StackPanel Spacing="8">
+                            <TextBlock
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource PrimaryBrush}"
+                                Text="Welcome to AzurePrOps!" />
+                            <TextBlock
+                                Foreground="{DynamicResource TextSecondaryBrush}"
+                                Text="To get started, you'll need a Personal Access Token (PAT) from Azure DevOps with the appropriate permissions."
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <!--  Instructions Section  -->
+                    <StackPanel Spacing="12">
+                        <TextBlock
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            Text="How to create a Personal Access Token:" />
+
+                        <StackPanel Margin="12,0,0,0" Spacing="6">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Ellipse
+                                    Fill="{DynamicResource PrimaryBrush}"
+                                    Height="6"
+                                    VerticalAlignment="Center"
+                                    Width="6" />
+                                <TextBlock
+                                    FontSize="13"
+                                    Foreground="{DynamicResource TextSecondaryBrush}"
+                                    Text="Go to Azure DevOps → User Settings → Personal Access Tokens"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Ellipse
+                                    Fill="{DynamicResource PrimaryBrush}"
+                                    Height="6"
+                                    VerticalAlignment="Center"
+                                    Width="6" />
+                                <TextBlock
+                                    FontSize="13"
+                                    Foreground="{DynamicResource TextSecondaryBrush}"
+                                    Text="Create a new token with 'Code (Read)' scope minimum"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Ellipse
+                                    Fill="{DynamicResource PrimaryBrush}"
+                                    Height="6"
+                                    VerticalAlignment="Center"
+                                    Width="6" />
+                                <TextBlock
+                                    FontSize="13"
+                                    Foreground="{DynamicResource TextSecondaryBrush}"
+                                    Text="For full functionality, also include 'Work Items (Read)' scope"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!--  Quick Access Links  -->
+                        <StackPanel
+                            HorizontalAlignment="Center"
+                            Margin="0,8,0,0"
+                            Orientation="Horizontal"
+                            Spacing="8">
+                            <Button
+                                Classes="SecondaryButton"
+                                Command="{Binding OpenPatHelpCommand}"
+                                Content="📖 PAT Guide"
+                                FontSize="12"
+                                Padding="12,6" />
+                            <Button
+                                Classes="SecondaryButton"
+                                Command="{Binding OpenAzureDevOpsCommand}"
+                                Content="🔗 Azure DevOps"
+                                FontSize="12"
+                                Padding="12,6" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!--  Login Form  -->
+                    <StackPanel Spacing="16">
+
+                        <!--  Email Field (Optional)  -->
+                        <StackPanel Spacing="6">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock FontWeight="SemiBold" Text="Email Address" />
+                                <TextBlock
+                                    FontSize="12"
+                                    Foreground="{DynamicResource TextSecondaryBrush}"
+                                    Text="(Optional - for identification)" />
+                            </StackPanel>
+                            <TextBox
+                                Classes="ModernTextBox"
+                                Name="EmailTextBox"
+                                Text="{Binding Email}"
+                                Watermark="your.name@company.com" />
+                        </StackPanel>
+
+                        <!--  PAT Field  -->
+                        <StackPanel Spacing="6">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <TextBlock FontWeight="SemiBold" Text="Personal Access Token" />
+                                <TextBlock
+                                    FontSize="12"
+                                    Foreground="{DynamicResource DangerBrush}"
+                                    Text="*" />
+                            </StackPanel>
+                            <TextBox
+                                Classes="ModernTextBox"
+                                Name="PatTextBox"
+                                PasswordChar="•"
+                                RevealPassword="True"
+                                Text="{Binding PersonalAccessToken}"
+                                Watermark="Paste your PAT here..." />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button
+                                    Classes="LinkButton"
+                                    Command="{Binding TogglePatVisibilityCommand}"
+                                    Content="{Binding PatVisibilityToggleText}"
+                                    FontSize="12"
+                                    Padding="0" />
+                                <Button
+                                    Classes="LinkButton"
+                                    Command="{Binding ValidatePatCommand}"
+                                    Content="🔍 Test Token"
+                                    FontSize="12"
+                                    IsEnabled="{Binding PersonalAccessToken, Converter={StaticResource StringNotEmptyConverter}}"
+                                    Padding="0" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!--  Remember me option  -->
+                        <CheckBox
+                            Content="Remember my credentials securely"
+                            FontSize="13"
+                            IsChecked="{Binding RememberCredentials}" />
+
+                    </StackPanel>
+
+                    <!--  Error Display  -->
+                    <Border
+                        Background="{DynamicResource DangerLightBrush}"
+                        BorderBrush="{DynamicResource DangerBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        IsVisible="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyConverter}}"
+                        Padding="12">
+                        <StackPanel Spacing="8">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock
+                                    FontSize="16"
+                                    Text="⚠️"
+                                    VerticalAlignment="Top" />
+                                <TextBlock
+                                    FontWeight="SemiBold"
+                                    Foreground="{DynamicResource DangerBrush}"
+                                    Text="Authentication Error" />
+                            </StackPanel>
+                            <TextBlock
+                                Foreground="{DynamicResource DangerBrush}"
+                                Text="{Binding ErrorMessage}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <!--  Success Display  -->
+                    <Border
+                        Background="{DynamicResource SuccessLightBrush}"
+                        BorderBrush="{DynamicResource SuccessBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        IsVisible="{Binding IsValidated}"
+                        Padding="12">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock
+                                FontSize="16"
+                                Text="✅"
+                                VerticalAlignment="Center" />
+                            <TextBlock
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource SuccessBrush}"
+                                Text="Token validated successfully!"
+                                VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+
+                    <!--  Action Buttons  -->
+                    <StackPanel Spacing="12">
+                        <Button
+                            Classes="PrimaryButton"
+                            Command="{Binding LoginCommand}"
+                            Content="Connect to Azure DevOps"
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            HorizontalAlignment="Stretch"
+                            IsEnabled="{Binding CanLogin}"
+                            Padding="0,12" />
+
+                        <StackPanel
+                            HorizontalAlignment="Center"
+                            Orientation="Horizontal"
+                            Spacing="16">
+                            <Button
+                                Classes="SecondaryButton"
+                                Command="{Binding LoadSavedCredentialsCommand}"
+                                Content="Load Saved Settings"
+                                FontSize="12"
+                                Padding="12,6" />
+                            <Button
+                                Classes="LinkButton"
+                                Command="{Binding ClearCredentialsCommand}"
+                                Content="Clear All Data"
+                                FontSize="12"
+                                Foreground="{DynamicResource TextSecondaryBrush}"
+                                Padding="12,6" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!--  Loading Indicator  -->
+                    <StackPanel
+                        HorizontalAlignment="Center"
+                        IsVisible="{Binding IsLoading}"
+                        Orientation="Horizontal"
+                        Spacing="8">
+                        <Border
+                            Background="{DynamicResource PrimaryBrush}"
+                            CornerRadius="10"
+                            Height="20"
+                            Width="20">
+                            <Border.RenderTransform>
+                                <RotateTransform />
+                            </Border.RenderTransform>
+                            <Border.Styles>
+                                <Style Selector="Border">
+                                    <Style.Animations>
+                                        <Animation Duration="0:0:1" IterationCount="INFINITE">
+                                            <KeyFrame Cue="0%">
+                                                <Setter Property="(RotateTransform.Angle)" Value="0" />
+                                            </KeyFrame>
+                                            <KeyFrame Cue="100%">
+                                                <Setter Property="(RotateTransform.Angle)" Value="360" />
+                                            </KeyFrame>
+                                        </Animation>
+                                    </Style.Animations>
+                                </Style>
+                            </Border.Styles>
+                        </Border>
+                        <TextBlock
+                            FontSize="13"
+                            Foreground="{DynamicResource TextSecondaryBrush}"
+                            Text="{Binding LoadingMessage}"
+                            VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <!--  Footer  -->
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{DynamicResource TextSecondaryBrush}"
+                        HorizontalAlignment="Center"
+                        Text="Your credentials are stored securely using Windows Credential Manager"
+                        TextAlignment="Center"
+                        TextWrapping="Wrap" />
+
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+    </Grid>
 </Window>
