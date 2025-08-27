@@ -372,7 +372,6 @@ namespace AzurePrOps.Controls
                     {
                         unifiedButton!.IsChecked = false;
                         ViewMode = DiffViewMode.SideBySide;
-                        UpdateStatus("Switched to side-by-side view");
                     }
                 };
 
@@ -382,54 +381,33 @@ namespace AzurePrOps.Controls
                     {
                         sideBySideButton!.IsChecked = false;
                         ViewMode = DiffViewMode.Unified;
-                        UpdateStatus("Switched to unified view");
                     }
                 };
             }
 
             if (nextChangeButton != null)
             {
-                nextChangeButton.Click += (_, __) =>
-                {
-                    NavigateToNextChange();
-                    UpdateStatus($"Navigated to change {_currentChangeIndex + 1} of {_changedLines.Count}");
-                };
+                nextChangeButton.Click += (_, __) => NavigateToNextChange();
             }
 
             if (prevChangeButton != null)
             {
-                prevChangeButton.Click += (_, __) =>
-                {
-                    NavigateToPreviousChange();
-                    UpdateStatus($"Navigated to change {_currentChangeIndex + 1} of {_changedLines.Count}");
-                };
+                prevChangeButton.Click += (_, __) => NavigateToPreviousChange();
             }
 
             if (nextSearchButton != null)
             {
-                nextSearchButton.Click += (_, __) =>
-                {
-                    NavigateToNextSearchResult();
-                    UpdateSearchStatus();
-                };
+                nextSearchButton.Click += (_, __) => NavigateToNextSearchResult();
             }
 
             if (prevSearchButton != null)
             {
-                prevSearchButton.Click += (_, __) =>
-                {
-                    NavigateToPreviousSearchResult();
-                    UpdateSearchStatus();
-                };
+                prevSearchButton.Click += (_, __) => NavigateToPreviousSearchResult();
             }
 
             if (openIdeButton != null)
             {
-                openIdeButton.Click += (_, __) =>
-                {
-                    OpenInIDE();
-                    UpdateStatus("Opened in IDE");
-                };
+                openIdeButton.Click += (_, __) => OpenInIDE();
             }
 
             if (codeFoldingButton != null)
@@ -438,17 +416,12 @@ namespace AzurePrOps.Controls
                 {
                     _codeFoldingEnabled = codeFoldingButton.IsChecked == true;
                     Render();
-                    UpdateStatus(_codeFoldingEnabled ? "Code folding enabled" : "Code folding disabled");
                 };
             }
 
             if (copyButton != null)
             {
-                copyButton.Click += (_, __) =>
-                {
-                    CopySelectedText();
-                    UpdateStatus("Copied selected text");
-                };
+                copyButton.Click += (_, __) => CopySelectedText();
             }
 
             if (_ignoreWhitespaceButton != null)
@@ -459,7 +432,6 @@ namespace AzurePrOps.Controls
                     _ignoreWhitespace = _ignoreWhitespaceButton.IsChecked == true;
                     DiffPreferences.IgnoreWhitespace = _ignoreWhitespace;
                     Render();
-                    UpdateStatus(_ignoreWhitespace ? "Ignoring whitespace" : "Showing whitespace changes");
                 };
             }
 
@@ -471,7 +443,6 @@ namespace AzurePrOps.Controls
                     _ignoreNewlines = _ignoreNewlinesButton.IsChecked == true;
                     DiffPreferences.IgnoreNewlines = _ignoreNewlines;
                     Render();
-                    UpdateStatus(_ignoreNewlines ? "Ignoring EOL differences" : "Showing EOL differences");
                 };
             }
 
@@ -486,17 +457,12 @@ namespace AzurePrOps.Controls
                         _oldEditor.WordWrap = _wrapLines;
                     if (_newEditor != null)
                         _newEditor.WordWrap = _wrapLines;
-                    UpdateStatus(_wrapLines ? "Line wrapping enabled" : "Line wrapping disabled");
                 };
             }
 
             if (copyDiffButton != null)
             {
-                copyDiffButton.Click += (_, __) =>
-                {
-                    CopyDiff();
-                    UpdateStatus("Copied diff to clipboard");
-                };
+                copyDiffButton.Click += (_, __) => CopyDiff();
             }
 
             if (_lineAlignmentButton != null)
@@ -506,7 +472,6 @@ namespace AzurePrOps.Controls
                 {
                     _lineAlignmentEnabled = _lineAlignmentButton.IsChecked == true;
                     Render();
-                    UpdateStatus(_lineAlignmentEnabled ? "Line alignment enabled" : "Line alignment disabled");
                 };
             }
         }
@@ -667,13 +632,10 @@ namespace AzurePrOps.Controls
         }
 
         /// <summary>
-        /// Background diff processing with progressive UI updates
+        /// Background diff processing with streamlined updates
         /// </summary>
         private async Task ProcessDiffInBackground(string oldText, string newText, CancellationToken cancellationToken)
         {
-            // Phase 1: Quick diff for immediate feedback
-            await Dispatcher.UIThread.InvokeAsync(() => UpdateStatus("Computing diff..."));
-
             // Get line counts on UI thread before background processing
             int oldLineCount = 0;
             int newLineCount = 0;
@@ -686,11 +648,7 @@ namespace AzurePrOps.Controls
             var quickResult = await Task.Run(() => ComputeQuickDiff(oldText, newText), cancellationToken);
             
             // Apply quick results first for immediate visual feedback
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                ApplyQuickVisualization(quickResult);
-                UpdateStatus("Applying detailed analysis...");
-            });
+            await Dispatcher.UIThread.InvokeAsync(() => ApplyQuickVisualization(quickResult));
 
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -718,8 +676,6 @@ namespace AzurePrOps.Controls
                     ApplyFolding();
                 else
                     ClearFolding();
-                    
-                UpdateStatus("Diff rendered successfully");
             });
         }
 
@@ -957,7 +913,6 @@ namespace AzurePrOps.Controls
         {
             _oldLineTypes = new Dictionary<int, DiffLineType>(result.OldLineTypes);
             _newLineTypes = new Dictionary<int, DiffLineType>(result.NewLineTypes);
-            _lineTypes = new Dictionary<int, DiffLineType>(result.NewLineTypes); // For backward compatibility
 
             ApplyDiffVisualization(result.OldLineTypes, result.NewLineTypes, 
                                  result.OldWordSpans, result.NewWordSpans);
@@ -2160,7 +2115,7 @@ namespace AzurePrOps.Controls
 
         // Removes BOM and hidden/zero-width characters, normalizes newlines and Unicode
         private static string SanitizeForDiff(string s, bool normalizeNewlines)
-        {
+       {
             if (string.IsNullOrEmpty(s)) return string.Empty;
 
             // Normalize line endings to LF only when requested

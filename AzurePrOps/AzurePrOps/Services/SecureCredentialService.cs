@@ -70,7 +70,7 @@ public class SecureCredentialService
                 }
             }
             
-            _logger.LogInformation("Personal Access Token stored securely");
+            // Only log during actual migration or first-time setup, not routine operations
             return true;
         }
         catch (Exception ex)

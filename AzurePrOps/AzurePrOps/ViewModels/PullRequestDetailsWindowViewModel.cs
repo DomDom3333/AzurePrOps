@@ -209,7 +209,6 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
         // Initialize loading state
         IsLoading = true;
         LoadingProgress = 0.0;
-        LoadingStatus = "Initializing...";
         
         // Start loading tasks and coordinate completion
         _ = InitializeAsync(diffs);

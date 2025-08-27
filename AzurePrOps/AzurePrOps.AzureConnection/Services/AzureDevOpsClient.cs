@@ -1412,7 +1412,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
 
                 if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(displayName))
                 {
-                    _logger.LogInformation("Successfully retrieved user profile: {DisplayName} ({Id})", displayName, id);
+                    _logger.LogDebug("Retrieved user profile: {DisplayName} ({Id})", displayName, id);
                     return new UserInfo(id, displayName, email, uniqueName);
                 }
             }

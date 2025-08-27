@@ -18,6 +18,7 @@ public static class ConnectionSettingsStorage
         "settings.json");
     
     private static readonly SecureCredentialService _credentialService = new();
+    private static bool _migrationAttempted = false;
 
     public static bool TryLoad(out ConnectionSettings? settings)
     {
@@ -30,47 +31,51 @@ public static class ConnectionSettingsStorage
             var json = File.ReadAllText(FilePath);
             
             // Try to deserialize with the old format first (for migration)
-            try
+            // Only attempt migration once per application session
+            if (!_migrationAttempted)
             {
-                var legacySettings = JsonSerializer.Deserialize<LegacyConnectionSettings>(json);
-                if (legacySettings != null && !string.IsNullOrEmpty(legacySettings.PersonalAccessToken))
+                _migrationAttempted = true;
+                try
                 {
-                    // Migrate the PAT token to secure storage
-                    _logger.LogInformation("Migrating Personal Access Token to secure storage");
-                    if (_credentialService.StorePersonalAccessToken(legacySettings.PersonalAccessToken, legacySettings.ReviewerId))
+                    var legacySettings = JsonSerializer.Deserialize<LegacyConnectionSettings>(json);
+                    if (legacySettings != null && !string.IsNullOrEmpty(legacySettings.PersonalAccessToken))
                     {
-                        // Create new settings without the PAT token
-                        settings = new ConnectionSettings(
-                            legacySettings.Organization,
-                            legacySettings.Project,
-                            legacySettings.Repository,
-                            legacySettings.ReviewerId,
-                            legacySettings.EditorCommand,
-                            legacySettings.UseGitDiff,
-                            legacySettings.SelectedReviewerGroups,
-                            legacySettings.IncludeGroupReviews,
-                            legacySettings.SelectedGroupsForFiltering,
-                            legacySettings.EnableGroupFiltering,
-                            legacySettings.UserDisplayName)
+                        // Migrate the PAT token to secure storage (only log if migration actually happens)
+                        if (_credentialService.StorePersonalAccessToken(legacySettings.PersonalAccessToken, legacySettings.ReviewerId))
                         {
-                            HasSecureToken = true
-                        };
-                        
-                        // Save the updated settings without the PAT token
-                        Save(settings);
-                        _logger.LogInformation("Migration completed successfully");
-                        return true;
-                    }
-                    else
-                    {
-                        _logger.LogError("Failed to migrate Personal Access Token to secure storage");
-                        return false;
+                            // Create new settings without the PAT token
+                            settings = new ConnectionSettings(
+                                legacySettings.Organization,
+                                legacySettings.Project,
+                                legacySettings.Repository,
+                                legacySettings.ReviewerId,
+                                legacySettings.EditorCommand,
+                                legacySettings.UseGitDiff,
+                                legacySettings.SelectedReviewerGroups,
+                                legacySettings.IncludeGroupReviews,
+                                legacySettings.SelectedGroupsForFiltering,
+                                legacySettings.EnableGroupFiltering,
+                                legacySettings.UserDisplayName)
+                            {
+                                HasSecureToken = true
+                            };
+                            
+                            // Save the updated settings without the PAT token
+                            Save(settings);
+                            _logger.LogInformation("Personal Access Token migration completed");
+                            return true;
+                        }
+                        else
+                        {
+                            _logger.LogError("Failed to migrate Personal Access Token to secure storage");
+                            return false;
+                        }
                     }
                 }
-            }
-            catch (JsonException)
-            {
-                // Not legacy format, continue with new format
+                catch (JsonException)
+                {
+                    // Not legacy format, continue with new format
+                }
             }
             
             // Try new format
