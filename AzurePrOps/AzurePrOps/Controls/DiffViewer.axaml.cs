@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -22,12 +23,11 @@ using AzurePrOps.AzureConnection.Services;
 using DiffPlex;
 using DiffPlex.DiffBuilder;
 using DiffPlex.DiffBuilder.Model;
-using Microsoft.Extensions.Logging;
-using AzurePrOps.Logging;
 using AzurePrOps.Infrastructure;
 using Markdown.Avalonia;
 using System.IO;
 using System.Text;
+using System.Threading;
 
 namespace AzurePrOps.Controls
 {
@@ -35,8 +35,6 @@ namespace AzurePrOps.Controls
 
     public partial class DiffViewer : UserControl
     {
-        private static readonly ILogger _logger = AppLogger.CreateLogger<DiffViewer>();
-
         // Dependency properties
         public static readonly StyledProperty<string> OldTextProperty =
             AvaloniaProperty.Register<DiffViewer, string>(nameof(OldText));
@@ -98,6 +96,27 @@ namespace AzurePrOps.Controls
         private int _currentSearchIndex = -1;
         private Dictionary<int, CommentThread> _threadsByLine = new();
         private Popup? _commentPopup;
+        
+        // Performance optimization fields
+        private bool _isInitialized = false;
+        private bool _isRendering = false;
+        private CancellationTokenSource? _renderCancellation;
+        private TaskCompletionSource<bool>? _initializationTask;
+        private readonly SemaphoreSlim _renderSemaphore = new(1, 1);
+        
+        // Lazy rendering optimization
+        private bool _isVisible = false;
+        private bool _hasBeenRendered = false;
+        private string? _pendingOldText;
+        private string? _pendingNewText;
+        private readonly object _renderLock = new object();
+        
+        // Hardware acceleration flags
+        private static readonly bool _useParallelProcessing = Environment.ProcessorCount > 2;
+        private static readonly ParallelOptions _parallelOptions = new() 
+        { 
+            MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2) 
+        };
 
         // Line alignment support for better diff comparison
         private Dictionary<int, int> _lineMapping = new(); // Maps old editor lines to new editor lines
@@ -109,17 +128,14 @@ namespace AzurePrOps.Controls
         {
             ViewModeProperty.Changed.AddClassHandler<DiffViewer>((x, e) =>
             {
-                _logger.LogDebug("DiffViewer ViewMode changed: {Old} -> {New}", e.OldValue, e.NewValue);
                 x.Render();
             });
             OldTextProperty.Changed.AddClassHandler<DiffViewer>((x, e) =>
             {
-                _logger.LogDebug("DiffViewer OldText changed: Length = {Length}", (e.NewValue as string)?.Length ?? 0);
                 x.Render();
             });
             NewTextProperty.Changed.AddClassHandler<DiffViewer>((x, e) =>
             {
-                _logger.LogDebug("DiffViewer NewText changed: Length = {Length}", (e.NewValue as string)?.Length ?? 0);
                 x.Render();
             });
         }
@@ -516,8 +532,6 @@ namespace AzurePrOps.Controls
             if (_oldEditor is null || _newEditor is null)
                 return;
 
-            _logger.LogDebug("Setting up DiffViewer editors");
-
             // Enhanced editor setup
             var highlightDef = HighlightingManager.Instance.GetDefinitionByExtension(".cs");
             _oldEditor.SyntaxHighlighting = highlightDef;
@@ -555,35 +569,495 @@ namespace AzurePrOps.Controls
 
         public void Render()
         {
-            _logger.LogDebug("DiffViewer.Render() called");
-            if (_oldEditor is null || _newEditor is null)
+            // Use the optimized async rendering by default
+            _ = RenderAsync();
+        }
+
+        private async Task RenderAsync()
+        {
+            // Prevent multiple simultaneous renders
+            if (!await _renderSemaphore.WaitAsync(0))
             {
-                _logger.LogWarning("DiffViewer.Render(): editors are null, aborting render");
                 return;
             }
 
-            UpdateStatus("Rendering diff...");
+            try
+            {
+                // Cancel any previous render operation
+                _renderCancellation?.Cancel();
+                _renderCancellation = new CancellationTokenSource();
 
-            ResetFoldingManagers();
+                // Check if we should defer rendering until the control is visible
+                if (!_isVisible && !_hasBeenRendered)
+                {
+                    _pendingOldText = OldText;
+                    _pendingNewText = NewText;
+                    return;
+                }
 
-            string oldTextRaw = OldText ?? string.Empty;
-            string newTextRaw = NewText ?? string.Empty;
-            string oldTextValue = SanitizeForDiff(oldTextRaw, _ignoreNewlines);
-            string newTextValue = SanitizeForDiff(newTextRaw, _ignoreNewlines);
+                // Mark as rendering
+                _isRendering = true;
+                UpdateStatus("Rendering diff...");
 
-            _oldEditor.Document = new AvaloniaEdit.Document.TextDocument(oldTextValue);
-            _newEditor.Document = new AvaloniaEdit.Document.TextDocument(newTextValue);
-            _oldEditor.Text = oldTextValue;
-            _newEditor.Text = newTextValue;
-
-            _oldEditor.TextArea.TextView.LineTransformers.Clear();
-            _newEditor.TextArea.TextView.LineTransformers.Clear();
-            _oldEditor.TextArea.TextView.BackgroundRenderers.Clear();
-            _newEditor.TextArea.TextView.BackgroundRenderers.Clear();
-
-            // Enhanced diff processing with better feedback (async to avoid UI freeze)
-            _ = ProcessDiffAndUpdateUIAsync(oldTextValue, newTextValue);
+                await ProcessDiffOptimizedAsync(_renderCancellation.Token);
+            }
+            finally
+            {
+                _isRendering = false;
+                _renderSemaphore.Release();
+            }
         }
+
+        /// <summary>
+        /// Optimized diff processing with parallel computation and progressive rendering
+        /// </summary>
+        private async Task ProcessDiffOptimizedAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                if (_oldEditor == null || _newEditor == null)
+                {
+                    return;
+                }
+
+                string oldTextRaw = OldText ?? string.Empty;
+                string newTextRaw = NewText ?? string.Empty;
+
+                // Quick check for empty content
+                if (string.IsNullOrEmpty(oldTextRaw) && string.IsNullOrEmpty(newTextRaw))
+                {
+                    await Dispatcher.UIThread.InvokeAsync(() => ClearEditors());
+                    return;
+                }
+
+                // Sanitize text off the UI thread
+                var (oldText, newText) = await Task.Run(() =>
+                {
+                    var old = SanitizeForDiff(oldTextRaw, _ignoreNewlines);
+                    var new_ = SanitizeForDiff(newTextRaw, _ignoreNewlines);
+                    return (old, new_);
+                }, cancellationToken);
+
+                // Update editors immediately for responsiveness
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    ResetFoldingManagers();
+                    _oldEditor.Document = new TextDocument(oldText);
+                    _newEditor.Document = new TextDocument(newText);
+                    _oldEditor.Text = oldText;
+                    _newEditor.Text = newText;
+                    ClearVisualization();
+                });
+
+                cancellationToken.ThrowIfCancellationRequested();
+
+                // Process diff computation in background with progress updates
+                await ProcessDiffInBackground(oldText, newText, cancellationToken);
+
+                _hasBeenRendered = true;
+            }
+            catch (OperationCanceledException)
+            {
+                await Dispatcher.UIThread.InvokeAsync(() => UpdateStatus("Rendering cancelled"));
+            }
+            catch (Exception ex)
+            {
+                await Dispatcher.UIThread.InvokeAsync(() => UpdateStatus($"Error: {ex.Message}"));
+            }
+        }
+
+        /// <summary>
+        /// Background diff processing with progressive UI updates
+        /// </summary>
+        private async Task ProcessDiffInBackground(string oldText, string newText, CancellationToken cancellationToken)
+        {
+            // Phase 1: Quick diff for immediate feedback
+            await Dispatcher.UIThread.InvokeAsync(() => UpdateStatus("Computing diff..."));
+
+            // Get line counts on UI thread before background processing
+            int oldLineCount = 0;
+            int newLineCount = 0;
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                oldLineCount = _oldEditor?.Document.LineCount ?? 0;
+                newLineCount = _newEditor?.Document.LineCount ?? 0;
+            });
+
+            var quickResult = await Task.Run(() => ComputeQuickDiff(oldText, newText), cancellationToken);
+            
+            // Apply quick results first for immediate visual feedback
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                ApplyQuickVisualization(quickResult);
+                UpdateStatus("Applying detailed analysis...");
+            });
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Phase 2: Detailed analysis with hardware acceleration
+            var detailedResult = await Task.Run(() =>
+            {
+                if (_useParallelProcessing && oldText.Length > 10000 && newText.Length > 10000)
+                {
+                    return ComputeDetailedDiffParallel(oldText, newText, cancellationToken, oldLineCount, newLineCount);
+                }
+                else
+                {
+                    return ComputeDetailedDiff(oldText, newText, cancellationToken, oldLineCount, newLineCount);
+                }
+            }, cancellationToken);
+
+            // Apply detailed results
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                ApplyDetailedVisualization(detailedResult);
+                ApplySearchHighlighting();
+                UpdateMetrics();
+                
+                if (_codeFoldingEnabled)
+                    ApplyFolding();
+                else
+                    ClearFolding();
+                    
+                UpdateStatus("Diff rendered successfully");
+            });
+        }
+
+        /// <summary>
+        /// Quick diff computation for immediate feedback
+        /// </summary>
+        private QuickDiffResult ComputeQuickDiff(string oldText, string newText)
+        {
+            var result = new QuickDiffResult();
+            
+            // Handle special cases
+            if (string.IsNullOrEmpty(oldText) && !string.IsNullOrEmpty(newText))
+            {
+                result.IsNewFile = true;
+                result.LineCount = newText.Split('\n').Length;
+                return result;
+            }
+
+            if (!string.IsNullOrEmpty(oldText) && string.IsNullOrEmpty(newText))
+            {
+                result.IsDeletedFile = true;
+                result.LineCount = oldText.Split('\n').Length;
+                return result;
+            }
+
+            // Quick line-based diff for immediate visual feedback
+            var oldLines = oldText.Split('\n');
+            var newLines = newText.Split('\n');
+            
+            result.OldLineCount = oldLines.Length;
+            result.NewLineCount = newLines.Length;
+            result.AddedLines = Math.Max(0, newLines.Length - oldLines.Length);
+            result.RemovedLines = Math.Max(0, oldLines.Length - newLines.Length);
+            
+            return result;
+        }
+
+        /// <summary>
+        /// Detailed diff computation with full analysis
+        /// </summary>
+        private DetailedDiffResult ComputeDetailedDiff(string oldText, string newText, CancellationToken cancellationToken, int oldLineCount, int newLineCount)
+        {
+            var sbs = new DiffPlex.DiffBuilder.SideBySideDiffBuilder(new Differ())
+                .BuildDiffModel(oldText, newText, _ignoreWhitespace);
+
+            var result = new DetailedDiffResult
+            {
+                OldLineTypes = new Dictionary<int, DiffLineType>(),
+                NewLineTypes = new Dictionary<int, DiffLineType>(),
+                OldWordSpans = new Dictionary<int, List<(int start, int length)>>(),
+                NewWordSpans = new Dictionary<int, List<(int start, int length)>>()
+            };
+
+            int count = Math.Max(sbs.OldText.Lines.Count, sbs.NewText.Lines.Count);
+            
+            for (int i = 0; i < count && !cancellationToken.IsCancellationRequested; i++)
+            {
+                ProcessDiffLine(sbs, i, result);
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Build line mappings for alignment, passing the line counts from UI thread
+            if (_lineAlignmentEnabled)
+            {
+                BuildLineAlignmentMappings(new Dictionary<int, DiffLineType>(result.OldLineTypes), 
+                                         new Dictionary<int, DiffLineType>(result.NewLineTypes), oldLineCount, newLineCount);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Parallel diff computation for large files
+        /// </summary>
+        private DetailedDiffResult ComputeDetailedDiffParallel(string oldText, string newText, CancellationToken cancellationToken, int oldLineCount, int newLineCount)
+        {
+            var sbs = new DiffPlex.DiffBuilder.SideBySideDiffBuilder(new Differ())
+                .BuildDiffModel(oldText, newText, _ignoreWhitespace);
+
+            var result = new DetailedDiffResult
+            {
+                OldLineTypes = new ConcurrentDictionary<int, DiffLineType>(),
+                NewLineTypes = new ConcurrentDictionary<int, DiffLineType>(),
+                OldWordSpans = new ConcurrentDictionary<int, List<(int start, int length)>>(),
+                NewWordSpans = new ConcurrentDictionary<int, List<(int start, int length)>>()
+            };
+
+            int count = Math.Max(sbs.OldText.Lines.Count, sbs.NewText.Lines.Count);
+            
+            // Process lines in parallel batches
+            var batches = Enumerable.Range(0, count)
+                .Select((index, i) => new { Index = index, Batch = i / 100 })
+                .GroupBy(x => x.Batch)
+                .Select(g => g.Select(x => x.Index).ToList())
+                .ToList();
+
+            Parallel.ForEach(batches, _parallelOptions, batch =>
+            {
+                if (cancellationToken.IsCancellationRequested) return;
+
+                foreach (int i in batch)
+                {
+                    if (cancellationToken.IsCancellationRequested) break;
+                    ProcessDiffLine(sbs, i, result);
+                }
+            });
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            // Convert concurrent dictionaries to regular dictionaries
+            var finalResult = new DetailedDiffResult
+            {
+                OldLineTypes = new Dictionary<int, DiffLineType>(result.OldLineTypes),
+                NewLineTypes = new Dictionary<int, DiffLineType>(result.NewLineTypes),
+                OldWordSpans = new Dictionary<int, List<(int start, int length)>>(result.OldWordSpans),
+                NewWordSpans = new Dictionary<int, List<(int start, int length)>>(result.NewWordSpans)
+            };
+
+            if (_lineAlignmentEnabled)
+            {
+                BuildLineAlignmentMappings(finalResult.OldLineTypes, finalResult.NewLineTypes, oldLineCount, newLineCount);
+            }
+
+            return finalResult;
+        }
+
+        /// <summary>
+        /// Process a single diff line (extracted for reuse in parallel processing)
+        /// </summary>
+        private void ProcessDiffLine(SideBySideDiffModel sbs, int i, DetailedDiffResult result)
+        {
+            var oldPiece = i < sbs.OldText.Lines.Count ? sbs.OldText.Lines[i] : null;
+            var newPiece = i < sbs.NewText.Lines.Count ? sbs.NewText.Lines[i] : null;
+
+            if (oldPiece != null)
+            {
+                int posOld = oldPiece.Position ?? (i + 1);
+                var oldType = Map(oldPiece.Type);
+                
+                if (result.OldLineTypes is ConcurrentDictionary<int, DiffLineType> concurrentOld)
+                    concurrentOld[posOld] = oldType;
+                else
+                    result.OldLineTypes[posOld] = oldType;
+            }
+
+            if (newPiece != null)
+            {
+                int posNew = newPiece.Position ?? (i + 1);
+                var newType = Map(newPiece.Type);
+                
+                if (result.NewLineTypes is ConcurrentDictionary<int, DiffLineType> concurrentNew)
+                    concurrentNew[posNew] = newType;
+                else
+                    result.NewLineTypes[posNew] = newType;
+            }
+
+            // Word-level analysis for modified lines
+            if (oldPiece != null && newPiece != null && 
+                (oldPiece.Type == ChangeType.Modified || newPiece.Type == ChangeType.Modified))
+            {
+                ProcessWordLevelDiff(oldPiece, newPiece, result);
+            }
+        }
+
+        /// <summary>
+        /// Process word-level differences for modified lines
+        /// </summary>
+        private void ProcessWordLevelDiff(DiffPiece oldPiece, DiffPiece newPiece, DetailedDiffResult result)
+        {
+            int posOld = oldPiece.Position ?? 0;
+            int posNew = newPiece.Position ?? 0;
+            string oldLineText = oldPiece.Text ?? string.Empty;
+            string newLineText = newPiece.Text ?? string.Empty;
+
+            var (oldSpans, newSpans) = ComputeTokenDiffSpans(oldLineText, newLineText);
+
+            if (oldSpans.Count > 0)
+            {
+                if (result.OldWordSpans is ConcurrentDictionary<int, List<(int start, int length)>> concurrentOldSpans)
+                    concurrentOldSpans[posOld] = oldSpans;
+                else
+                    result.OldWordSpans[posOld] = oldSpans;
+            }
+
+            if (newSpans.Count > 0)
+            {
+                if (result.NewWordSpans is ConcurrentDictionary<int, List<(int start, int length)>> concurrentNewSpans)
+                    concurrentNewSpans[posNew] = newSpans;
+                else
+                    result.NewWordSpans[posNew] = newSpans;
+            }
+        }
+
+        /// <summary>
+        /// Apply quick visualization for immediate feedback
+        /// </summary>
+        private void ApplyQuickVisualization(QuickDiffResult result)
+        {
+            if (result.IsNewFile)
+            {
+                var newLines = NewText?.Split('\n') ?? Array.Empty<string>();
+                _lineTypes = newLines
+                    .Select((_, i) => new { Line = i + 1, Type = DiffLineType.Added })
+                    .ToDictionary(x => x.Line, x => x.Type);
+                
+                if (_addedLinesText != null) _addedLinesText.Text = $"{newLines.Length} added";
+                if (_removedLinesText != null) _removedLinesText.Text = "0 removed";
+                if (_modifiedLinesText != null) _modifiedLinesText.Text = "0 modified";
+            }
+            else if (result.IsDeletedFile)
+            {
+                var oldLines = OldText?.Split('\n') ?? Array.Empty<string>();
+                _lineTypes = oldLines
+                    .Select((_, i) => new { Line = i + 1, Type = DiffLineType.Removed })
+                    .ToDictionary(x => x.Line, x => x.Type);
+                
+                if (_addedLinesText != null) _addedLinesText.Text = "0 added";
+                if (_removedLinesText != null) _removedLinesText.Text = $"{oldLines.Length} removed";
+                if (_modifiedLinesText != null) _modifiedLinesText.Text = "0 modified";
+            }
+            else
+            {
+                // Show preliminary stats
+                if (_addedLinesText != null) _addedLinesText.Text = $"~{result.AddedLines} added";
+                if (_removedLinesText != null) _removedLinesText.Text = $"~{result.RemovedLines} removed";
+                if (_modifiedLinesText != null) _modifiedLinesText.Text = "analyzing...";
+            }
+        }
+
+        /// <summary>
+        /// Apply detailed visualization with full diff analysis
+        /// </summary>
+        private void ApplyDetailedVisualization(DetailedDiffResult result)
+        {
+            _oldLineTypes = new Dictionary<int, DiffLineType>(result.OldLineTypes);
+            _newLineTypes = new Dictionary<int, DiffLineType>(result.NewLineTypes);
+            _lineTypes = new Dictionary<int, DiffLineType>(result.NewLineTypes); // For backward compatibility
+
+            ApplyDiffVisualization(result.OldLineTypes, result.NewLineTypes, 
+                                 result.OldWordSpans, result.NewWordSpans);
+
+            // Update accurate statistics
+            int added = result.NewLineTypes.Count(kv => kv.Value == DiffLineType.Added);
+            int removed = result.OldLineTypes.Count(kv => kv.Value == DiffLineType.Removed);
+            int modified = result.NewLineTypes.Count(kv => kv.Value == DiffLineType.Modified) + 
+                          result.OldLineTypes.Count(kv => kv.Value == DiffLineType.Modified);
+
+            if (_addedLinesText != null) _addedLinesText.Text = $"{added} added";
+            if (_removedLinesText != null) _removedLinesText.Text = $"{removed} removed";
+            if (_modifiedLinesText != null) _modifiedLinesText.Text = $"{modified} modified";
+        }
+
+        /// <summary>
+        /// Clear all visualizations
+        /// </summary>
+        private void ClearVisualization()
+        {
+            _oldEditor?.TextArea.TextView.LineTransformers.Clear();
+            _newEditor?.TextArea.TextView.LineTransformers.Clear();
+            _oldEditor?.TextArea.TextView.BackgroundRenderers.Clear();
+            _newEditor?.TextArea.TextView.BackgroundRenderers.Clear();
+        }
+
+        /// <summary>
+        /// Clear editors content
+        /// </summary>
+        private void ClearEditors()
+        {
+            if (_oldEditor != null)
+            {
+                _oldEditor.Document = new TextDocument(string.Empty);
+                _oldEditor.Text = string.Empty;
+            }
+            if (_newEditor != null)
+            {
+                _newEditor.Document = new TextDocument(string.Empty);
+                _newEditor.Text = string.Empty;
+            }
+            
+            ClearVisualization();
+            UpdateStatus("Ready");
+        }
+
+        /// <summary>
+        /// Handle visibility changes for lazy rendering
+        /// </summary>
+        protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnAttachedToVisualTree(e);
+            _isVisible = true;
+            
+            // If we have pending content, render it now
+            if (!_hasBeenRendered && (_pendingOldText != null || _pendingNewText != null))
+            {
+                OldText = _pendingOldText ?? string.Empty;
+                NewText = _pendingNewText ?? string.Empty;
+                _pendingOldText = null;
+                _pendingNewText = null;
+                _ = RenderAsync();
+            }
+        }
+
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnDetachedFromVisualTree(e);
+            _isVisible = false;
+            
+            // Cancel any ongoing render operation
+            _renderCancellation?.Cancel();
+        }
+
+        /// <summary>
+        /// Result of quick diff computation for immediate feedback
+        /// </summary>
+        private class QuickDiffResult
+        {
+            public bool IsNewFile { get; set; }
+            public bool IsDeletedFile { get; set; }
+            public int LineCount { get; set; }
+            public int OldLineCount { get; set; }
+            public int NewLineCount { get; set; }
+            public int AddedLines { get; set; }
+            public int RemovedLines { get; set; }
+        }
+
+        /// <summary>
+        /// Result of detailed diff computation with full analysis
+        /// </summary>
+        private class DetailedDiffResult
+        {
+            public IDictionary<int, DiffLineType> OldLineTypes { get; set; } = new Dictionary<int, DiffLineType>();
+            public IDictionary<int, DiffLineType> NewLineTypes { get; set; } = new Dictionary<int, DiffLineType>();
+            public IDictionary<int, List<(int start, int length)>> OldWordSpans { get; set; } = new Dictionary<int, List<(int start, int length)>>();
+            public IDictionary<int, List<(int start, int length)>> NewWordSpans { get; set; } = new Dictionary<int, List<(int start, int length)>>();
+        }
+
+        // Add missing methods that are referenced but not implemented
 
         private void ProcessDiffAndUpdateUI(string oldTextValue, string newTextValue)
         {
@@ -618,166 +1092,6 @@ namespace AzurePrOps.Controls
                 ApplyFolding();
             else
                 ClearFolding();
-        }
-
-        private async System.Threading.Tasks.Task ProcessDiffAndUpdateUIAsync(string oldTextValue, string newTextValue)
-        {
-            try
-            {
-                // Handle special cases for new/deleted files quickly on UI thread
-                if (string.IsNullOrEmpty(oldTextValue) && !string.IsNullOrEmpty(newTextValue))
-                {
-                    HandleNewFile(newTextValue);
-                    UpdateStatus("Diff rendered successfully");
-                    return;
-                }
-
-                if (!string.IsNullOrEmpty(oldTextValue) && string.IsNullOrEmpty(newTextValue))
-                {
-                    HandleDeletedFile(oldTextValue);
-                    UpdateStatus("Diff rendered successfully");
-                    return;
-                }
-
-                bool ignoreWhitespace = _ignoreWhitespace; // capture for background
-
-                // Build the diff model off the UI thread
-                var result = await System.Threading.Tasks.Task.Run(() =>
-                {
-                    static bool IsMeaningful(string s)
-                    {
-                        if (string.IsNullOrEmpty(s)) return false;
-                        foreach (var ch in s)
-                        {
-                            if (!char.IsWhiteSpace(ch) && !char.IsPunctuation(ch))
-                                return true;
-                        }
-                        return false;
-                    }
-
-                    var sbs = new DiffPlex.DiffBuilder.SideBySideDiffBuilder(new Differ())
-                        .BuildDiffModel(oldTextValue, newTextValue, ignoreWhitespace);
-
-                    var oldMap = new Dictionary<int, DiffLineType>();
-                    var newMap = new Dictionary<int, DiffLineType>();
-                    var oldWord = new Dictionary<int, List<(int start, int length)>>();
-                    var newWord = new Dictionary<int, List<(int start, int length)>>();
-
-                    int count = System.Math.Max(sbs.OldText.Lines.Count, sbs.NewText.Lines.Count);
-                    for (int i = 0; i < count; i++)
-                    {
-                        var oldPiece = i < sbs.OldText.Lines.Count ? sbs.OldText.Lines[i] : null;
-                        var newPiece = i < sbs.NewText.Lines.Count ? sbs.NewText.Lines[i] : null;
-
-                        if (oldPiece != null)
-                        {
-                            int posOld = oldPiece.Position ?? (i + 1);
-                            oldMap[posOld] = Map(oldPiece.Type);
-                        }
-                        if (newPiece != null)
-                        {
-                            int posNew = newPiece.Position ?? (i + 1);
-                            newMap[posNew] = Map(newPiece.Type);
-                        }
-
-                        // Word-level spans for modified lines using token-aware diff (ignores pure formatting/newline changes)
-                        if (oldPiece != null && newPiece != null && (oldPiece.Type == ChangeType.Modified || newPiece.Type == ChangeType.Modified))
-                        {
-                            int posOld = oldPiece.Position ?? (i + 1);
-                            int posNew = newPiece.Position ?? (i + 1);
-                            string oldLineText = oldPiece.Text ?? string.Empty;
-                            string newLineText = newPiece.Text ?? string.Empty;
-
-                            var (oldSp, newSp) = ComputeTokenDiffSpans(oldLineText, newLineText);
-
-                            if (oldSp.Count > 0)
-                            {
-                                if (!oldWord.TryGetValue(posOld, out var list))
-                                {
-                                    list = new List<(int start, int length)>();
-                                    oldWord[posOld] = list;
-                                }
-                                list.AddRange(oldSp);
-                            }
-                            if (newSp.Count > 0)
-                            {
-                                if (!newWord.TryGetValue(posNew, out var list))
-                                {
-                                    list = new List<(int start, int length)>();
-                                    newWord[posNew] = list;
-                                }
-                                list.AddRange(newSp);
-                            }
-
-                            // If no meaningful token spans detected, downgrade Modified to Unchanged on that side
-                            if (oldPiece.Type == ChangeType.Modified && (!oldWord.ContainsKey(posOld) || oldWord[posOld].Count == 0))
-                                oldMap[posOld] = DiffLineType.Unchanged;
-                            if (newPiece.Type == ChangeType.Modified && (!newWord.ContainsKey(posNew) || newWord[posNew].Count == 0))
-                                newMap[posNew] = DiffLineType.Unchanged;
-                        }
-                    }
-
-                    // Fallback: ensure maps cover all lines (unchanged lines default)
-                    if (oldMap.Count == 0)
-                    {
-                        var oldLines = oldTextValue.Split('\n');
-                        for (int i = 0; i < oldLines.Length; i++) oldMap[i + 1] = DiffLineType.Unchanged;
-                    }
-                    if (newMap.Count == 0)
-                    {
-                        var newLines = newTextValue.Split('\n');
-                        for (int i = 0; i < newLines.Length; i++) newMap[i + 1] = DiffLineType.Unchanged;
-                    }
-
-                    return (oldMap, newMap, oldWord, newWord);
-                }).ConfigureAwait(false);
-
-                // Apply results on UI thread
-                Dispatcher.UIThread.Post(() =>
-                {
-                    var (oldMap, newMap, oldWord, newWord) = result;
-                    // Store maps for folding/navigation
-                    _oldLineTypes = oldMap;
-                    _newLineTypes = newMap;
-                    // For backward compatibility some features use _lineTypes; use new side
-                    _lineTypes = newMap;
-
-                    // Build line alignment mappings for better diff comparison
-                    if (_lineAlignmentEnabled)
-                    {
-                        BuildLineAlignmentMappings(oldMap, newMap);
-                    }
-                    else
-                    {
-                        // Clear mappings when alignment is disabled
-                        _lineMapping.Clear();
-                        _reverseLineMapping.Clear();
-                    }
-
-                    ApplyDiffVisualization(oldMap, newMap, oldWord, newWord);
-
-                    // Update statistics combined (meaningful modified already filtered)
-                    int added = newMap.Count(kv => kv.Value == DiffLineType.Added);
-                    int removed = oldMap.Count(kv => kv.Value == DiffLineType.Removed);
-                    int modified = newMap.Count(kv => kv.Value == DiffLineType.Modified) + oldMap.Count(kv => kv.Value == DiffLineType.Modified);
-                    if (_addedLinesText != null) _addedLinesText.Text = $"{added} added";
-                    if (_removedLinesText != null) _removedLinesText.Text = $"{removed} removed";
-                    if (_modifiedLinesText != null) _modifiedLinesText.Text = $"{modified} modified";
-
-                    ApplySearchHighlighting();
-                    UpdateMetrics();
-                    if (_codeFoldingEnabled)
-                        ApplyFolding();
-                    else
-                        ClearFolding();
-                    UpdateStatus("Diff rendered successfully");
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error while rendering diff asynchronously");
-                await Dispatcher.UIThread.InvokeAsync(() => UpdateStatus($"Error: {ex.Message}"));
-            }
         }
 
         private void HandleNewFile(string newText)
@@ -824,39 +1138,45 @@ namespace AzurePrOps.Controls
 
         // New overload that supports independent maps and word-level spans for each editor
         private void ApplyDiffVisualization(
-            Dictionary<int, DiffLineType> oldMap,
-            Dictionary<int, DiffLineType> newMap,
-            Dictionary<int, List<(int start, int length)>> oldWordSpans,
-            Dictionary<int, List<(int start, int length)>> newWordSpans)
+            IDictionary<int, DiffLineType> oldMap,
+            IDictionary<int, DiffLineType> newMap,
+            IDictionary<int, List<(int start, int length)>> oldWordSpans,
+            IDictionary<int, List<(int start, int length)>> newWordSpans)
         {
             if (_oldEditor == null || _newEditor == null)
                 return;
+
+            // Convert IDictionary to Dictionary for compatibility with existing methods
+            var oldMapDict = new Dictionary<int, DiffLineType>(oldMap);
+            var newMapDict = new Dictionary<int, DiffLineType>(newMap);
+            var oldWordSpansDict = new Dictionary<int, List<(int start, int length)>>(oldWordSpans);
+            var newWordSpansDict = new Dictionary<int, List<(int start, int length)>>(newWordSpans);
 
             // Clear any existing line transformers; keep other background renderers (comments, etc.) intact
             _oldEditor.TextArea.TextView.LineTransformers.Clear();
             _newEditor.TextArea.TextView.LineTransformers.Clear();
 
-            var oldTransformer = new DiffLineBackgroundTransformer(oldMap);
-            var newTransformer = new DiffLineBackgroundTransformer(newMap);
+            var oldTransformer = new DiffLineBackgroundTransformer(oldMapDict);
+            var newTransformer = new DiffLineBackgroundTransformer(newMapDict);
             _oldEditor.TextArea.TextView.LineTransformers.Add(oldTransformer);
             _newEditor.TextArea.TextView.LineTransformers.Add(newTransformer);
 
             // Word-level transformers (deleted parts on the old editor, inserted parts on the new editor)
-            var oldWordTransformer = new WordDiffColorizingTransformer(oldWordSpans, isAdditionStyle: false);
-            var newWordTransformer = new WordDiffColorizingTransformer(newWordSpans, isAdditionStyle: true);
+            var oldWordTransformer = new WordDiffColorizingTransformer(oldWordSpansDict, isAdditionStyle: false);
+            var newWordTransformer = new WordDiffColorizingTransformer(newWordSpansDict, isAdditionStyle: true);
             _oldEditor.TextArea.TextView.LineTransformers.Add(oldWordTransformer);
             _newEditor.TextArea.TextView.LineTransformers.Add(newWordTransformer);
 
-            var oldMarginRenderer = new LineStatusMarginRenderer(oldMap);
-            var newMarginRenderer = new LineStatusMarginRenderer(newMap);
+            var oldMarginRenderer = new LineStatusMarginRenderer(oldMapDict);
+            var newMarginRenderer = new LineStatusMarginRenderer(newMapDict);
             _oldEditor.TextArea.TextView.BackgroundRenderers.Add(oldMarginRenderer);
             _newEditor.TextArea.TextView.BackgroundRenderers.Add(newMarginRenderer);
 
             // Track changed lines for navigation using the new editor's perspective primarily
-            _changedLines = newMap
+            _changedLines = newMapDict
                 .Where(kv => kv.Value != DiffLineType.Unchanged)
                 .Select(kv => kv.Key)
-                .Union(oldMap.Where(kv => kv.Value != DiffLineType.Unchanged).Select(kv => kv.Key))
+                .Union(oldMapDict.Where(kv => kv.Value != DiffLineType.Unchanged).Select(kv => kv.Key))
                 .OrderBy(line => line)
                 .ToList();
         }
@@ -925,9 +1245,9 @@ namespace AzurePrOps.Controls
                     _threadsByLine[t.LineNumber] = t;
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger.LogWarning(ex, "Failed to load comment threads");
+                // Failed to load comment threads - could show user notification if needed
             }
 
             ApplyCommentMarkers();
@@ -1102,9 +1422,9 @@ namespace AzurePrOps.Controls
 
                 ApplyCommentMarkers();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger.LogWarning(ex, "Failed to post comment");
+                // Comment posting failed - could show user notification if needed
             }
         }
 
@@ -1130,9 +1450,9 @@ namespace AzurePrOps.Controls
                 _threadsByLine[thread.LineNumber] = thread;
                 ApplyCommentMarkers();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger.LogWarning(ex, "Failed to update thread status");
+                // Thread status update failed - could show user notification if needed
             }
         }
 
@@ -1297,16 +1617,13 @@ namespace AzurePrOps.Controls
         }
 
         /// <summary>
-        /// Builds line alignment mappings between old and new editors for better diff comparison.
+        /// Builds line alignment mappings between old and new editors.
         /// This creates mappings that align corresponding changed lines for easier review.
         /// </summary>
-        private void BuildLineAlignmentMappings(Dictionary<int, DiffLineType> oldMap, Dictionary<int, DiffLineType> newMap)
+        private void BuildLineAlignmentMappings(IDictionary<int, DiffLineType> oldMap, IDictionary<int, DiffLineType> newMap, int oldLineCount, int newLineCount)
         {
             _lineMapping.Clear();
             _reverseLineMapping.Clear();
-
-            _logger.LogDebug("Building line alignment mappings. Old lines: {OldCount}, New lines: {NewCount}", 
-                oldMap.Count, newMap.Count);
 
             // Get lists of changed lines in each editor
             var oldChangedLines = oldMap.Where(kv => kv.Value != DiffLineType.Unchanged)
@@ -1326,15 +1643,13 @@ namespace AzurePrOps.Controls
             AlignChangeBlocks(oldChangedLines, newChangedLines, oldMap, newMap);
 
             // Strategy 3: Fill in gaps with proportional alignment for unchanged regions
-            FillUnchangedRegions(oldMap, newMap);
-
-            _logger.LogDebug("Line alignment completed. Created {MappingCount} mappings", _lineMapping.Count);
+            FillUnchangedRegions(oldMap, newMap, oldLineCount, newLineCount);
         }
 
         /// <summary>
         /// Aligns modified lines that likely correspond to each other based on position and content.
         /// </summary>
-        private void AlignModifiedLines(Dictionary<int, DiffLineType> oldMap, Dictionary<int, DiffLineType> newMap)
+        private void AlignModifiedLines(IDictionary<int, DiffLineType> oldMap, IDictionary<int, DiffLineType> newMap)
         {
             var oldModified = oldMap.Where(kv => kv.Value == DiffLineType.Modified)
                                    .Select(kv => kv.Key)
@@ -1362,7 +1677,7 @@ namespace AzurePrOps.Controls
         /// Aligns consecutive blocks of changes to improve visual correspondence.
         /// </summary>
         private void AlignChangeBlocks(List<int> oldChangedLines, List<int> newChangedLines, 
-                                     Dictionary<int, DiffLineType> oldMap, Dictionary<int, DiffLineType> newMap)
+                                     IDictionary<int, DiffLineType> oldMap, IDictionary<int, DiffLineType> newMap)
         {
             if (oldChangedLines.Count == 0 || newChangedLines.Count == 0) return;
 
@@ -1446,10 +1761,8 @@ namespace AzurePrOps.Controls
         /// <summary>
         /// Fills gaps in unchanged regions with proportional alignment to maintain context.
         /// </summary>
-        private void FillUnchangedRegions(Dictionary<int, DiffLineType> oldMap, Dictionary<int, DiffLineType> newMap)
+        private void FillUnchangedRegions(IDictionary<int, DiffLineType> oldMap, IDictionary<int, DiffLineType> newMap, int oldLineCount, int newLineCount)
         {
-            int oldLineCount = _oldEditor?.Document.LineCount ?? 0;
-            int newLineCount = _newEditor?.Document.LineCount ?? 0;
 
             if (oldLineCount == 0 || newLineCount == 0) return;
 
@@ -1535,9 +1848,9 @@ namespace AzurePrOps.Controls
                 
                 target.Offset = target.Offset.WithY(targetY);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger.LogWarning(ex, "Error in line-aligned scroll sync, falling back to simple sync");
+                // Error in line-aligned scroll sync, falling back to simple sync
                 target.Offset = target.Offset.WithY(source.Offset.Y);
             }
         }
@@ -1562,9 +1875,9 @@ namespace AzurePrOps.Controls
                     return Math.Max(1, nextLinePosition.Y - linePosition.Y);
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                _logger.LogDebug(ex, "Could not calculate line height, using default");
+                // Could not calculate line height, using default
             }
 
             return 16; // Default line height fallback
@@ -1645,13 +1958,8 @@ namespace AzurePrOps.Controls
 
         private void ApplyFolding()
         {
-            _logger.LogDebug("ApplyFolding() called. _codeFoldingEnabled={CodeFoldingEnabled}", _codeFoldingEnabled);
-
             if (_oldEditor is null || _newEditor is null)
-            {
-                _logger.LogDebug("ApplyFolding(): editors are null, aborting");
                 return;
-            }
 
             _oldFoldingManager ??= FoldingManager.Install(_oldEditor.TextArea);
             _newFoldingManager ??= FoldingManager.Install(_newEditor.TextArea);
@@ -1710,13 +2018,8 @@ namespace AzurePrOps.Controls
                 }
             }
 
-            _logger.LogDebug("ApplyFolding(): Created {OldFoldCount} folds for old editor, {NewFoldCount} folds for new editor",
-                newFoldingsOld.Count, newFoldingsNew.Count);
-
             _oldFoldingManager.UpdateFoldings(newFoldingsOld, -1);
             _newFoldingManager.UpdateFoldings(newFoldingsNew, -1);
-
-            _logger.LogDebug("ApplyFolding(): Successfully applied foldings to both editors");
         }
 
         private void ClearFolding()
@@ -1730,14 +2033,8 @@ namespace AzurePrOps.Controls
             if (_oldEditor is null || _newEditor is null)
                 yield break;
 
-            _logger.LogDebug("GetFoldRegionsAroundChangesForMap: lineCount={LineCount}, map.Count={MapCount}",
-                lineCount, map.Count);
-
             if (lineCount == 0)
-            {
-                _logger.LogDebug("GetFoldRegionsAroundChangesForMap: No lines to process");
                 yield break;
-            }
 
             // Get all changed line numbers for the provided map
             var changedLines = new HashSet<int>();
@@ -1748,10 +2045,7 @@ namespace AzurePrOps.Controls
             }
 
             if (changedLines.Count == 0)
-            {
-                _logger.LogDebug("GetFoldRegionsAroundChangesForMap: No changes found, not folding anything");
                 yield break;
-            }
 
             // Calculate which lines should be visible (changed lines + context)
             var visibleLines = new HashSet<int>();
@@ -1792,8 +2086,6 @@ namespace AzurePrOps.Controls
                 foldRegions.Add((foldStart.Value, lineCount));
             }
 
-            _logger.LogDebug("GetFoldRegionsAroundChangesForMap: Generated {FoldCount} fold regions",
-                foldRegions.Count);
 
             foreach (var region in foldRegions)
             {

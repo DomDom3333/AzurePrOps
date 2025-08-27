@@ -329,7 +329,7 @@ public class SettingsWindowViewModel : ViewModelBase
                     }
                 }
 
-                // Save connection settings
+                // Save connection settings asynchronously
                 var settings = new ConnectionSettings(
                     SelectedOrganization?.Name ?? string.Empty,
                     SelectedProject?.Name ?? string.Empty,
@@ -337,18 +337,17 @@ public class SettingsWindowViewModel : ViewModelBase
                     _reviewerId,
                     editorCommand,
                     UseGitDiff);
-                ConnectionSettingsStorage.Save(settings);
+                
+                // Add proper async operation
+                await Task.Run(() => ConnectionSettingsStorage.Save(settings));
 
-                // Note: Feature flags, diff preferences, and UI preferences are now automatically saved
-                // when their properties are changed, so no explicit saving is needed here
-
-                // Save diff preferences (redundant but kept for explicit consistency)
+                // Save diff preferences asynchronously
                 var diffPreferences = new DiffPreferencesData(
                     IgnoreWhitespace,
                     WrapLines,
                     IgnoreNewlines,
                     ExpandAllDiffsOnOpen);
-                DiffPreferencesStorage.Save(diffPreferences);
+                await Task.Run(() => DiffPreferencesStorage.Save(diffPreferences));
 
                 // Save UI preferences (redundant but kept for explicit consistency)
                 var uiPreferences = new UIPreferencesData(
@@ -357,7 +356,7 @@ public class SettingsWindowViewModel : ViewModelBase
                     RefreshIntervalSeconds,
                     ShowNotifications,
                     MinimizeToTray);
-                UIPreferencesStorage.Save(uiPreferences);
+                await Task.Run(() => UIPreferencesStorage.Save(uiPreferences));
 
                 ConnectionSettings = settings;
 

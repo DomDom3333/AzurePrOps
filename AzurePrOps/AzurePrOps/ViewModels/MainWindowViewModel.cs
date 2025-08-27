@@ -17,8 +17,6 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using System.Diagnostics;
 using AzurePrOps.Views;
-using Microsoft.Extensions.Logging;
-using AzurePrOps.Logging;
 using System.Linq;
 using AzurePrOps.Infrastructure;
 
@@ -26,7 +24,6 @@ namespace AzurePrOps.ViewModels;
 
 public class MainWindowViewModel : ViewModelBase
 {
-    private static readonly ILogger _logger = AppLogger.CreateLogger<MainWindowViewModel>();
     private readonly AzureDevOpsClient _client = new();
     private readonly IPullRequestService _pullRequestService;
     private Models.ConnectionSettings _settings; // Remove readonly to allow updates
@@ -543,7 +540,6 @@ public class MainWindowViewModel : ViewModelBase
             var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
             if (string.IsNullOrEmpty(personalAccessToken))
             {
-                _logger.LogWarning("No Personal Access Token found for loading groups");
                 _authService.RedirectToLogin();
                 return;
             }
@@ -606,7 +602,7 @@ public class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load and cache groups");
+            // Log error (removed excessive logging)
         }
     }
 
@@ -709,10 +705,6 @@ public class MainWindowViewModel : ViewModelBase
                 // Temporarily disabled due to performance issues - return empty list
                 _userGroupMemberships = new List<string>();
                 
-                _logger.LogInformation("[DEBUG_LOG] Fetched user group memberships: {GroupCount} groups: {Groups}", 
-                    _userGroupMemberships?.Count ?? 0, 
-                    _userGroupMemberships != null ? string.Join(", ", _userGroupMemberships) : "null");
-
                 _allPullRequests.Clear();
                 
                 // Clear the selected pull request when refreshing
@@ -764,7 +756,7 @@ public class MainWindowViewModel : ViewModelBase
                     _settings.Project,
                     _settings.Repository,
                     SelectedPullRequest.Id,
-                    _settings.ReviewerId,
+                    _settings.ReviewerId ?? throw new InvalidOperationException("Reviewer ID is required"),
                     personalAccessToken);
             }
             catch (UnauthorizedAccessException ex)
@@ -798,7 +790,7 @@ public class MainWindowViewModel : ViewModelBase
                 _settings.Project,
                 _settings.Repository,
                 SelectedPullRequest.Id,
-                _settings.ReviewerId,
+                _settings.ReviewerId ?? throw new InvalidOperationException("Reviewer ID is required"),
                 personalAccessToken);
         }, hasSelection);
 
@@ -967,7 +959,6 @@ public class MainWindowViewModel : ViewModelBase
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to open pull request details window");
                 await ShowErrorMessage($"Failed to open details window: {ex.Message}");
             }
             finally
@@ -1225,7 +1216,7 @@ public class MainWindowViewModel : ViewModelBase
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to initialize group filtering");
+                // Log error (removed excessive logging)
             }
         });
 
@@ -1238,7 +1229,7 @@ public class MainWindowViewModel : ViewModelBase
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to initialize user information");
+                // Log error (removed excessive logging)
             }
         });
     }
@@ -1276,7 +1267,7 @@ public class MainWindowViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to load preferences");
+            // Log error (removed excessive logging)
             // Continue with default preferences if loading fails
             _preferences = new FilterSortPreferences();
         }
@@ -1288,19 +1279,12 @@ public class MainWindowViewModel : ViewModelBase
     {
         try
         {
-            _logger.LogInformation("Starting to apply saved filter view: {ViewName}", savedView.Name);
-            
             // Set flag to prevent multiple filter applications during this process
             _isApplyingFilterView = true;
             
             // Apply filter criteria from saved view
             var filterData = savedView.FilterCriteria;
 
-            _logger.LogInformation("Filter data - MyPRs: {MyPRs}, AssignedToMe: {AssignedToMe}, NeedsMyReview: {NeedsMyReview}", 
-                filterData.MyPullRequestsOnly, filterData.AssignedToMeOnly, filterData.NeedsMyReviewOnly);
-            _logger.LogInformation("Filter data - Statuses: [{Statuses}], Votes: [{Votes}]", 
-                string.Join(", ", filterData.SelectedStatuses), string.Join(", ", filterData.SelectedReviewerVotes));
-            
             // Reset all filters first (like workflow presets do)
             ResetFiltersToDefaults();
             
@@ -1338,9 +1322,6 @@ public class MainWindowViewModel : ViewModelBase
             ShowAssignedToMeOnly = filterData.AssignedToMeOnly;
             ShowNeedsMyReviewOnly = filterData.NeedsMyReviewOnly;
             
-            _logger.LogInformation("[DEBUG_SAVED_FILTER] Applied boolean filters - ShowMyPullRequestsOnly: {ShowMyPRs}, FilterCriteria.MyPullRequestsOnly: {CriteriaMyPRs}", 
-                ShowMyPullRequestsOnly, FilterCriteria.MyPullRequestsOnly);
-            
             // Apply workflow preset if specified
             if (!string.IsNullOrEmpty(filterData.WorkflowPreset))
             {
@@ -1363,12 +1344,9 @@ public class MainWindowViewModel : ViewModelBase
             // Save the updated preferences
             _preferences.LastSelectedView = savedView.Name;
             FilterSortPreferencesStorage.Save(_preferences);
-            
-            _logger.LogInformation("Successfully applied saved filter view: {ViewName}", savedView.Name);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to apply saved filter view: {ViewName}", savedView.Name);
             // Ensure flag is cleared even if an error occurs
             _isApplyingFilterView = false;
         }
@@ -1415,9 +1393,6 @@ public class MainWindowViewModel : ViewModelBase
                         _statusFilter = targetSelection;
                         this.RaisePropertyChanged(nameof(StatusFilter));
                         UpdateStatusFilter(targetSelection);
-                        
-                        _logger.LogInformation("[DEBUG_LOG] StatusFilter set to: {StatusFilter}, Available count: {AvailableCount}", 
-                            _statusFilter, AvailableStatuses.Count);
                     }, DispatcherPriority.ApplicationIdle);
                 }, DispatcherPriority.Background);
             };
@@ -1455,9 +1430,6 @@ public class MainWindowViewModel : ViewModelBase
     {
         var filteredPRs = _allPullRequests.AsEnumerable();
 
-        _logger.LogInformation("[DEBUG_LOG] ApplyFiltersAndSorting called. Total PRs: {TotalCount}, StatusFilter: {StatusFilter}, SelectedStatuses count: {SelectedStatusesCount}", 
-            _allPullRequests.Count, _statusFilter, FilterCriteria.SelectedStatuses.Count);
-
         // Apply group filtering if enabled
         if (EnableGroupFiltering && _groupSettings.SelectedGroups.Any())
         {
@@ -1469,15 +1441,11 @@ public class MainWindowViewModel : ViewModelBase
 
         var result = _filterSortService.ApplyFiltersAndSorting(filteredPRs, FilterCriteria, SortCriteria, _userGroupMemberships);
 
-        _logger.LogInformation("[DEBUG_LOG] After filtering - Result count: {ResultCount}", result.Count());
-
         PullRequests.Clear();
         foreach (var pr in result)
         {
             PullRequests.Add(pr);
         }
-
-        _logger.LogInformation("[DEBUG_LOG] PullRequests collection updated. Final count: {FinalCount}", PullRequests.Count);
 
         // Update summary statistics and filter state properties
         this.RaisePropertyChanged(nameof(ActivePRCount));
@@ -1644,14 +1612,9 @@ public class MainWindowViewModel : ViewModelBase
             var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
             if (string.IsNullOrWhiteSpace(_settings.Organization) || string.IsNullOrWhiteSpace(personalAccessToken))
             {
-                _logger.LogWarning("Cannot retrieve user information: Organization or Personal Access Token is missing");
-                // Don't redirect to login here - the user just successfully logged in
-                // If there's really an issue, other operations will catch it
                 return;
             }
 
-            _logger.LogInformation("Automatically retrieving current user information from Azure DevOps...");
-            
             // Try to get user info without aggressive PAT validation that could cause redirect loops
             var userInfo = await _client.GetCurrentUserAsync(_settings.Organization, personalAccessToken);
             
@@ -1661,9 +1624,6 @@ public class MainWindowViewModel : ViewModelBase
                 FilterCriteria.CurrentUserId = userInfo.Id;
                 FilterCriteria.UserDisplayName = userInfo.DisplayName;
                 
-                _logger.LogInformation("Successfully retrieved user information: {DisplayName} (ID: {UserId})", 
-                    userInfo.DisplayName, userInfo.Id);
-
                 // Update connection settings to store the retrieved user information for future use
                 var updatedSettings = _settings with 
                 { 
@@ -1673,29 +1633,19 @@ public class MainWindowViewModel : ViewModelBase
                 
                 // Save the updated settings so the user doesn't need to enter this information manually
                 ConnectionSettingsStorage.Save(updatedSettings);
-                
-                _logger.LogInformation("User information has been automatically saved to settings");
-            }
-            else
-            {
-                _logger.LogWarning("Could not retrieve user information from Azure DevOps. Using existing settings if available.");
             }
         }
         catch (UnauthorizedAccessException ex)
         {
-            _logger.LogWarning(ex, "Failed to retrieve user information - unauthorized. Will continue with existing settings.");
-            // Don't redirect to login during initialization - this could cause redirect loops
-            // The user just successfully logged in, so let other operations handle auth issues if they persist
+            _authService.HandlePatValidationError(ex, "InitializeUserInformationAsync");
         }
         catch (System.Net.Http.HttpRequestException ex) when (ex.Message.Contains("401") || ex.Message.Contains("403"))
         {
-            _logger.LogWarning(ex, "Failed to retrieve user information - HTTP auth error. Will continue with existing settings.");
-            // Don't redirect to login during initialization - this could cause redirect loops
+            _authService.HandlePatValidationError(ex, "InitializeUserInformationAsync");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to automatically retrieve user information from Azure DevOps");
-            // Continue with existing settings - this is not a critical failure
+            // Log error (removed excessive logging)
         }
     }
 }

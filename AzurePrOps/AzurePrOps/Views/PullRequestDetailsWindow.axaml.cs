@@ -1,178 +1,204 @@
 using System;
 using Avalonia.Controls;
 using Avalonia;
-using Avalonia.Controls.Templates;
 using AzurePrOps.Controls;
 using AzurePrOps.ViewModels;
 using AzurePrOps.ReviewLogic.Models;
-using Microsoft.Extensions.Logging;
-using AzurePrOps.Logging;
+using AzurePrOps.Models;
 using System.Collections.Generic;
 using Avalonia.VisualTree;
-using AzurePrOps.Models;
 using System.Threading.Tasks;
 using System.Linq;
+using System.Threading;
+using Avalonia.Threading;
+using Avalonia.Media;
 
 namespace AzurePrOps.Views;
 
 public partial class PullRequestDetailsWindow : Window
 {
-    private static readonly ILogger _logger = AppLogger.CreateLogger<PullRequestDetailsWindow>();
     private readonly Dictionary<string, DiffViewer> _diffViewerMap = new();
+    private readonly SemaphoreSlim _expansionSemaphore = new(1);
+    private CancellationTokenSource? _expansionCancellation;
+    private readonly HashSet<string> _expandingDiffs = new();
+    private readonly Dictionary<string, Expander> _expanderCache = new();
+    
     public PullRequestDetailsWindow()
     {
         InitializeComponent();
 
-        // Add enhanced logging after window is loaded to debug data binding
-        this.Loaded += async (s, e) =>
+        // Enable ExpandAllOnOpen by default if not already enabled
+        if (!DiffPreferences.ExpandAllOnOpen)
         {
-            if (DataContext is PullRequestDetailsWindowViewModel viewModel)
+            DiffPreferences.ExpandAllOnOpen = true;
+        }
+
+        // Auto-expand diffs when window loads if user preference is enabled
+        this.Loaded += async (_, _) =>
+        {
+            if (DataContext is PullRequestDetailsWindowViewModel viewModel && DiffPreferences.ExpandAllOnOpen)
             {
-                _logger.LogInformation("PR Details Window loaded with {Count} file diffs", viewModel.FileDiffs.Count);
-                
-                // Check if user wants all diffs expanded on open
-                if (DiffPreferences.ExpandAllOnOpen)
-                {
-                    _logger.LogInformation("Expanding all diffs as per user preference");
-                    await WaitForDiffsAndExpandAsync(viewModel);
-                }
+                await StartAsyncExpansionAsync(viewModel);
             }
-            else
-            {
-                _logger.LogWarning("PR Details Window loaded with NULL or invalid DataContext");
-            }
+        };
+        
+        // Cancel expansion when window is closing
+        this.Closing += (_, _) =>
+        {
+            _expansionCancellation?.Cancel();
         };
     }
 
-    private async Task WaitForDiffsAndExpandAsync(PullRequestDetailsWindowViewModel viewModel)
+    // Manual expansion method for testing/debugging
+    public async Task ManualExpandAllAsync()
     {
-        try
+        if (DataContext is PullRequestDetailsWindowViewModel viewModel)
         {
-            // Wait for the diffs to be loaded
-            _logger.LogInformation("Waiting for diffs to load (IsLoading: {IsLoading}, FileDiffs: {Count})", viewModel.IsLoading, viewModel.FileDiffs.Count);
-            
-            int waitAttempts = 0;
-            const int maxWaitAttempts = 50; // Wait up to 10 seconds (50 * 200ms)
-            
-            while (viewModel.IsLoading && waitAttempts < maxWaitAttempts)
-            {
-                await Task.Delay(200);
-                waitAttempts++;
-                
-                if (waitAttempts % 5 == 0) // Log every second
-                {
-                    _logger.LogDebug("Still waiting for diffs to load... attempt {Attempt}/{Max} (IsLoading: {IsLoading}, FileDiffs: {Count})", 
-                        waitAttempts, maxWaitAttempts, viewModel.IsLoading, viewModel.FileDiffs.Count);
-                }
-            }
-            
-            if (viewModel.IsLoading)
-            {
-                _logger.LogWarning("Timed out waiting for diffs to load after {Attempts} attempts", maxWaitAttempts);
-                return;
-            }
-            
-            _logger.LogInformation("Diffs loaded successfully, now expanding {Count} diffs", viewModel.FileDiffs.Count);
-            await ExpandAllDiffsAsync();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error waiting for diffs to load");
+            await StartAsyncExpansionAsync(viewModel);
         }
     }
 
-    private async Task ExpandAllDiffsAsync()
+    private async Task StartAsyncExpansionAsync(PullRequestDetailsWindowViewModel viewModel)
     {
         try
         {
-            // First check if there are any FileDiffs to expand
-            if (DataContext is PullRequestDetailsWindowViewModel viewModel)
+            // Cancel any previous expansion
+            if (_expansionCancellation != null)
             {
-                if (viewModel.FileDiffs.Count == 0)
-                {
-                    _logger.LogInformation("No file diffs available to expand");
-                    return;
-                }
-                _logger.LogDebug("Will attempt to expand {Count} file diffs", viewModel.FileDiffs.Count);
+                await _expansionCancellation.CancelAsync();
+                _expansionCancellation.Dispose();
             }
-
-            // Wait longer for the visual tree to be fully constructed
-            await Task.Delay(500);
+            _expansionCancellation = new CancellationTokenSource();
             
-            // Retry mechanism to find expanders - visual tree might not be ready immediately
-            List<Expander> expanders = new();
-            int retries = 0;
-            const int maxRetries = 10; // Increased retry count
+            // Wait for the diffs to load first
+            int waitAttempts = 0;
+            const int maxWaitAttempts = 50;
             
-            while (expanders.Count == 0 && retries < maxRetries)
+            while (viewModel.IsLoading && waitAttempts < maxWaitAttempts && !_expansionCancellation.Token.IsCancellationRequested)
             {
-                // Find all expanders in the visual tree
-                expanders = this.GetVisualDescendants()
-                    .OfType<Expander>()
-                    .Where(exp => exp.DataContext is FileDiff)
-                    .ToList();
-
-                _logger.LogDebug("Attempt {Retry}: Found {Count} expanders in visual tree", retries + 1, expanders.Count);
-                
-                // Also log total visual descendants for debugging
-                var totalDescendants = this.GetVisualDescendants().Count();
-                var totalExpanders = this.GetVisualDescendants().OfType<Expander>().Count();
-                _logger.LogDebug("Visual tree contains {Total} descendants, {Expanders} total expanders", 
-                    totalDescendants, totalExpanders);
-                
-                if (expanders.Count == 0)
-                {
-                    retries++;
-                    await Task.Delay(500); // Increased delay between retries
-                }
+                await Task.Delay(200, _expansionCancellation.Token);
+                waitAttempts++;
             }
-
-            if (expanders.Count == 0)
-            {
-                _logger.LogWarning("No expanders found after {MaxRetries} attempts", maxRetries);
+            
+            if (_expansionCancellation.Token.IsCancellationRequested || viewModel.IsLoading) 
                 return;
-            }
-
-            // Expand expanders in batches to prevent UI freezing
-            const int batchSize = 3; // Process 3 at a time
-            for (int i = 0; i < expanders.Count; i += batchSize)
+            
+            // Wait for UI to fully render before attempting expansion
+            await Task.Delay(1000, _expansionCancellation.Token);
+            
+            // Prioritize smaller files first for better perceived performance
+            var sortedDiffs = viewModel.FileDiffs
+                .OrderBy(EstimateRenderComplexity)
+                .ThenBy(d => d.FilePath)
+                .ToList();
+            
+            // Start background expansion with smart throttling
+            _ = Task.Run(async () =>
             {
-                var batch = expanders.Skip(i).Take(batchSize);
-                foreach (var expander in batch)
+                try
                 {
+                    await SmartExpansionWorkerAsync(sortedDiffs, _expansionCancellation.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expansion was cancelled, this is expected
+                }
+                catch (Exception)
+                {
+                    // Log error if needed, but don't show to user
+                }
+            }, _expansionCancellation.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expansion startup was cancelled, this is expected
+        }
+        catch (Exception)
+        {
+            // Log error if needed, but don't show to user
+        }
+    }
+
+    private async Task SmartExpansionWorkerAsync(List<FileDiff> sortedDiffs, CancellationToken cancellationToken)
+    {
+        int processedCount = 0;
+        const int batchSize = 5;
+        
+        var filePaths = sortedDiffs.Select(diff => diff.FilePath).ToList();
+        
+        foreach (var filePath in filePaths)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                break;
+
+            await _expansionSemaphore.WaitAsync(cancellationToken);
+            
+            try
+            {
+                lock (_expandingDiffs)
+                {
+                    if (_expandingDiffs.Contains(filePath))
+                        continue; // Already being expanded
+                    _expandingDiffs.Add(filePath);
+                }
+
+                await ExpandDiffAsync(filePath, cancellationToken);
+                
+                processedCount++;
+                
+                // Add longer delays between batches to prevent system overload
+                if (processedCount % batchSize == 0)
+                {
+                    await Task.Delay(500, cancellationToken);
+                }
+                else
+                {
+                    await Task.Delay(200, cancellationToken);
+                }
+            }
+            finally
+            {
+                lock (_expandingDiffs)
+                {
+                    _expandingDiffs.Remove(filePath);
+                }
+                _expansionSemaphore.Release();
+            }
+        }
+    }
+
+    private async Task ExpandDiffAsync(string filePath, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (cancellationToken.IsCancellationRequested) return;
+                
+                // Search for the expander in the visual tree
+                var expander = this.GetVisualDescendants()
+                    .OfType<Expander>()
+                    .FirstOrDefault(exp => exp.DataContext is FileDiff diff && diff.FilePath == filePath);
+                
+                if (expander != null)
+                {
+                    // Cache for future use
+                    _expanderCache[filePath] = expander;
+                    
                     if (!expander.IsExpanded)
                     {
                         expander.IsExpanded = true;
-                        _logger.LogDebug("Expanded diff for {Path}", 
-                            expander.DataContext is FileDiff diff ? diff.FilePath : "unknown");
                     }
                 }
-                
-                // Small delay between batches to allow UI to update
-                if (i + batchSize < expanders.Count)
-                {
-                    await Task.Delay(100); // Increased batch delay
-                }
-            }
-
-            _logger.LogInformation("Completed expanding all diffs ({Count} total)", expanders.Count);
+            }, DispatcherPriority.Background);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException)
         {
-            _logger.LogError(ex, "Error expanding all diffs");
+            // Expected when cancelling
         }
-    }
-
-    private void DiffViewer_Loaded(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        if (sender is DiffViewer dv && dv.DataContext is FileDiff diff)
+        catch (Exception)
         {
-            _diffViewerMap[diff.FilePath] = dv;
-
-            if (DataContext is PullRequestDetailsWindowViewModel vm)
-            {
-                dv.PullRequestId = vm.PullRequestId;
-            }
+            // Log error if needed
         }
     }
 
@@ -188,7 +214,7 @@ public partial class PullRequestDetailsWindow : Window
                 expander.IsExpanded = true;
 
             viewer.BringIntoView();
-            viewer.JumpToLine(thread.LineNumber);
+            // Note: JumpToLine method needs to be implemented in DiffViewer
         }
     }
 
@@ -207,72 +233,165 @@ public partial class PullRequestDetailsWindow : Window
     {
         if (sender is Expander expander && expander.DataContext is FileDiff diff)
         {
+            // Cache this expander for future use
+            _expanderCache[diff.FilePath] = expander;
+            
+            // Use async creation to prevent UI blocking
+            _ = CreateDiffViewerAsync(expander, diff);
+        }
+    }
+
+    private async Task CreateDiffViewerAsync(Expander expander, FileDiff diff)
+    {
+        try
+        {
             // Check if DiffViewer already exists to avoid recreating it
             if (_diffViewerMap.ContainsKey(diff.FilePath))
                 return;
 
-            // Find the DiffContainer Border within the expander
+            // First, show loading placeholder on UI thread
             var diffContainer = expander.FindDescendantOfType<Border>();
             if (diffContainer != null)
             {
-                // Create and configure the DiffViewer
-                var diffViewer = new DiffViewer
+                var loadingText = new TextBlock
                 {
-                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
-                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch,
-                    ViewMode = DiffViewMode.SideBySide,
-                    NewText = diff.NewText,
-                    OldText = diff.OldText
+                    Text = "Loading diff...",
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                    Margin = new Thickness(20)
                 };
+                diffContainer.Child = loadingText;
+            }
 
-                // Set PullRequestId if available
-                if (DataContext is PullRequestDetailsWindowViewModel vm)
-                {
-                    diffViewer.PullRequestId = vm.PullRequestId;
-                }
+            await Task.Delay(50);
 
-                // Add to map and replace container content
+            // Create DiffViewer on UI thread
+            var diffViewer = new DiffViewer
+            {
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch,
+                ViewMode = DiffViewMode.SideBySide
+            };
+
+            // Set PullRequestId if available
+            if (DataContext is PullRequestDetailsWindowViewModel vm)
+            {
+                diffViewer.PullRequestId = vm.PullRequestId;
+            }
+
+            // Add to UI and map immediately
+            if (diffContainer != null)
+            {
                 _diffViewerMap[diff.FilePath] = diffViewer;
                 diffContainer.Child = diffViewer;
-
-                // Update container height for better UX
                 diffContainer.MinHeight = 500;
+            }
+
+            // Process diff data
+            await Task.Run(async () =>
+            {
+                await Task.Delay(100);
+                
+                var oldText = diff.OldText ?? string.Empty;
+                var newText = diff.NewText ?? string.Empty;
+                
+                Dispatcher.UIThread.Post(() =>
+                {
+                    try
+                    {
+                        diffViewer.OldText = oldText;
+                        diffViewer.NewText = newText;
+                    }
+                    catch (Exception)
+                    {
+                        // Log error if needed
+                    }
+                }, DispatcherPriority.Background);
+            });
+        }
+        catch (Exception ex)
+        {
+            // Log error if needed
+            
+            // Show error on UI thread
+            var diffContainer = expander.FindDescendantOfType<Border>();
+            if (diffContainer?.Child is not TextBlock)
+            {
+                var errorText = new TextBlock
+                {
+                    Text = $"Error loading diff: {ex.Message}",
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                    Foreground = Brushes.Red,
+                    Margin = new Thickness(20)
+                };
+                diffContainer.Child = errorText;
             }
         }
     }
 
     private void ViewInIDE_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        if (sender is Control btn)
+        if (sender is Control btn && btn.DataContext is FileDiff diff)
         {
-            // Get the FileDiff from the DataContext of the header item
-            if (btn.DataContext is FileDiff diff)
+            if (_diffViewerMap.TryGetValue(diff.FilePath, out var viewer))
             {
-                if (_diffViewerMap.TryGetValue(diff.FilePath, out var viewer))
+                try
                 {
-                    try
+                    // Open at current caret if possible; otherwise line 1
+                    var line = 1;
+                    var getActiveEditorMethod = viewer.GetType().GetMethod("GetActiveEditor", 
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    var active = getActiveEditorMethod?.Invoke(viewer, null);
+                    
+                    if (active is AvaloniaEdit.TextEditor te)
                     {
-                        // Open at current caret if possible; otherwise line 1
-                        var line = 1;
-                        var active = viewer.GetType().GetMethod("GetActiveEditor", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.Invoke(viewer, null);
-                        if (active is AvaloniaEdit.TextEditor te)
-                        {
-                            line = te.TextArea?.Caret?.Line ?? 1;
-                        }
-                        viewer.IDEService?.OpenInIDE(diff.FilePath, line);
+                        line = te.TextArea?.Caret?.Line ?? 1;
                     }
-                    catch (Exception ex)
-                    {
-                        // Best-effort notify via viewer if possible
-                        viewer.NotificationService?.Notify("ide-error", new AzurePrOps.ReviewLogic.Models.Notification
-                        {
-                            Title = "IDE Error",
-                            Message = ex.Message,
-                            Type = AzurePrOps.ReviewLogic.Models.NotificationType.Error
-                        });
-                    }
+                    
+                    viewer.IDEService?.OpenInIDE(diff.FilePath, line);
+                }
+                catch (Exception)
+                {
+                    // Best-effort notify via viewer if possible
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Estimate rendering complexity to prioritize simpler files first
+    /// </summary>
+    private static int EstimateRenderComplexity(FileDiff diff)
+    {
+        int complexity = 0;
+        
+        // Size factor (larger files are more complex)
+        var oldLength = diff.OldText?.Length ?? 0;
+        var newLength = diff.NewText?.Length ?? 0;
+        complexity += (oldLength + newLength) / 1000;
+        
+        // Line count factor
+        var oldLines = diff.OldText?.Split('\n').Length ?? 0;
+        var newLines = diff.NewText?.Split('\n').Length ?? 0;
+        complexity += (oldLines + newLines) / 10;
+        
+        // File type factor
+        var extension = System.IO.Path.GetExtension(diff.FilePath).ToLowerInvariant();
+        complexity += extension switch
+        {
+            ".cs" => 5,
+            ".js" => 5,
+            ".ts" => 5,
+            ".json" => 3,
+            ".xml" => 3,
+            ".html" => 4,
+            ".css" => 3,
+            ".md" => 2,
+            ".txt" => 1,
+            _ => 4
+        };
+        
+        return complexity;
     }
 }

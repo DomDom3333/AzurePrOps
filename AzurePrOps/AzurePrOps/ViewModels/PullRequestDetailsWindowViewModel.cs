@@ -361,7 +361,6 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
         int removed = 0;
         int lintWarnings = 0;
         int securityRisks = 0;
-        int complexityScore = 0;
         int testLines = 0;
         int totalCodeLines = 0;
         int testFiles = 0;
