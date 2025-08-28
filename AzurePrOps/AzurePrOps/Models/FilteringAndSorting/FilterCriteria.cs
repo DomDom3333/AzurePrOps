@@ -53,6 +53,11 @@ public class FilterCriteria : INotifyPropertyChanged
     // Workflow preset tracking
     public string WorkflowPreset { get; set; } = string.Empty;
 
+    // Filter state tracking for better UX
+    public string CurrentFilterSource { get; set; } = "Manual"; // "Manual", "Preset", "SavedView"
+    public string CurrentFilterSourceName { get; set; } = string.Empty;
+    public DateTime LastApplied { get; set; } = DateTime.Now;
+
     /// <summary>
     /// Checks if any filters are currently active
     /// </summary>
@@ -79,45 +84,173 @@ public class FilterCriteria : INotifyPropertyChanged
         MaxReviewerCount.HasValue;
 
     /// <summary>
+    /// Gets a human-readable summary of currently active filters
+    /// </summary>
+    public string ActiveFiltersSummary
+    {
+        get
+        {
+            var filters = new List<string>();
+            
+            if (MyPullRequestsOnly) filters.Add("My PRs");
+            if (AssignedToMeOnly) filters.Add("Assigned to me");
+            if (NeedsMyReviewOnly) filters.Add("Needs my review");
+            if (ExcludeMyPullRequests) filters.Add("Exclude my PRs");
+            
+            if (SelectedStatuses.Count > 0) 
+                filters.Add($"Status: {string.Join(", ", SelectedStatuses)}");
+            
+            if (IsDraft.HasValue)
+                filters.Add(IsDraft.Value ? "Drafts only" : "Non-drafts only");
+            
+            if (!string.IsNullOrWhiteSpace(GlobalSearchText))
+                filters.Add($"Search: \"{GlobalSearchText}\"");
+            
+            if (!string.IsNullOrWhiteSpace(TitleFilter))
+                filters.Add($"Title: \"{TitleFilter}\"");
+            
+            if (!string.IsNullOrWhiteSpace(CreatorFilter))
+                filters.Add($"Creator: \"{CreatorFilter}\"");
+            
+            if (!string.IsNullOrWhiteSpace(ReviewerFilter))
+                filters.Add($"Reviewer: \"{ReviewerFilter}\"");
+            
+            if (!string.IsNullOrWhiteSpace(SourceBranchFilter))
+                filters.Add($"Source: \"{SourceBranchFilter}\"");
+            
+            if (!string.IsNullOrWhiteSpace(TargetBranchFilter))
+                filters.Add($"Target: \"{TargetBranchFilter}\"");
+            
+            if (SelectedReviewerVotes.Count > 0)
+                filters.Add($"Votes: {string.Join(", ", SelectedReviewerVotes)}");
+            
+            if (CreatedAfter.HasValue || CreatedBefore.HasValue)
+            {
+                var dateRange = "Created: ";
+                if (CreatedAfter.HasValue) dateRange += $"after {CreatedAfter.Value:yyyy-MM-dd}";
+                if (CreatedBefore.HasValue) 
+                {
+                    if (CreatedAfter.HasValue) dateRange += " and ";
+                    dateRange += $"before {CreatedBefore.Value:yyyy-MM-dd}";
+                }
+                filters.Add(dateRange);
+            }
+            
+            if (UpdatedAfter.HasValue || UpdatedBefore.HasValue)
+            {
+                var dateRange = "Updated: ";
+                if (UpdatedAfter.HasValue) dateRange += $"after {UpdatedAfter.Value:yyyy-MM-dd}";
+                if (UpdatedBefore.HasValue) 
+                {
+                    if (UpdatedAfter.HasValue) dateRange += " and ";
+                    dateRange += $"before {UpdatedBefore.Value:yyyy-MM-dd}";
+                }
+                filters.Add(dateRange);
+            }
+            
+            if (MinReviewerCount.HasValue || MaxReviewerCount.HasValue)
+            {
+                var reviewerRange = "Reviewers: ";
+                if (MinReviewerCount.HasValue && MaxReviewerCount.HasValue)
+                    reviewerRange += $"{MinReviewerCount}-{MaxReviewerCount}";
+                else if (MinReviewerCount.HasValue)
+                    reviewerRange += $"≥{MinReviewerCount}";
+                else
+                    reviewerRange += $"≤{MaxReviewerCount}";
+                filters.Add(reviewerRange);
+            }
+            
+            if (EnableGroupsWithoutVoteFilter && SelectedGroupsWithoutVote.Count > 0)
+                filters.Add($"Groups without vote: {string.Join(", ", SelectedGroupsWithoutVote)}");
+            
+            return filters.Count > 0 ? string.Join(" • ", filters) : "No filters applied";
+        }
+    }
+
+    /// <summary>
+    /// Gets the current filter source display text
+    /// </summary>
+    public string FilterSourceDisplay
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(CurrentFilterSourceName))
+                return CurrentFilterSource;
+            
+            return CurrentFilterSource switch
+            {
+                "Preset" => $"Preset: {CurrentFilterSourceName}",
+                "SavedView" => $"Saved View: {CurrentFilterSourceName}",
+                _ => "Manual Filters"
+            };
+        }
+    }
+
+    /// <summary>
+    /// Sets the filter source information for tracking
+    /// </summary>
+    public void SetFilterSource(string source, string sourceName = "")
+    {
+        CurrentFilterSource = source;
+        CurrentFilterSourceName = sourceName;
+        LastApplied = DateTime.Now;
+    }
+
+    /// <summary>
     /// Applies a workflow preset to the filter criteria
     /// </summary>
     public void ApplyWorkflowPreset(string preset)
     {
         WorkflowPreset = preset;
-        // The actual preset logic is handled in the ViewModel
-        // This just tracks which preset was applied
+        SetFilterSource("Preset", preset);
     }
 
     /// <summary>
-    /// Resets all filters to their default state
+    /// Resets all filter criteria to their default values
     /// </summary>
     public void Reset()
     {
+        // Personal filters
         MyPullRequestsOnly = false;
         AssignedToMeOnly = false;
         NeedsMyReviewOnly = false;
         ExcludeMyPullRequests = false;
+
+        // Status filters
         SelectedStatuses.Clear();
         IsDraft = null;
+
+        // Text filters
         GlobalSearchText = string.Empty;
         TitleFilter = string.Empty;
         CreatorFilter = string.Empty;
         ReviewerFilter = string.Empty;
         SourceBranchFilter = string.Empty;
         TargetBranchFilter = string.Empty;
+
+        // Reviewer vote filters
         SelectedReviewerVotes.Clear();
+
+        // Date filters
         CreatedAfter = null;
         CreatedBefore = null;
         UpdatedAfter = null;
         UpdatedBefore = null;
+
+        // Group filters
         EnableGroupsWithoutVoteFilter = false;
         GroupsWithoutVote.Clear();
         SelectedGroupsWithoutVote.Clear();
+
+        // Numeric filters
         MinReviewerCount = null;
         MaxReviewerCount = null;
+
+        // Reset source tracking
+        CurrentFilterSource = "Manual";
+        CurrentFilterSourceName = string.Empty;
         WorkflowPreset = string.Empty;
-        
-        OnPropertyChanged(nameof(HasActiveFilters));
+        LastApplied = DateTime.Now;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

@@ -26,7 +26,7 @@ public class MainWindowViewModel : ViewModelBase
 {
     private readonly AzureDevOpsClient _client = new();
     private readonly IPullRequestService _pullRequestService;
-    private Models.ConnectionSettings _settings; // Remove readonly to allow updates
+    private Models.ConnectionSettings _settings;
     private readonly PullRequestFilteringSortingService _filterSortService = new();
     private readonly AuthenticationService _authService;
     private IReadOnlyList<string> _userGroupMemberships = new List<string>();
@@ -34,13 +34,29 @@ public class MainWindowViewModel : ViewModelBase
     public ObservableCollection<PullRequestInfo> PullRequests { get; } = new();
     private readonly ObservableCollection<PullRequestInfo> _allPullRequests = new();
 
-    // Enhanced filtering and sorting
-    public FilterCriteria FilterCriteria { get; } = new();
-    public SortCriteria SortCriteria { get; } = new();
-    private FilterSortPreferences _preferences = new();
+    // Centralized filtering and sorting state - replaces scattered filter properties
+    public FilterState FilterState { get; }
+    public FilterPanelViewModel FilterPanel { get; }
 
+    // Legacy collections for backward compatibility (during transition)
     public ObservableCollection<FilterView> FilterViews { get; } = new();
     public ObservableCollection<SavedFilterView> SavedFilterViews { get; } = new();
+    
+    // Preferences for saved views
+    private FilterSortPreferences _preferences = new();
+
+    // Legacy properties for backward compatibility (to be removed after UI migration)
+    [Obsolete("Use FilterState.Criteria instead")]
+    public FilterCriteria FilterCriteria => FilterState.Criteria;
+    
+    [Obsolete("Use FilterState.SortCriteria instead")]
+    public SortCriteria SortCriteria => FilterState.SortCriteria;
+
+    // Filter state display properties - now delegated to FilterState
+    public string CurrentFilterSource => FilterState.CurrentFilterSource;
+    public string ActiveFiltersSummary => FilterState.ActiveFiltersSummary;
+    public bool HasActiveFilters => FilterState.HasActiveFilters;
+    public string FilterStatusText => FilterState.FilterStatusText;
 
     // Available options for dropdowns - with proper initialization
     public ObservableCollection<string> AvailableStatuses { get; } = new() { "All", "Active", "Completed", "Abandoned" };
@@ -64,7 +80,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _showMyPullRequestsOnly, value);
-            FilterCriteria.MyPullRequestsOnly = value;
+            FilterState.Criteria.MyPullRequestsOnly = value;
             if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
@@ -76,7 +92,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _showAssignedToMeOnly, value);
-            FilterCriteria.AssignedToMeOnly = value;
+            FilterState.Criteria.AssignedToMeOnly = value;
             if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
@@ -88,7 +104,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _showNeedsMyReviewOnly, value);
-            FilterCriteria.NeedsMyReviewOnly = value;
+            FilterState.Criteria.NeedsMyReviewOnly = value;
             if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
@@ -100,7 +116,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _excludeMyPullRequests, value);
-            FilterCriteria.ExcludeMyPullRequests = value;
+            FilterState.Criteria.ExcludeMyPullRequests = value;
             if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
@@ -113,7 +129,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _draftFilter, value);
-            FilterCriteria.IsDraft = value switch
+            FilterState.Criteria.IsDraft = value switch
             {
                 "Drafts Only" => true,
                 "Non-Drafts Only" => false,
@@ -151,7 +167,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _enableGroupsWithoutVoteFilter, value);
-            FilterCriteria.EnableGroupsWithoutVoteFilter = value;
+            FilterState.Criteria.EnableGroupsWithoutVoteFilter = value;
             if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
@@ -175,7 +191,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _globalSearchText, value);
-            FilterCriteria.GlobalSearchText = value;
+            FilterState.Criteria.GlobalSearchText = value;
             if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
@@ -188,7 +204,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _titleFilter, value);
-            FilterCriteria.TitleFilter = value;
+            FilterState.Criteria.TitleFilter = value;
             if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
@@ -200,7 +216,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _creatorFilter, value);
-            FilterCriteria.CreatorFilter = value;
+            FilterState.Criteria.CreatorFilter = value;
             if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
@@ -212,7 +228,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _reviewerFilter, value);
-            FilterCriteria.ReviewerFilter = value;
+            FilterState.Criteria.ReviewerFilter = value;
             if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
@@ -224,7 +240,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _sourceBranchFilter, value);
-            FilterCriteria.SourceBranchFilter = value;
+            FilterState.Criteria.SourceBranchFilter = value;
             if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
@@ -236,7 +252,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _targetBranchFilter, value);
-            FilterCriteria.TargetBranchFilter = value;
+            FilterState.Criteria.TargetBranchFilter = value;
             if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
@@ -278,7 +294,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _createdAfter, value);
-            FilterCriteria.CreatedAfter = value;
+            FilterState.Criteria.CreatedAfter = value;
             if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
@@ -290,7 +306,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _createdBefore, value);
-            FilterCriteria.CreatedBefore = value;
+            FilterState.Criteria.CreatedBefore = value;
             if (!_isApplyingFilterView) ApplyFiltersAndSorting();
         }
     }
@@ -328,7 +344,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _selectedSortPreset, value);
-            SortCriteria.ApplyPreset(value);
+            FilterState.SortCriteria.ApplyPreset(value);
             this.RaisePropertyChanged(nameof(SelectedSortPresetTooltip));
             ApplyFiltersAndSorting();
         }
@@ -341,7 +357,7 @@ public class MainWindowViewModel : ViewModelBase
     public ObservableCollection<string> WorkflowPresets { get; } = new()
     {
         "All Pull Requests", "Team Lead Overview", "My Pull Requests", "Need My Review", 
-        "Ready for QA", "Awaiting Author", "Recently Updated", "High Priority"
+        "Approved & Ready for Testing", "Waiting for Author Response", "Recently Updated", "High Priority"
     };
 
     private string _selectedWorkflowPreset = "All Pull Requests";
@@ -453,7 +469,6 @@ public class MainWindowViewModel : ViewModelBase
 
     // Filter summary for better UX
     public string ActiveFiltersCount => GetActiveFiltersCount();
-    public bool HasActiveFilters => GetActiveFiltersCount() != "No filters active";
     public string FilterSummary => GetFilterSummary();
 
     #endregion
@@ -479,6 +494,7 @@ public class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<PullRequestInfo?, Unit> ViewDetailsCommand { get; }
     public ReactiveCommand<PullRequestInfo?, Unit> OpenInBrowserCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveViewCommand { get; }
+    public ReactiveCommand<Unit, Unit> SaveCurrentFiltersCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenSettingsCommand { get; }
     public ReactiveCommand<Unit, Unit> ApproveWithSuggestionsCommand { get; }
     public ReactiveCommand<Unit, Unit> WaitForAuthorCommand { get; }
@@ -600,7 +616,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             _authService.HandlePatValidationError(ex, "LoadAndCacheGroupsAsync");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Log error (removed excessive logging)
         }
@@ -620,19 +636,30 @@ public class MainWindowViewModel : ViewModelBase
 
     private void UpdateSelectedGroupsWithoutVoteText()
     {
-        if (!FilterCriteria.SelectedGroupsWithoutVote.Any())
+        if (!FilterState.Criteria.SelectedGroupsWithoutVote.Any())
         {
             SelectedGroupsWithoutVoteText = "No Groups Selected";
         }
         else
         {
-            SelectedGroupsWithoutVoteText = string.Join(", ", FilterCriteria.SelectedGroupsWithoutVote);
+            SelectedGroupsWithoutVoteText = string.Join(", ", FilterState.Criteria.SelectedGroupsWithoutVote);
         }
     }
 
     public MainWindowViewModel(Models.ConnectionSettings settings)
     {
         _settings = settings;
+        
+        // Initialize centralized filtering system FIRST
+        FilterState = new FilterState();
+        FilterPanel = new FilterPanelViewModel(FilterState);
+        
+        // Set up user information in filter state
+        FilterState.Criteria.CurrentUserId = settings.ReviewerId ?? string.Empty;
+        FilterState.Criteria.UserDisplayName = settings.UserDisplayName ?? string.Empty;
+        
+        // Subscribe to filter changes to automatically apply filtering
+        FilterState.FilterChanged += (_, _) => ApplyFiltersAndSorting();
         
         // Get the AuthenticationService from the service registry
         _authService = ServiceRegistry.Resolve<AuthenticationService>() ?? new AuthenticationService();
@@ -653,16 +680,16 @@ public class MainWindowViewModel : ViewModelBase
         LoadPreferences();
         
         // Initialize user information - will be updated automatically when app starts
-        FilterCriteria.CurrentUserId = _settings.ReviewerId ?? string.Empty;
-        FilterCriteria.UserDisplayName = _settings.UserDisplayName ?? string.Empty;
+        FilterState.Criteria.CurrentUserId = _settings.ReviewerId ?? string.Empty;
+        FilterState.Criteria.UserDisplayName = _settings.UserDisplayName ?? string.Empty;
 
         // Initialize the status filter to ensure "All" works properly
         UpdateStatusFilter(_statusFilter);
         UpdateReviewerVoteFilter(_reviewerVoteFilter);
 
         // Set up property change handlers for real-time filtering
-        FilterCriteria.PropertyChanged += (_, _) => ApplyFiltersAndSorting();
-        SortCriteria.PropertyChanged += (_, _) => ApplyFiltersAndSorting();
+        FilterState.Criteria.PropertyChanged += (_, _) => ApplyFiltersAndSorting();
+        FilterState.SortCriteria.PropertyChanged += (_, _) => ApplyFiltersAndSorting();
 
         // Add error handling mechanism
         _client.SetErrorHandler(message => _ = ShowErrorMessage(message));
@@ -967,7 +994,7 @@ public class MainWindowViewModel : ViewModelBase
             }
         });
 
-        OpenInBrowserCommand = ReactiveCommand.CreateFromTask<PullRequestInfo?>(async (pr) =>
+        OpenInBrowserCommand = ReactiveCommand.Create<PullRequestInfo?>((pr) =>
         {
             if (pr == null)
                 return;
@@ -1011,6 +1038,51 @@ public class MainWindowViewModel : ViewModelBase
             NewViewName = string.Empty;
         });
 
+        SaveCurrentFiltersCommand = ReactiveCommand.Create(() =>
+        {
+            // Generate a unique name for the saved filter view
+            var defaultName = $"Filter View {DateTime.Now:yyyy-MM-dd HH-mm-ss}";
+            var viewName = NewViewName.Trim().Length > 0 ? NewViewName.Trim() : defaultName;
+
+            // Create the saved filter view object
+            var savedView = new SavedFilterView
+            {
+                Name = viewName,
+                FilterCriteria = new FilterCriteria
+                {
+                    TitleFilter = TitleFilter,
+                    CreatorFilter = CreatorFilter,
+                    SourceBranchFilter = SourceBranchFilter,
+                    TargetBranchFilter = TargetBranchFilter,
+                    GlobalSearchText = GlobalSearchText,
+                    MyPullRequestsOnly = ShowMyPullRequestsOnly,
+                    AssignedToMeOnly = ShowAssignedToMeOnly,
+                    NeedsMyReviewOnly = ShowNeedsMyReviewOnly,
+                    ExcludeMyPullRequests = ExcludeMyPullRequests,
+                    IsDraft = DraftFilter == "Drafts Only" ? true : DraftFilter == "Non-Drafts Only" ? false : null,
+                    SelectedReviewerVotes = new List<string> { ReviewerVoteFilter != "All" ? ReviewerVoteFilter : "" }.Where(x => !string.IsNullOrEmpty(x)).ToList(),
+                    SelectedStatuses = new List<string> { StatusFilter != "All" ? StatusFilter : "" }.Where(x => !string.IsNullOrEmpty(x)).ToList(),
+                    CreatedAfter = CreatedAfter,
+                    CreatedBefore = CreatedBefore,
+                    EnableGroupsWithoutVoteFilter = EnableGroupsWithoutVoteFilter,
+                    SelectedGroupsWithoutVote = new List<string>(FilterState.Criteria.SelectedGroupsWithoutVote)
+                },
+                SortCriteria = new SortCriteria
+                {
+                    CurrentPreset = FilterState.SortCriteria.CurrentPreset
+                },
+                LastUsed = DateTime.Now
+            };
+
+            // Add to preferences and save
+            _preferences.SavedViews.Add(savedView);
+            SavedFilterViews.Add(savedView);
+            FilterSortPreferencesStorage.Save(_preferences);
+
+            // Clear the new view name
+            NewViewName = string.Empty;
+        });
+
         OpenSettingsCommand = ReactiveCommand.CreateFromTask(async () =>
         {
             var settingsViewModel = new SettingsWindowViewModel(_settings);
@@ -1025,7 +1097,7 @@ public class MainWindowViewModel : ViewModelBase
             {
                 await settingsViewModel.LoadAsync();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // If loading fails, the settings window will still open but show error messages
                 // The ViewModel handles error display internally
@@ -1051,8 +1123,8 @@ public class MainWindowViewModel : ViewModelBase
                     }
                     
                     // Update user information in filter criteria
-                    FilterCriteria.CurrentUserId = _settings.ReviewerId ?? string.Empty;
-                    FilterCriteria.UserDisplayName = _settings.UserDisplayName ?? string.Empty;
+                    FilterState.Criteria.CurrentUserId = _settings.ReviewerId ?? string.Empty;
+                    FilterState.Criteria.UserDisplayName = _settings.UserDisplayName ?? string.Empty;
                     
                     // Check if connection details changed
                     bool connectionChanged = oldSettings.Organization != result.Organization || 
@@ -1075,7 +1147,7 @@ public class MainWindowViewModel : ViewModelBase
 
         ResetFiltersCommand = ReactiveCommand.Create(() =>
         {
-            FilterCriteria.Reset();
+            FilterState.Criteria.Reset();
             TitleFilter = string.Empty;
             CreatorFilter = string.Empty;
             SourceBranchFilter = string.Empty;
@@ -1089,7 +1161,7 @@ public class MainWindowViewModel : ViewModelBase
 
         ResetSortingCommand = ReactiveCommand.Create(() =>
         {
-            SortCriteria.Reset();
+            FilterState.SortCriteria.Reset();
             SelectedSortPreset = "Newest First";
         });
 
@@ -1114,7 +1186,7 @@ public class MainWindowViewModel : ViewModelBase
 
             // Clear selected groups
             _groupSettings = _groupSettings with { SelectedGroups = new List<string>() };
-            FilterCriteria.SelectedGroupsWithoutVote.Clear();
+            FilterState.Criteria.SelectedGroupsWithoutVote.Clear();
 
             // Update UI
             UpdateSelectedGroupsText();
@@ -1181,7 +1253,7 @@ public class MainWindowViewModel : ViewModelBase
             var groupSelectionWindow = new Views.GroupSelectionWindow();
             var groupSelectionViewModel = new GroupSelectionViewModel(
                 _groupSettings.AvailableGroups.ToList(), 
-                FilterCriteria.SelectedGroupsWithoutVote.ToList());
+                FilterState.Criteria.SelectedGroupsWithoutVote.ToList());
             groupSelectionWindow.DataContext = groupSelectionViewModel;
             
             if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -1189,10 +1261,10 @@ public class MainWindowViewModel : ViewModelBase
                 var result = await groupSelectionWindow.ShowDialog<bool>(desktop.MainWindow);
                 if (result)
                 {
-                    FilterCriteria.SelectedGroupsWithoutVote.Clear();
+                    FilterState.Criteria.SelectedGroupsWithoutVote.Clear();
                     foreach (var group in groupSelectionViewModel.SelectedGroups)
                     {
-                        FilterCriteria.SelectedGroupsWithoutVote.Add(group);
+                        FilterState.Criteria.SelectedGroupsWithoutVote.Add(group);
                     }
                     UpdateSelectedGroupsWithoutVoteText();
                     ApplyFiltersAndSorting();
@@ -1202,7 +1274,7 @@ public class MainWindowViewModel : ViewModelBase
 
         ClearGroupsWithoutVoteSelectionCommand = ReactiveCommand.Create(() =>
         {
-            FilterCriteria.SelectedGroupsWithoutVote.Clear();
+            FilterState.Criteria.SelectedGroupsWithoutVote.Clear();
             UpdateSelectedGroupsWithoutVoteText();
             ApplyFiltersAndSorting();
         });
@@ -1214,7 +1286,7 @@ public class MainWindowViewModel : ViewModelBase
             {
                 await LoadAndCacheGroupsAsync();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // Log error (removed excessive logging)
             }
@@ -1227,7 +1299,7 @@ public class MainWindowViewModel : ViewModelBase
             {
                 await InitializeUserInformationAsync();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // Log error (removed excessive logging)
             }
@@ -1265,7 +1337,7 @@ public class MainWindowViewModel : ViewModelBase
                 }
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Log error (removed excessive logging)
             // Continue with default preferences if loading fails
@@ -1332,6 +1404,9 @@ public class MainWindowViewModel : ViewModelBase
             var sortData = savedView.SortCriteria;
             SelectedSortPreset = sortData.CurrentPreset ?? "Most Recent";
             
+            // Track the filter source for clarity
+            FilterState.Criteria.SetFilterSource("SavedView", savedView.Name);
+            
             // Clear the flag before applying filters
             _isApplyingFilterView = false;
             
@@ -1344,8 +1419,14 @@ public class MainWindowViewModel : ViewModelBase
             // Save the updated preferences
             _preferences.LastSelectedView = savedView.Name;
             FilterSortPreferencesStorage.Save(_preferences);
+            
+            // Notify UI of state changes
+            this.RaisePropertyChanged(nameof(CurrentFilterSource));
+            this.RaisePropertyChanged(nameof(ActiveFiltersSummary));
+            this.RaisePropertyChanged(nameof(HasActiveFilters));
+            this.RaisePropertyChanged(nameof(FilterStatusText));
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Ensure flag is cleared even if an error occurs
             _isApplyingFilterView = false;
@@ -1441,7 +1522,7 @@ public class MainWindowViewModel : ViewModelBase
 
         // Pass the current user ID from settings for personal filters
         var currentUserId = _settings?.ReviewerId ?? string.Empty;
-        var result = _filterSortService.ApplyFiltersAndSorting(filteredPRs, FilterCriteria, SortCriteria, _userGroupMemberships, currentUserId);
+        var result = _filterSortService.ApplyFiltersAndSorting(filteredPRs, FilterState.Criteria, FilterState.SortCriteria, _userGroupMemberships, currentUserId);
 
         PullRequests.Clear();
         foreach (var pr in result)
@@ -1459,19 +1540,19 @@ public class MainWindowViewModel : ViewModelBase
 
     private void UpdateStatusFilter(string value)
     {
-        FilterCriteria.SelectedStatuses.Clear();
+        FilterState.Criteria.SelectedStatuses.Clear();
         if (!string.IsNullOrEmpty(value) && value != "All")
         {
-            FilterCriteria.SelectedStatuses.Add(value);
+            FilterState.Criteria.SelectedStatuses.Add(value);
         }
     }
 
     private void UpdateReviewerVoteFilter(string value)
     {
-        FilterCriteria.SelectedReviewerVotes.Clear();
+        FilterState.Criteria.SelectedReviewerVotes.Clear();
         if (!string.IsNullOrEmpty(value) && value != "All")
         {
-            FilterCriteria.SelectedReviewerVotes.Add(value);
+            FilterState.Criteria.SelectedReviewerVotes.Add(value);
         }
     }
 
@@ -1515,11 +1596,11 @@ public class MainWindowViewModel : ViewModelBase
                 StatusFilter = "Active";
                 ReviewerVoteFilter = "No vote";
                 break;
-            case "Ready for QA":
+            case "Approved & Ready for Testing":
                 StatusFilter = "Active";
                 ReviewerVoteFilter = "Approved";
                 break;
-            case "Awaiting Author":
+            case "Waiting for Author Response":
                 StatusFilter = "Active";
                 ReviewerVoteFilter = "Waiting for author";
                 break;
@@ -1533,7 +1614,14 @@ public class MainWindowViewModel : ViewModelBase
                 break;
         }
 
-        FilterCriteria.ApplyWorkflowPreset(preset);
+        // Track the filter source for clarity
+        FilterState.Criteria.SetFilterSource("Preset", preset);
+        
+        // Notify UI of state changes
+        this.RaisePropertyChanged(nameof(CurrentFilterSource));
+        this.RaisePropertyChanged(nameof(ActiveFiltersSummary));
+        this.RaisePropertyChanged(nameof(HasActiveFilters));
+        this.RaisePropertyChanged(nameof(FilterStatusText));
     }
 
     private void ResetFiltersToDefaults()
@@ -1553,6 +1641,9 @@ public class MainWindowViewModel : ViewModelBase
         GlobalSearchText = string.Empty;
         EnableGroupFiltering = false;
         EnableGroupsWithoutVoteFilter = false;
+        
+        // Update filter source tracking when manually resetting
+        FilterState.Criteria.SetFilterSource("Manual");
     }
 
     private string GetActiveFiltersCount()
@@ -1599,8 +1690,8 @@ public class MainWindowViewModel : ViewModelBase
             "Team Lead Overview" => "Active PRs from the last 7 days for team oversight",
             "My Pull Requests" => "Show only pull requests created by you",
             "Need My Review" => "Active PRs where you haven't voted yet",
-            "Ready for QA" => "Active PRs that have been approved and are ready for QA",
-            "Awaiting Author" => "PRs waiting for author response",
+            "Approved & Ready for Testing" => "Active PRs that have been approved and are ready for testing",
+            "Waiting for Author Response" => "PRs waiting for author response",
             "Recently Updated" => "PRs updated in the last 7 days, sorted by most recent",
             "High Priority" => "PRs that need immediate attention",
             _ => "Custom workflow preset"
@@ -1623,8 +1714,8 @@ public class MainWindowViewModel : ViewModelBase
             if (userInfo != UserInfo.Empty && !string.IsNullOrEmpty(userInfo.Id) && !string.IsNullOrEmpty(userInfo.DisplayName))
             {
                 // Update filter criteria with automatically retrieved user information
-                FilterCriteria.CurrentUserId = userInfo.Id;
-                FilterCriteria.UserDisplayName = userInfo.DisplayName;
+                FilterState.Criteria.CurrentUserId = userInfo.Id;
+                FilterState.Criteria.UserDisplayName = userInfo.DisplayName;
                 
                 // Update connection settings to store the retrieved user information for future use
                 var updatedSettings = _settings with 
@@ -1645,7 +1736,7 @@ public class MainWindowViewModel : ViewModelBase
         {
             _authService.HandlePatValidationError(ex, "InitializeUserInformationAsync");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Log error (removed excessive logging)
         }

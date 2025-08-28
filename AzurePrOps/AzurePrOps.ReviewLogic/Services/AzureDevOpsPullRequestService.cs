@@ -467,7 +467,6 @@ namespace AzurePrOps.ReviewLogic.Services
                     changeTypeProp.GetString() ?? "edit" : "edit";
                 var changeType = changeTypeRaw.ToLowerInvariant();
 
-                bool IsType(string token) => changeType.Contains(token, StringComparison.OrdinalIgnoreCase);
 
                 var newObjectId = item.TryGetProperty("objectId", out var newIdProp) ?
                     newIdProp.GetString() : null;

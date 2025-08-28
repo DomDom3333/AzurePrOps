@@ -98,10 +98,8 @@ namespace AzurePrOps.Controls
         private Popup? _commentPopup;
         
         // Performance optimization fields
-        private bool _isInitialized = false;
         private bool _isRendering = false;
         private CancellationTokenSource? _renderCancellation;
-        private TaskCompletionSource<bool>? _initializationTask;
         private readonly SemaphoreSlim _renderSemaphore = new(1, 1);
         
         // Lazy rendering optimization
