@@ -13,7 +13,8 @@ public record ConnectionSettings(
     bool IncludeGroupReviews = true,
     List<string>? SelectedGroupsForFiltering = null,
     bool EnableGroupFiltering = false,
-    string UserDisplayName = "")
+    string UserDisplayName = "",
+    UserRole UserRole = UserRole.Developer)
 {
     public List<string> SelectedReviewerGroups { get; init; } = SelectedReviewerGroups ?? new List<string>();
     public List<string> SelectedGroupsForFiltering { get; init; } = SelectedGroupsForFiltering ?? new List<string>();
@@ -29,4 +30,9 @@ public record ConnectionSettings(
     public string PersonalAccessToken => HasSecureToken ? 
         ConnectionSettingsStorage.GetPersonalAccessToken() ?? string.Empty : 
         string.Empty;
+    
+    /// <summary>
+    /// The primary role of the user, which affects workflow preset behavior
+    /// </summary>
+    public UserRole UserRole { get; init; } = UserRole;
 }

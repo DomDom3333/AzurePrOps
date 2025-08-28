@@ -177,6 +177,16 @@ public class SettingsWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _customEditorPath, value);
     }
 
+    // User Role settings
+    public ObservableCollection<UserRoleOption> UserRoleOptions { get; } = new();
+    
+    private UserRoleOption? _selectedUserRole;
+    public UserRoleOption? SelectedUserRole
+    {
+        get => _selectedUserRole;
+        set => this.RaiseAndSetIfChanged(ref _selectedUserRole, value);
+    }
+
     // Interface settings
     public bool AutoRefreshEnabled
     {
@@ -292,6 +302,14 @@ public class SettingsWindowViewModel : ViewModelBase
         _reviewerId = currentSettings.ReviewerId;
         _useGitDiff = currentSettings.UseGitDiff;
         
+        // Initialize user role options
+        foreach (UserRole role in Enum.GetValues<UserRole>())
+        {
+            UserRoleOptions.Add(new UserRoleOption(role));
+        }
+        _selectedUserRole = UserRoleOptions.FirstOrDefault(ur => ur.Role == currentSettings.UserRole) ??
+                           UserRoleOptions.FirstOrDefault(ur => ur.Role == UserRole.Developer);
+        
         // Initialize selected editor from current settings
         _selectedEditor = string.IsNullOrWhiteSpace(currentSettings.EditorCommand)
             ? EditorDetector.GetDefaultEditor()
@@ -336,7 +354,8 @@ public class SettingsWindowViewModel : ViewModelBase
                     SelectedRepository?.Id ?? string.Empty,
                     _reviewerId,
                     editorCommand,
-                    UseGitDiff);
+                    UseGitDiff,
+                    UserRole: SelectedUserRole?.Role ?? UserRole.Developer);
                 
                 // Add proper async operation
                 await Task.Run(() => ConnectionSettingsStorage.Save(settings));
