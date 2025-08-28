@@ -1439,7 +1439,9 @@ public class MainWindowViewModel : ViewModelBase
                     _groupSettings.SelectedGroups.Contains(reviewer.DisplayName)));
         }
 
-        var result = _filterSortService.ApplyFiltersAndSorting(filteredPRs, FilterCriteria, SortCriteria, _userGroupMemberships);
+        // Pass the current user ID from settings for personal filters
+        var currentUserId = _settings?.ReviewerId ?? string.Empty;
+        var result = _filterSortService.ApplyFiltersAndSorting(filteredPRs, FilterCriteria, SortCriteria, _userGroupMemberships, currentUserId);
 
         PullRequests.Clear();
         foreach (var pr in result)

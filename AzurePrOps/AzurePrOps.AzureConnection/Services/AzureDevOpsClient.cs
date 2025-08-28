@@ -149,7 +149,10 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
                         }
                     }
 
-                    result.Add(new PullRequestInfo(id, title, createdBy, createdById, createdDate, status, reviewers, sourceBranch, targetBranch, url, isDraft));
+                    // Get last activity date for this PR
+                    var lastActivity = await GetLastActivityDateAsync(organization, project, repositoryId, id, personalAccessToken);
+
+                    result.Add(new PullRequestInfo(id, title, createdBy, createdById, createdDate, status, reviewers, sourceBranch, targetBranch, url, isDraft, ReviewerVote: "No vote", ShowDraftBadge: false, LastActivity: lastActivity));
                 }
                 catch (Exception ex)
                 {
@@ -1463,5 +1466,143 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
 
         _logger.LogWarning("Could not retrieve current user information from Azure DevOps");
         return UserInfo.Empty;
+    }
+
+    private async Task<DateTime?> GetLastActivityDateAsync(
+        string organization,
+        string project,
+        string repositoryId,
+        int pullRequestId,
+        string personalAccessToken)
+    {
+        try
+        {
+            var encodedOrg = Uri.EscapeDataString(organization);
+            var encodedProject = Uri.EscapeDataString(project);
+            var encodedRepoId = Uri.EscapeDataString(repositoryId);
+
+            var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
+            var latestActivity = DateTime.MinValue;
+
+            // Check for latest commits
+            try
+            {
+                var commitsUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}/commits?api-version={ApiVersion}&$top=1";
+                using var commitsRequest = new HttpRequestMessage(HttpMethod.Get, commitsUri);
+                commitsRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+                
+                using var commitsResponse = await _httpClient.SendAsync(commitsRequest);
+                if (commitsResponse.IsSuccessStatusCode)
+                {
+                    using var commitsStream = await commitsResponse.Content.ReadAsStreamAsync();
+                    var commitsJson = await JsonDocument.ParseAsync(commitsStream);
+                    
+                    if (commitsJson.RootElement.TryGetProperty("value", out var commitsArray) && commitsArray.GetArrayLength() > 0)
+                    {
+                        var latestCommit = commitsArray.EnumerateArray().First();
+                        if (latestCommit.TryGetProperty("committer", out var committer) &&
+                            committer.TryGetProperty("date", out var commitDate))
+                        {
+                            var commitDateTime = commitDate.GetDateTime();
+                            if (commitDateTime > latestActivity)
+                                latestActivity = commitDateTime;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error fetching commits for PR {PullRequestId}", pullRequestId);
+            }
+
+            // Check for latest comments
+            try
+            {
+                var threadsUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}/threads?api-version={ApiVersion}";
+                using var threadsRequest = new HttpRequestMessage(HttpMethod.Get, threadsUri);
+                threadsRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+                
+                using var threadsResponse = await _httpClient.SendAsync(threadsRequest);
+                if (threadsResponse.IsSuccessStatusCode)
+                {
+                    using var threadsStream = await threadsResponse.Content.ReadAsStreamAsync();
+                    var threadsJson = await JsonDocument.ParseAsync(threadsStream);
+                    
+                    if (threadsJson.RootElement.TryGetProperty("value", out var threadsArray))
+                    {
+                        foreach (var thread in threadsArray.EnumerateArray())
+                        {
+                            if (thread.TryGetProperty("comments", out var commentArray))
+                            {
+                                foreach (var comment in commentArray.EnumerateArray())
+                                {
+                                    if (comment.TryGetProperty("publishedDate", out var publishedDate))
+                                    {
+                                        var commentDateTime = publishedDate.GetDateTime();
+                                        if (commentDateTime > latestActivity)
+                                            latestActivity = commentDateTime;
+                                    }
+                                    if (comment.TryGetProperty("lastUpdatedDate", out var lastUpdatedDate))
+                                    {
+                                        var updatedDateTime = lastUpdatedDate.GetDateTime();
+                                        if (updatedDateTime > latestActivity)
+                                            latestActivity = updatedDateTime;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error fetching comments for PR {PullRequestId}", pullRequestId);
+            }
+
+            // Check for latest reviewer activity (vote changes)
+            try
+            {
+                var reviewersUri = $"{AzureDevOpsBaseUrl}/{encodedOrg}/{encodedProject}/_apis/git/repositories/{encodedRepoId}/pullRequests/{pullRequestId}/reviewers?api-version={ApiVersion}";
+                using var reviewersRequest = new HttpRequestMessage(HttpMethod.Get, reviewersUri);
+                reviewersRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+                
+                using var reviewersResponse = await _httpClient.SendAsync(reviewersRequest);
+                if (reviewersResponse.IsSuccessStatusCode)
+                {
+                    using var reviewersStream = await reviewersResponse.Content.ReadAsStreamAsync();
+                    var reviewersJson = await JsonDocument.ParseAsync(reviewersStream);
+                    
+                    if (reviewersJson.RootElement.TryGetProperty("value", out var reviewersArray))
+                    {
+                        foreach (var reviewer in reviewersArray.EnumerateArray())
+                        {
+                            if (reviewer.TryGetProperty("votedFor", out var votedForArray))
+                            {
+                                foreach (var vote in votedForArray.EnumerateArray())
+                                {
+                                    if (vote.TryGetProperty("date", out var voteDate))
+                                    {
+                                        var voteDateTime = voteDate.GetDateTime();
+                                        if (voteDateTime > latestActivity)
+                                            latestActivity = voteDateTime;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error fetching reviewer activity for PR {PullRequestId}", pullRequestId);
+            }
+
+            return latestActivity == DateTime.MinValue ? null : latestActivity;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error getting last activity for PR {PullRequestId}", pullRequestId);
+            return null;
+        }
     }
 }

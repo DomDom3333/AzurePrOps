@@ -74,6 +74,12 @@
             <Setter Property="Margin" Value="1" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <DoubleTransition Duration="0:0:0.15" Property="Opacity" />
+                    <BrushTransition Duration="0:0:0.15" Property="Background" />
+                </Transitions>
+            </Setter>
         </Style>
 
         <Style Selector="ToggleButton.toolbar:pointerover">
@@ -88,17 +94,21 @@
             <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
         </Style>
 
-        <!--  PathIcon and TextBlock styles for better contrast  -->
+        <!--  Enhanced PathIcon styles with proper contrast  -->
+        <Style Selector="PathIcon">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        </Style>
+
         <Style Selector="ToggleButton.toolbar PathIcon">
-            <Setter Property="Foreground" Value="{StaticResource IconBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
         </Style>
 
         <Style Selector="ToggleButton.toolbar:pointerover PathIcon">
-            <Setter Property="Foreground" Value="{StaticResource IconHoverBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}" />
         </Style>
 
         <Style Selector="ToggleButton.toolbar:checked PathIcon">
-            <Setter Property="Foreground" Value="{StaticResource IconSelectedBrush}" />
+            <Setter Property="Foreground" Value="White" />
         </Style>
 
         <Style Selector="ToggleButton.toolbar TextBlock">
@@ -114,11 +124,15 @@
         </Style>
 
         <Style Selector="Button.modern PathIcon">
-            <Setter Property="Foreground" Value="{StaticResource IconBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
         </Style>
 
         <Style Selector="Button.modern:pointerover PathIcon">
-            <Setter Property="Foreground" Value="{StaticResource IconHoverBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}" />
+        </Style>
+
+        <Style Selector="Button.modern:pressed PathIcon">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
         </Style>
 
         <Style Selector="Button.modern TextBlock">
@@ -135,6 +149,22 @@
 
         <Style Selector="Button.primary TextBlock">
             <Setter Property="Foreground" Value="White" />
+        </Style>
+
+        <!--  Enhanced tooltip styles for better readability  -->
+        <Style Selector="ToolTip">
+            <Setter Property="Background" Value="#2D3748" />
+            <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="BorderBrush" Value="#4A5568" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Medium" />
+        </Style>
+
+        <Style Selector="ToolTip TextBlock">
+            <Setter Property="Foreground" Value="#FFFFFF" />
         </Style>
 
         <Style Selector="TextBox.search">
@@ -178,51 +208,61 @@
                 BorderThickness="0,0,0,1"
                 CornerRadius="8,8,0,0"
                 Grid.Row="0"
-                Padding="16,12">
+                Padding="12,10">
                 <Grid ColumnDefinitions="Auto,*,Auto">
 
-                    <!--  View Mode & Navigation  -->
+                    <!--  Left Section: View Mode & Navigation  -->
                     <StackPanel
                         Grid.Column="0"
                         Orientation="Horizontal"
-                        Spacing="8">
-                        <StackPanel Orientation="Horizontal" Spacing="2">
-                            <ToggleButton
-                                Classes="toolbar"
-                                IsChecked="True"
-                                ToolTip.Tip="Side-by-Side View"
-                                x:Name="PART_SideBySideButton">
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <PathIcon
-                                        Data="M0,0 L7,0 L7,14 L0,14 Z M9,0 L16,14 L16,14 L9,14 Z"
-                                        Height="14"
-                                        Width="16" />
-                                    <TextBlock FontSize="12" Text="Split" />
-                                </StackPanel>
-                            </ToggleButton>
-                            <ToggleButton
-                                Classes="toolbar"
-                                ToolTip.Tip="Unified View"
-                                x:Name="PART_UnifiedButton">
-                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <PathIcon
-                                        Data="M0,0 L16,0 L16,14 L0,14 Z"
-                                        Height="14"
-                                        Width="16" />
-                                    <TextBlock FontSize="12" Text="Unified" />
-                                </StackPanel>
-                            </ToggleButton>
-                        </StackPanel>
+                        Spacing="12">
 
+                        <!--  View Mode Toggle Group  -->
                         <Border
-                            Background="{StaticResource BorderBrush}"
-                            Height="24"
-                            Width="1" />
+                            Background="{StaticResource SurfaceBrush}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="2">
+                            <StackPanel Orientation="Horizontal" Spacing="1">
+                                <ToggleButton
+                                    Classes="toolbar"
+                                    IsChecked="True"
+                                    Margin="0"
+                                    Padding="10,6"
+                                    ToolTip.Tip="Side-by-Side View"
+                                    x:Name="PART_SideBySideButton">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <PathIcon
+                                            Data="M0,0 L7,0 L7,14 L0,14 Z M9,0 L16,14 L16,14 L9,14 Z"
+                                            Height="14"
+                                            Width="16" />
+                                        <TextBlock FontSize="12" Text="Split" />
+                                    </StackPanel>
+                                </ToggleButton>
+                                <ToggleButton
+                                    Classes="toolbar"
+                                    Margin="0"
+                                    Padding="10,6"
+                                    ToolTip.Tip="Unified View"
+                                    x:Name="PART_UnifiedButton">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <PathIcon
+                                            Data="M0,0 L16,0 L16,14 L0,14 Z"
+                                            Height="14"
+                                            Width="16" />
+                                        <TextBlock FontSize="12" Text="Unified" />
+                                    </StackPanel>
+                                </ToggleButton>
+                            </StackPanel>
+                        </Border>
 
-                        <StackPanel Orientation="Horizontal" Spacing="2">
+                        <!--  Navigation Controls  -->
+                        <StackPanel Orientation="Horizontal" Spacing="4">
                             <Button
                                 Classes="modern"
-                                ToolTip.Tip="Previous Change"
+                                Padding="8,6"
+                                ToolTip.Tip="Previous Change (Ctrl+Up)"
                                 x:Name="PART_PrevChangeButton">
                                 <PathIcon
                                     Data="M8,0 L0,6 L8,12 Z"
@@ -231,7 +271,8 @@
                             </Button>
                             <Button
                                 Classes="modern"
-                                ToolTip.Tip="Next Change"
+                                Padding="8,6"
+                                ToolTip.Tip="Next Change (Ctrl+Down)"
                                 x:Name="PART_NextChangeButton">
                                 <PathIcon
                                     Data="M0,0 L8,6 L0,12 Z"
@@ -241,17 +282,19 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <!--  Search  -->
-                    <Border
+                    <!--  Center Section: Search  -->
+                    <Grid
                         Grid.Column="1"
-                        HorizontalAlignment="Stretch"
-                        MinWidth="320">
+                        Margin="20,0"
+                        MaxWidth="400"
+                        MinWidth="250">
                         <Grid ColumnDefinitions="*,Auto">
                             <TextBox
                                 Classes="search"
+                                FontSize="13"
                                 Grid.Column="0"
                                 HorizontalAlignment="Stretch"
-                                Watermark="Search in diff..."
+                                Watermark="Search in diff... (Ctrl+F)"
                                 x:Name="PART_SearchBox" />
                             <StackPanel
                                 Grid.Column="1"
@@ -260,7 +303,8 @@
                                 Spacing="2">
                                 <Button
                                     Classes="modern"
-                                    ToolTip.Tip="Previous Match"
+                                    Padding="6,6"
+                                    ToolTip.Tip="Previous Match (F3)"
                                     x:Name="PART_PrevSearchButton">
                                     <PathIcon
                                         Data="M8,0 L0,6 L8,12 Z"
@@ -269,7 +313,8 @@
                                 </Button>
                                 <Button
                                     Classes="modern"
-                                    ToolTip.Tip="Next Match"
+                                    Padding="6,6"
+                                    ToolTip.Tip="Next Match (Shift+F3)"
                                     x:Name="PART_NextSearchButton">
                                     <PathIcon
                                         Data="M0,0 L8,6 L0,12 Z"
@@ -278,102 +323,102 @@
                                 </Button>
                             </StackPanel>
                         </Grid>
-                    </Border>
+                    </Grid>
 
-                    <!--  Actions  -->
+                    <!--  Right Section: Options & Actions  -->
                     <StackPanel
                         Grid.Column="2"
                         Orientation="Horizontal"
-                        Spacing="4">
-                        <ToggleButton
-                            Classes="toolbar"
-                            IsChecked="True"
-                            ToolTip.Tip="Show Only Changes"
-                            x:Name="PART_CodeFoldingButton">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
+                        Spacing="8">
+
+                        <!--  Diff Options Group  -->
+                        <StackPanel Orientation="Horizontal" Spacing="3">
+                            <ToggleButton
+                                Classes="toolbar"
+                                IsChecked="True"
+                                Padding="6,6"
+                                ToolTip.Tip="Show Only Changes"
+                                x:Name="PART_CodeFoldingButton">
                                 <PathIcon
                                     Data="M2,4 L14,4 M2,8 L14,8 M2,12 L14,12"
-                                    Height="16"
-                                    Width="16" />
-                                <TextBlock Text="Changes" />
-                            </StackPanel>
-                        </ToggleButton>
-                        <ToggleButton
-                            Classes="toolbar"
-                            ToolTip.Tip="Ignore Whitespace"
-                            x:Name="PART_IgnoreWhitespaceButton">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                    Height="14"
+                                    Width="14" />
+                            </ToggleButton>
+                            <ToggleButton
+                                Classes="toolbar"
+                                Padding="6,6"
+                                ToolTip.Tip="Ignore Whitespace"
+                                x:Name="PART_IgnoreWhitespaceButton">
                                 <PathIcon
                                     Data="M2,2 L14,14 M14,2 L2,14"
-                                    Height="16"
-                                    Width="16" />
-                                <TextBlock Text="Ignore WS" />
-                            </StackPanel>
-                        </ToggleButton>
-                        <ToggleButton
-                            Classes="toolbar"
-                            ToolTip.Tip="Ignore EOL (line ending) differences"
-                            x:Name="PART_IgnoreNewlinesButton">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                    Height="14"
+                                    Width="14" />
+                            </ToggleButton>
+                            <ToggleButton
+                                Classes="toolbar"
+                                Padding="6,6"
+                                ToolTip.Tip="Ignore Line Endings"
+                                x:Name="PART_IgnoreNewlinesButton">
                                 <PathIcon
                                     Data="M3,3 L13,3 L13,6 L9,6 L9,11 L6,11 L6,6 L3,6 Z M10,9 L14,13 M14,9 L10,13"
-                                    Height="16"
-                                    Width="16" />
-                                <TextBlock Text="Ignore EOL" />
-                            </StackPanel>
-                        </ToggleButton>
-                        <ToggleButton
-                            Classes="toolbar"
-                            ToolTip.Tip="Wrap Lines"
-                            x:Name="PART_WrapLinesButton">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                    Height="14"
+                                    Width="14" />
+                            </ToggleButton>
+                            <ToggleButton
+                                Classes="toolbar"
+                                Padding="6,6"
+                                ToolTip.Tip="Wrap Lines"
+                                x:Name="PART_WrapLinesButton">
                                 <PathIcon
                                     Data="M2,4 L12,4 M2,8 L12,8 M2,12 L12,12 M12,8 L16,12 L12,16"
-                                    Height="16"
-                                    Width="16" />
-                                <TextBlock Text="Wrap" />
-                            </StackPanel>
-                        </ToggleButton>
+                                    Height="14"
+                                    Width="14" />
+                            </ToggleButton>
+                        </StackPanel>
 
+                        <!--  Separator  -->
                         <Border
                             Background="{StaticResource BorderBrush}"
-                            Height="24"
+                            Height="20"
+                            VerticalAlignment="Center"
                             Width="1" />
 
-                        <Button
-                            Classes="modern"
-                            ToolTip.Tip="Copy Selected"
-                            x:Name="PART_CopyButton">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
+                        <!--  Action Buttons Group  -->
+                        <StackPanel Orientation="Horizontal" Spacing="3">
+                            <Button
+                                Classes="modern"
+                                Padding="6,6"
+                                ToolTip.Tip="Copy Selection (Ctrl+C)"
+                                x:Name="PART_CopyButton">
                                 <PathIcon
                                     Data="M4,2 L4,4 L2,4 L2,14 L10,14 L10,12 L12,12 L12,2 Z M6,0 L14,0 L14,10 L12,10"
                                     Height="14"
                                     Width="14" />
-                                <TextBlock Text="Copy Sel" />
-                            </StackPanel>
-                        </Button>
-                        <Button
-                            Classes="modern"
-                            ToolTip.Tip="Copy Diff"
-                            x:Name="PART_CopyDiffButton">
-                            <StackPanel Orientation="Horizontal" Spacing="6">
+                            </Button>
+                            <Button
+                                Classes="modern"
+                                Padding="6,6"
+                                ToolTip.Tip="Copy Entire Diff (Ctrl+Shift+C)"
+                                x:Name="PART_CopyDiffButton">
                                 <PathIcon
                                     Data="M2,2 L10,2 L10,12 L2,12 Z M12,4 L14,4 L14,14 L6,14 L6,12"
                                     Height="14"
                                     Width="14" />
-                                <TextBlock Text="Copy Diff" />
-                            </StackPanel>
-                        </Button>
+                            </Button>
+                        </StackPanel>
+
+                        <!--  Primary Action  -->
                         <Button
                             Classes="primary"
-                            ToolTip.Tip="Open in IDE"
+                            Padding="10,6"
+                            ToolTip.Tip="Open in External Editor (Ctrl+O)"
                             x:Name="PART_OpenInIDEButton">
-                            <StackPanel Orientation="Horizontal" Spacing="4">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
                                 <PathIcon
                                     Data="M0,0 L14,0 L14,5 L12,5 L12,2 L2,2 L2,12 L5,12 L5,14 L0,14 Z M8,6 L14,0 M10,0 L14,4"
                                     Height="14"
                                     Width="14" />
-                                <TextBlock FontSize="11" Text="IDE" />
+                                <TextBlock FontSize="12" Text="Open" />
                             </StackPanel>
                         </Button>
                     </StackPanel>

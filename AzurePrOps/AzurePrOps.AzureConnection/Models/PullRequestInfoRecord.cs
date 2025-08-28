@@ -17,7 +17,8 @@ public record PullRequestInfo(
     string Url,
     bool IsDraft = false,
     string ReviewerVote = "No vote",
-    bool ShowDraftBadge = false)
+    bool ShowDraftBadge = false,
+    DateTime? LastActivity = null)
 {
     public string WebUrl => !string.IsNullOrWhiteSpace(Url) && Uri.IsWellFormedUriString(Url, UriKind.Absolute)
         ? Url
@@ -36,4 +37,7 @@ public record PullRequestInfo(
         "rejected" => "❌",
         _ => "❔"
     };
+
+    // Use LastActivity if available, otherwise fall back to Created date
+    public DateTime EffectiveLastActivity => LastActivity ?? Created;
 }

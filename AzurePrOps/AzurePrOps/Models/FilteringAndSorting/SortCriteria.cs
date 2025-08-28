@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Runtime.CompilerServices;
 
 namespace AzurePrOps.Models.FilteringAndSorting;
 
@@ -7,12 +9,13 @@ public enum SortField
 {
     Title,
     Creator,
-    Created,
+    CreatedDate,
+    UpdatedDate,
     Status,
     SourceBranch,
     TargetBranch,
     ReviewerVote,
-    Id,
+    PrId,
     ReviewerCount
 }
 
@@ -22,200 +25,186 @@ public enum SortDirection
     Descending
 }
 
+/// <summary>
+/// Defines sorting criteria for pull requests
+/// </summary>
 public class SortCriteria : INotifyPropertyChanged
 {
-    private SortField _primarySortField = SortField.Created;
-    private SortDirection _primarySortDirection = SortDirection.Descending;
-    private SortField? _secondarySortField;
-    private SortDirection _secondarySortDirection = SortDirection.Ascending;
-    private SortField? _tertiarySortField;
-    private SortDirection _tertiarySortDirection = SortDirection.Ascending;
+    public SortField PrimaryField { get; set; } = SortField.CreatedDate;
+    public SortDirection PrimaryDirection { get; set; } = SortDirection.Descending;
+    
+    public SortField? SecondaryField { get; set; }
+    public SortDirection SecondaryDirection { get; set; } = SortDirection.Ascending;
+    
+    public SortField? TertiaryField { get; set; }
+    public SortDirection TertiaryDirection { get; set; } = SortDirection.Ascending;
 
-    public SortField PrimarySortField
+    public string CurrentPreset { get; set; } = "Most Recent";
+
+    /// <summary>
+    /// Gets the list of active sort fields in order of priority
+    /// </summary>
+    public List<(SortField Field, SortDirection Direction)> GetSortFields()
     {
-        get => _primarySortField;
-        set
+        var fields = new List<(SortField Field, SortDirection Direction)>
         {
-            _primarySortField = value;
-            OnPropertyChanged();
-        }
-    }
+            (PrimaryField, PrimaryDirection)
+        };
 
-    public SortDirection PrimarySortDirection
-    {
-        get => _primarySortDirection;
-        set
+        if (SecondaryField.HasValue)
         {
-            _primarySortDirection = value;
-            OnPropertyChanged();
+            fields.Add((SecondaryField.Value, SecondaryDirection));
         }
-    }
 
-    public SortField? SecondarySortField
-    {
-        get => _secondarySortField;
-        set
+        if (TertiaryField.HasValue)
         {
-            _secondarySortField = value;
-            OnPropertyChanged();
+            fields.Add((TertiaryField.Value, TertiaryDirection));
         }
+
+        return fields;
     }
 
-    public SortDirection SecondarySortDirection
-    {
-        get => _secondarySortDirection;
-        set
-        {
-            _secondarySortDirection = value;
-            OnPropertyChanged();
-        }
-    }
-
-    public SortField? TertiarySortField
-    {
-        get => _tertiarySortField;
-        set
-        {
-            _tertiarySortField = value;
-            OnPropertyChanged();
-        }
-    }
-
-    public SortDirection TertiarySortDirection
-    {
-        get => _tertiarySortDirection;
-        set
-        {
-            _tertiarySortDirection = value;
-            OnPropertyChanged();
-        }
-    }
-
-    public void Reset()
-    {
-        PrimarySortField = SortField.Created;
-        PrimarySortDirection = SortDirection.Descending;
-        SecondarySortField = null;
-        SecondarySortDirection = SortDirection.Ascending;
-        TertiarySortField = null;
-        TertiarySortDirection = SortDirection.Ascending;
-    }
-
-    // Predefined sorting presets
+    /// <summary>
+    /// Applies a sort preset
+    /// </summary>
     public void ApplyPreset(string preset)
     {
+        CurrentPreset = preset;
+        
         switch (preset)
         {
-            case "Newest First":
-                PrimarySortField = SortField.Created;
-                PrimarySortDirection = SortDirection.Descending;
-                SecondarySortField = SortField.Id;
-                SecondarySortDirection = SortDirection.Descending;
-                TertiarySortField = null;
+            case "Most Recent":
+                PrimaryField = SortField.CreatedDate;
+                PrimaryDirection = SortDirection.Descending;
+                SecondaryField = null;
+                TertiaryField = null;
                 break;
+
             case "Oldest First":
-                PrimarySortField = SortField.Created;
-                PrimarySortDirection = SortDirection.Ascending;
-                SecondarySortField = SortField.Id;
-                SecondarySortDirection = SortDirection.Ascending;
-                TertiarySortField = null;
+                PrimaryField = SortField.CreatedDate;
+                PrimaryDirection = SortDirection.Ascending;
+                SecondaryField = null;
+                TertiaryField = null;
                 break;
+
             case "Title A-Z":
-                PrimarySortField = SortField.Title;
-                PrimarySortDirection = SortDirection.Ascending;
-                SecondarySortField = SortField.Created;
-                SecondarySortDirection = SortDirection.Descending;
-                TertiarySortField = null;
+                PrimaryField = SortField.Title;
+                PrimaryDirection = SortDirection.Ascending;
+                SecondaryField = SortField.CreatedDate;
+                SecondaryDirection = SortDirection.Descending;
+                TertiaryField = null;
                 break;
+
+            case "Title Z-A":
+                PrimaryField = SortField.Title;
+                PrimaryDirection = SortDirection.Descending;
+                SecondaryField = SortField.CreatedDate;
+                SecondaryDirection = SortDirection.Descending;
+                TertiaryField = null;
+                break;
+
             case "Creator A-Z":
-                PrimarySortField = SortField.Creator;
-                PrimarySortDirection = SortDirection.Ascending;
-                SecondarySortField = SortField.Created;
-                SecondarySortDirection = SortDirection.Descending;
-                TertiarySortField = null;
+                PrimaryField = SortField.Creator;
+                PrimaryDirection = SortDirection.Ascending;
+                SecondaryField = SortField.CreatedDate;
+                SecondaryDirection = SortDirection.Descending;
+                TertiaryField = null;
                 break;
+
+            case "Creator Z-A":
+                PrimaryField = SortField.Creator;
+                PrimaryDirection = SortDirection.Descending;
+                SecondaryField = SortField.CreatedDate;
+                SecondaryDirection = SortDirection.Descending;
+                TertiaryField = null;
+                break;
+
             case "Status Priority":
-                PrimarySortField = SortField.Status;
-                PrimarySortDirection = SortDirection.Ascending; // Active, Draft, Completed, Abandoned
-                SecondarySortField = SortField.ReviewerVote;
-                SecondarySortDirection = SortDirection.Ascending;
-                TertiarySortField = SortField.Created;
-                TertiarySortDirection = SortDirection.Descending;
+                PrimaryField = SortField.Status;
+                PrimaryDirection = SortDirection.Ascending;
+                SecondaryField = SortField.CreatedDate;
+                SecondaryDirection = SortDirection.Descending;
+                TertiaryField = null;
                 break;
+
             case "Review Priority":
-                PrimarySortField = SortField.ReviewerVote;
-                PrimarySortDirection = SortDirection.Ascending; // No vote, Waiting, Rejected, etc.
-                SecondarySortField = SortField.Created;
-                SecondarySortDirection = SortDirection.Ascending; // Older PRs need attention first
-                TertiarySortField = null;
+                PrimaryField = SortField.ReviewerVote;
+                PrimaryDirection = SortDirection.Ascending;
+                SecondaryField = SortField.CreatedDate;
+                SecondaryDirection = SortDirection.Descending;
+                TertiaryField = null;
                 break;
+
             case "High Activity":
-                PrimarySortField = SortField.ReviewerCount;
-                PrimarySortDirection = SortDirection.Descending;
-                SecondarySortField = SortField.Created;
-                SecondarySortDirection = SortDirection.Descending;
-                TertiarySortField = null;
+                PrimaryField = SortField.UpdatedDate;
+                PrimaryDirection = SortDirection.Descending;
+                SecondaryField = SortField.ReviewerCount;
+                SecondaryDirection = SortDirection.Descending;
+                TertiaryField = null;
                 break;
+
+            case "Needs Attention":
+                PrimaryField = SortField.ReviewerVote;
+                PrimaryDirection = SortDirection.Ascending;
+                SecondaryField = SortField.UpdatedDate;
+                SecondaryDirection = SortDirection.Ascending;
+                TertiaryField = null;
+                break;
+
             default:
-                Reset();
+                // Keep current settings for unknown presets
                 break;
         }
+
+        OnPropertyChanged();
     }
 
-    public string GetDisplayName(SortField field)
-    {
-        return field switch
-        {
-            SortField.Title => "Title",
-            SortField.Creator => "Creator",
-            SortField.Created => "Created Date",
-            SortField.Status => "Status",
-            SortField.SourceBranch => "Source Branch",
-            SortField.TargetBranch => "Target Branch",
-            SortField.ReviewerVote => "Reviewer Vote",
-            SortField.Id => "PR ID",
-            SortField.ReviewerCount => "Reviewer Count",
-            _ => field.ToString()
-        };
-    }
-
-    public string GetCurrentDescription()
-    {
-        var primary = $"{GetDisplayName(PrimarySortField)} ({(PrimarySortDirection == SortDirection.Ascending ? "A-Z" : "Z-A")})";
-        
-        if (SecondarySortField.HasValue)
-        {
-            var secondary = $"{GetDisplayName(SecondarySortField.Value)} ({(SecondarySortDirection == SortDirection.Ascending ? "A-Z" : "Z-A")})";
-            primary += $", then {secondary}";
-            
-            if (TertiarySortField.HasValue)
-            {
-                var tertiary = $"{GetDisplayName(TertiarySortField.Value)} ({(TertiarySortDirection == SortDirection.Ascending ? "A-Z" : "Z-A")})";
-                primary += $", then {tertiary}";
-            }
-        }
-        
-        return primary;
-    }
-
+    /// <summary>
+    /// Gets tooltip text for a sort preset
+    /// </summary>
     public static string GetSortPresetTooltip(string preset)
     {
         return preset switch
         {
-            "Newest First" => "Sort by Created Date (newest first), then by PR ID (highest first).",
-            "Oldest First" => "Sort by Created Date (oldest first), then by PR ID (lowest first).",
-            "Title A-Z" => "Sort by Title (A-Z), then by Created Date (newest first).",
-            "Creator A-Z" => "Sort by Creator name (A-Z), then by Created Date (newest first).",
-            "Status Priority" => "Sort by Status priority (Active, Draft, Completed, Abandoned), then by Reviewer Vote, then by Created Date (newest first).",
-            "Review Priority" => "Sort by Reviewer Vote priority (Rejected, Waiting, No vote, Approved with suggestions, Approved), then by Created Date (oldest first for urgent attention).",
-            "High Activity" => "Sort by Reviewer Count (most reviewers first), then by Created Date (newest first).",
-            _ => "Custom sort preset"
+            "Most Recent" => "Sort by creation date, newest first",
+            "Oldest First" => "Sort by creation date, oldest first",
+            "Title A-Z" => "Sort by title alphabetically",
+            "Title Z-A" => "Sort by title reverse alphabetically",
+            "Creator A-Z" => "Sort by creator name alphabetically",
+            "Creator Z-A" => "Sort by creator name reverse alphabetically",
+            "Status Priority" => "Sort by status priority (Active, Draft, Completed, Abandoned)",
+            "Review Priority" => "Sort by review votes (critical votes first)",
+            "High Activity" => "Sort by recent updates and reviewer activity",
+            "Needs Attention" => "Sort by PRs that need immediate attention",
+            _ => "Custom sort criteria"
         };
     }
 
+    /// <summary>
+    /// Resets sorting to default (Created Date descending)
+    /// </summary>
+    public void Reset()
+    {
+        PrimaryField = SortField.CreatedDate;
+        PrimaryDirection = SortDirection.Descending;
+        SecondaryField = null;
+        TertiaryField = null;
+        CurrentPreset = "Most Recent";
+        OnPropertyChanged();
+    }
+
+    /// <summary>
+    /// Checks if sorting is at default settings
+    /// </summary>
+    public bool IsDefault => 
+        PrimaryField == SortField.CreatedDate && 
+        PrimaryDirection == SortDirection.Descending && 
+        !SecondaryField.HasValue && 
+        !TertiaryField.HasValue;
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    protected virtual void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
+    protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
