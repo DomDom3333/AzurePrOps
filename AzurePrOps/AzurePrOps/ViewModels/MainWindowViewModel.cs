@@ -19,6 +19,7 @@ using System.Diagnostics;
 using AzurePrOps.Views;
 using System.Linq;
 using AzurePrOps.Infrastructure;
+using AzurePrOps.ViewModels.Filters;
 
 namespace AzurePrOps.ViewModels;
 
@@ -27,17 +28,15 @@ public class MainWindowViewModel : ViewModelBase
     private readonly AzureDevOpsClient _client = new();
     private readonly IPullRequestService _pullRequestService;
     private Models.ConnectionSettings _settings;
-    private readonly PullRequestFilteringSortingService _filterSortService = new();
     private readonly AuthenticationService _authService;
     private IReadOnlyList<string> _userGroupMemberships = new List<string>();
 
     public ObservableCollection<PullRequestInfo> PullRequests { get; } = new();
     private readonly ObservableCollection<PullRequestInfo> _allPullRequests = new();
 
-    // Centralized filtering and sorting state - replaces scattered filter properties
-    public FilterState FilterState { get; }
-    public FilterPanelViewModel FilterPanel { get; }
-
+    // Modular filter system - replaces scattered filter properties
+    private readonly FilterOrchestrator _filterOrchestrator;
+    
     // Legacy collections for backward compatibility (during transition)
     public ObservableCollection<FilterView> FilterViews { get; } = new();
     public ObservableCollection<SavedFilterView> SavedFilterViews { get; } = new();
@@ -45,17 +44,22 @@ public class MainWindowViewModel : ViewModelBase
     // Preferences for saved views
     private FilterSortPreferences _preferences = new();
 
+    // Expose filter components for UI binding
+    public FilterOrchestrator FilterOrchestrator => _filterOrchestrator;
+    public AzurePrOps.ViewModels.Filters.FilterPanelViewModel FilterPanel => _filterOrchestrator.FilterPanel;
+    public FilterState FilterState => _filterOrchestrator.FilterState;
+
     // Legacy properties for backward compatibility (to be removed after UI migration)
-    [Obsolete("Use FilterState.Criteria instead")]
+    [Obsolete("Use FilterOrchestrator.FilterState.Criteria instead")]
     public FilterCriteria FilterCriteria => FilterState.Criteria;
 
-    [Obsolete("Use FilterState.SortCriteria instead")]
+    [Obsolete("Use FilterOrchestrator.FilterState.SortCriteria instead")]
     public SortCriteria SortCriteria => FilterState.SortCriteria;
 
-    // Filter state display properties - now delegated to FilterState
+    // Filter state display properties - now delegated to FilterOrchestrator
     public string CurrentFilterSource => FilterState.CurrentFilterSource;
-    public string ActiveFiltersSummary => FilterState.ActiveFiltersSummary;
-    public bool HasActiveFilters => FilterState.HasActiveFilters;
+    public string ActiveFiltersSummary => FilterOrchestrator.GetFilterSummary();
+    public bool HasActiveFilters => FilterOrchestrator.HasActiveFilters();
     public string FilterStatusText => FilterState.FilterStatusText;
 
     // Available options for dropdowns - with proper initialization
@@ -686,16 +690,18 @@ public class MainWindowViewModel : ViewModelBase
     {
         _settings = settings;
 
-        // Initialize centralized filtering system FIRST
-        FilterState = new FilterState();
-        FilterPanel = new FilterPanelViewModel(FilterState);
+        // Initialize modular filter system FIRST
+        _filterOrchestrator = new FilterOrchestrator(new PullRequestFilteringSortingService());
 
-        // Set up user information in filter state
-        FilterState.Criteria.CurrentUserId = settings.ReviewerId ?? string.Empty;
-        FilterState.Criteria.UserDisplayName = settings.UserDisplayName ?? string.Empty;
+        // Initialize the filter orchestrator with user information
+        var userRole = _settings.UserRole; // UserRole is already an enum, no need for HasValue/Value
+        _filterOrchestrator.Initialize(
+            _settings.ReviewerId ?? string.Empty, 
+            _settings.UserDisplayName ?? string.Empty, 
+            userRole);
 
         // Subscribe to filter changes to automatically apply filtering
-        FilterState.FilterChanged += (_, _) => ApplyFiltersAndSorting();
+        _filterOrchestrator.FiltersChanged += (_, criteria) => ApplyFiltersAndSorting();
 
         // Get the AuthenticationService from the service registry
         _authService = ServiceRegistry.Resolve<AuthenticationService>() ?? new AuthenticationService();
@@ -717,16 +723,16 @@ public class MainWindowViewModel : ViewModelBase
         LoadPreferences();
 
         // Initialize user information - will be updated automatically when app starts
-        FilterState.Criteria.CurrentUserId = _settings.ReviewerId ?? string.Empty;
-        FilterState.Criteria.UserDisplayName = _settings.UserDisplayName ?? string.Empty;
+        _filterOrchestrator.FilterState.Criteria.CurrentUserId = _settings.ReviewerId ?? string.Empty;
+        _filterOrchestrator.FilterState.Criteria.UserDisplayName = _settings.UserDisplayName ?? string.Empty;
 
         // Initialize the status filter to ensure "All" works properly
         UpdateStatusFilter(_statusFilter);
         UpdateReviewerVoteFilter(_reviewerVoteFilter);
 
         // Set up property change handlers for real-time filtering
-        FilterState.Criteria.PropertyChanged += (_, _) => ApplyFiltersAndSorting();
-        FilterState.SortCriteria.PropertyChanged += (_, _) => ApplyFiltersAndSorting();
+        _filterOrchestrator.FilterState.Criteria.PropertyChanged += (_, _) => ApplyFiltersAndSorting();
+        _filterOrchestrator.FilterState.SortCriteria.PropertyChanged += (_, _) => ApplyFiltersAndSorting();
 
         // Add error handling mechanism
         _client.SetErrorHandler(message => _ = ShowErrorMessage(message));
@@ -1065,13 +1071,15 @@ public class MainWindowViewModel : ViewModelBase
             if (string.IsNullOrWhiteSpace(NewViewName))
                 return;
 
-            var view = new FilterView(
-                NewViewName,
-                TitleFilter,
-                CreatorFilter,
-                SourceBranchFilter,
-                TargetBranchFilter,
-                StatusFilter == "All" ? string.Empty : StatusFilter);
+            var view = new FilterView
+            {
+                Name = NewViewName,
+                Title = TitleFilter,
+                Creator = CreatorFilter,
+                SourceBranch = SourceBranchFilter,
+                TargetBranch = TargetBranchFilter,
+                Status = StatusFilter == "All" ? string.Empty : StatusFilter
+            };
 
             FilterViews.Add(view);
             FilterViewStorage.Save(FilterViews.ToArray());
@@ -1568,10 +1576,8 @@ public class MainWindowViewModel : ViewModelBase
                     _groupSettings.SelectedGroups.Contains(reviewer.DisplayName)));
         }
 
-        // Pass the current user ID from settings for personal filters
-        var currentUserId = _settings?.ReviewerId ?? string.Empty;
-        var result = _filterSortService.ApplyFiltersAndSorting(filteredPRs, FilterState.Criteria,
-            FilterState.SortCriteria, _userGroupMemberships, currentUserId);
+        // Use the FilterOrchestrator to apply filters and sorting
+        var result = _filterOrchestrator.ApplyFiltersAndSorting(filteredPRs);
 
         PullRequests.Clear();
         foreach (var pr in result)

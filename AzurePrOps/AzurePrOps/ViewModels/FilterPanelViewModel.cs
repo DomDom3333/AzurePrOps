@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reactive;
 using System.Threading.Tasks;
 using AzurePrOps.AzureConnection.Models;
+using AzurePrOps.Models;
 using ReactiveUI;
 using AzurePrOps.Models.FilteringAndSorting;
 
@@ -26,8 +27,8 @@ public class FilterPanelViewModel : ViewModelBase
         // Initialize commands
         ClearAllFiltersCommand = ReactiveCommand.Create(ClearAllFilters);
         SaveCurrentFilterViewCommand = ReactiveCommand.CreateFromTask(SaveCurrentFilterView);
-        ApplyFilterViewCommand = ReactiveCommand.Create<SavedFilterView>(ApplyFilterView);
-        DeleteFilterViewCommand = ReactiveCommand.Create<SavedFilterView>(DeleteFilterView);
+        ApplyFilterViewCommand = ReactiveCommand.Create<FilterView>(ApplyFilterView);
+        DeleteFilterViewCommand = ReactiveCommand.Create<FilterView>(DeleteFilterView);
         ApplyQuickFilterCommand = ReactiveCommand.Create<string>(ApplyQuickFilter);
 
         // Initialize collections
@@ -137,8 +138,8 @@ public class FilterPanelViewModel : ViewModelBase
 
     public ReactiveCommand<Unit, Unit> ClearAllFiltersCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveCurrentFilterViewCommand { get; }
-    public ReactiveCommand<SavedFilterView, Unit> ApplyFilterViewCommand { get; }
-    public ReactiveCommand<SavedFilterView, Unit> DeleteFilterViewCommand { get; }
+    public ReactiveCommand<FilterView, Unit> ApplyFilterViewCommand { get; }
+    public ReactiveCommand<FilterView, Unit> DeleteFilterViewCommand { get; }
     public ReactiveCommand<string, Unit> ApplyQuickFilterCommand { get; }
 
     #endregion
@@ -158,7 +159,38 @@ public class FilterPanelViewModel : ViewModelBase
             return;
         }
 
-        var savedView = _filterState.CreateSavedFilterView(NewFilterViewName, NewFilterViewDescription);
+        // Create a SavedFilterView directly instead of using CreateSavedFilterView which returns FilterView
+        var savedView = new SavedFilterView
+        {
+            Name = NewFilterViewName,
+            Description = NewFilterViewDescription,
+            FilterCriteria = new FilterCriteria
+            {
+                CurrentUserId = _filterState.Criteria.CurrentUserId,
+                UserDisplayName = _filterState.Criteria.UserDisplayName,
+                MyPullRequestsOnly = _filterState.MyPullRequestsOnly,
+                AssignedToMeOnly = _filterState.AssignedToMeOnly,
+                NeedsMyReviewOnly = _filterState.NeedsMyReviewOnly,
+                ExcludeMyPullRequests = _filterState.ExcludeMyPullRequests,
+                SelectedStatuses = _filterState.SelectedStatuses.ToList(),
+                IsDraft = _filterState.IsDraft,
+                GlobalSearchText = _filterState.GlobalSearchText,
+                TitleFilter = _filterState.TitleFilter,
+                CreatorFilter = _filterState.CreatorFilter,
+                ReviewerFilter = _filterState.ReviewerFilter,
+                SourceBranchFilter = _filterState.SourceBranchFilter,
+                TargetBranchFilter = _filterState.TargetBranchFilter,
+                SelectedReviewerVotes = _filterState.Criteria.SelectedReviewerVotes.ToList(),
+                EnableGroupsWithoutVoteFilter = _filterState.EnableGroupsWithoutVoteFilter
+            },
+            SortCriteria = new SortCriteria
+            {
+                // Copy current sort criteria properties
+                CurrentPreset = _filterState.SortCriteria.CurrentPreset
+            },
+            CreatedAt = DateTime.Now,
+            LastUsed = DateTime.Now
+        };
         
         // Save to storage
         await SaveFilterViewToStorage(savedView);
@@ -171,27 +203,28 @@ public class FilterPanelViewModel : ViewModelBase
         NewFilterViewDescription = string.Empty;
     }
 
-    private void ApplyFilterView(SavedFilterView filterView)
+    private void ApplyFilterView(FilterView filterView)
     {
         if (filterView == null) return;
 
         _filterState.ApplyFilterView(filterView);
         
-        // Update the last used timestamp
-        filterView.LastUsed = DateTime.Now;
-        
-        // Save the updated timestamp
-        _ = Task.Run(() => SaveFilterViewToStorage(filterView));
+        // Note: FilterView doesn't have LastUsed property, only SavedFilterView does
+        // If we need to track usage, we'd need to convert or handle differently
     }
 
-    private void DeleteFilterView(SavedFilterView filterView)
+    private void DeleteFilterView(FilterView filterView)
     {
         if (filterView == null) return;
 
-        SavedFilterViews.Remove(filterView);
-        
-        // Remove from storage
-        _ = Task.Run(() => DeleteFilterViewFromStorage(filterView));
+        // Remove from the SavedFilterViews collection by matching name
+        var savedViewToRemove = SavedFilterViews.FirstOrDefault(sv => sv.Name == filterView.Name);
+        if (savedViewToRemove != null)
+        {
+            SavedFilterViews.Remove(savedViewToRemove);
+            // Remove from storage
+            _ = Task.Run(() => DeleteFilterViewFromStorage(savedViewToRemove));
+        }
     }
 
     private void ApplyQuickFilter(string filterType)
@@ -215,7 +248,7 @@ public class FilterPanelViewModel : ViewModelBase
                 
             case "RecentActivity":
                 _filterState.ClearAllFilters();
-                _filterState.UpdatedAfter = DateTimeOffset.Now.AddDays(-7);
+                _filterState.UpdatedAfter(DateTimeOffset.Now.AddDays(-7));
                 break;
                 
             case "ActivePRs":

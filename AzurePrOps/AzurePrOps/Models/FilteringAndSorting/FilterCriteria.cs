@@ -50,12 +50,11 @@ public class FilterCriteria : INotifyPropertyChanged
     public int? MinReviewerCount { get; set; }
     public int? MaxReviewerCount { get; set; }
 
-    // Workflow preset tracking
-    public string WorkflowPreset { get; set; } = string.Empty;
-
-    // Filter state tracking for better UX
-    public string CurrentFilterSource { get; set; } = "Manual"; // "Manual", "Preset", "SavedView"
+    // Filter source tracking for better UX
+    public string FilterSource { get; set; } = "Manual";
+    public string CurrentFilterSource { get; set; } = "Manual";
     public string CurrentFilterSourceName { get; set; } = string.Empty;
+    public string WorkflowPreset { get; set; } = string.Empty;
     public DateTime LastApplied { get; set; } = DateTime.Now;
 
     /// <summary>
@@ -194,6 +193,8 @@ public class FilterCriteria : INotifyPropertyChanged
         CurrentFilterSource = source;
         CurrentFilterSourceName = sourceName;
         LastApplied = DateTime.Now;
+        OnPropertyChanged(nameof(CurrentFilterSource));
+        OnPropertyChanged(nameof(FilterSourceDisplay));
     }
 
     /// <summary>
@@ -251,6 +252,45 @@ public class FilterCriteria : INotifyPropertyChanged
         CurrentFilterSourceName = string.Empty;
         WorkflowPreset = string.Empty;
         LastApplied = DateTime.Now;
+    }
+
+    /// <summary>
+    /// Creates a deep copy of the filter criteria
+    /// </summary>
+    public FilterCriteria Clone()
+    {
+        return new FilterCriteria
+        {
+            CurrentUserId = CurrentUserId,
+            UserDisplayName = UserDisplayName,
+            MyPullRequestsOnly = MyPullRequestsOnly,
+            AssignedToMeOnly = AssignedToMeOnly,
+            NeedsMyReviewOnly = NeedsMyReviewOnly,
+            ExcludeMyPullRequests = ExcludeMyPullRequests,
+            SelectedStatuses = new List<string>(SelectedStatuses),
+            IsDraft = IsDraft,
+            GlobalSearchText = GlobalSearchText,
+            TitleFilter = TitleFilter,
+            CreatorFilter = CreatorFilter,
+            ReviewerFilter = ReviewerFilter,
+            SourceBranchFilter = SourceBranchFilter,
+            TargetBranchFilter = TargetBranchFilter,
+            SelectedReviewerVotes = new List<string>(SelectedReviewerVotes),
+            CreatedAfter = CreatedAfter,
+            CreatedBefore = CreatedBefore,
+            UpdatedAfter = UpdatedAfter,
+            UpdatedBefore = UpdatedBefore,
+            EnableGroupsWithoutVoteFilter = EnableGroupsWithoutVoteFilter,
+            GroupsWithoutVote = new List<string>(GroupsWithoutVote),
+            SelectedGroupsWithoutVote = new List<string>(SelectedGroupsWithoutVote),
+            MinReviewerCount = MinReviewerCount,
+            MaxReviewerCount = MaxReviewerCount,
+            FilterSource = FilterSource,
+            CurrentFilterSource = CurrentFilterSource,
+            CurrentFilterSourceName = CurrentFilterSourceName,
+            WorkflowPreset = WorkflowPreset,
+            LastApplied = LastApplied
+        };
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

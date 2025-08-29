@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Linq;
 using ReactiveUI;
+using AzurePrOps.Models;
 
 namespace AzurePrOps.Models.FilteringAndSorting;
 
@@ -240,77 +241,35 @@ public class FilterState : ReactiveObject
 
     #endregion
 
-    #region Reviewer Vote Filters
+    #region Status and Vote Filters
 
-    public List<string> SelectedReviewerVotes
+    private string _statusFilter = "All";
+    public string StatusFilter
     {
-        get => _criteria.SelectedReviewerVotes;
+        get => _statusFilter;
         set
         {
-            if (!_criteria.SelectedReviewerVotes.SequenceEqual(value))
+            var safeValue = value ?? "All";
+            if (_statusFilter != safeValue)
             {
-                _criteria.SelectedReviewerVotes = value.ToList();
-                this.RaisePropertyChanged();
+                this.RaiseAndSetIfChanged(ref _statusFilter, safeValue);
+                UpdateStatusFilter(safeValue);
                 OnFilterChanged();
             }
         }
     }
 
-    #endregion
-
-    #region Date Filters
-
-    public DateTimeOffset? CreatedAfter
+    private string _reviewerVoteFilter = "All";
+    public string ReviewerVoteFilter
     {
-        get => _criteria.CreatedAfter;
+        get => _reviewerVoteFilter;
         set
         {
-            if (_criteria.CreatedAfter != value)
+            var safeValue = value ?? "All";
+            if (_reviewerVoteFilter != safeValue)
             {
-                _criteria.CreatedAfter = value;
-                this.RaisePropertyChanged();
-                OnFilterChanged();
-            }
-        }
-    }
-
-    public DateTimeOffset? CreatedBefore
-    {
-        get => _criteria.CreatedBefore;
-        set
-        {
-            if (_criteria.CreatedBefore != value)
-            {
-                _criteria.CreatedBefore = value;
-                this.RaisePropertyChanged();
-                OnFilterChanged();
-            }
-        }
-    }
-
-    public DateTimeOffset? UpdatedAfter
-    {
-        get => _criteria.UpdatedAfter;
-        set
-        {
-            if (_criteria.UpdatedAfter != value)
-            {
-                _criteria.UpdatedAfter = value;
-                this.RaisePropertyChanged();
-                OnFilterChanged();
-            }
-        }
-    }
-
-    public DateTimeOffset? UpdatedBefore
-    {
-        get => _criteria.UpdatedBefore;
-        set
-        {
-            if (_criteria.UpdatedBefore != value)
-            {
-                _criteria.UpdatedBefore = value;
-                this.RaisePropertyChanged();
+                this.RaiseAndSetIfChanged(ref _reviewerVoteFilter, safeValue);
+                UpdateReviewerVoteFilter(safeValue);
                 OnFilterChanged();
             }
         }
@@ -325,32 +284,12 @@ public class FilterState : ReactiveObject
         get => _enableGroupFiltering;
         set
         {
-            if (this.RaiseAndSetIfChanged(ref _enableGroupFiltering, value))
+            if (_enableGroupFiltering != value)
             {
+                this.RaiseAndSetIfChanged(ref _enableGroupFiltering, value);
                 OnFilterChanged();
             }
         }
-    }
-
-    public List<string> SelectedGroups
-    {
-        get => _selectedGroups;
-        set
-        {
-            if (!_selectedGroups.SequenceEqual(value))
-            {
-                this.RaiseAndSetIfChanged(ref _selectedGroups, value.ToList());
-                UpdateSelectedGroupsText();
-                OnFilterChanged();
-            }
-        }
-    }
-
-    private string _selectedGroupsText = "All Groups";
-    public string SelectedGroupsText
-    {
-        get => _selectedGroupsText;
-        private set => this.RaiseAndSetIfChanged(ref _selectedGroupsText, value);
     }
 
     public bool EnableGroupsWithoutVoteFilter
@@ -367,54 +306,14 @@ public class FilterState : ReactiveObject
         }
     }
 
-    public List<string> SelectedGroupsWithoutVote
+    public List<string> SelectedGroups
     {
-        get => _criteria.SelectedGroupsWithoutVote;
+        get => _selectedGroups;
         set
         {
-            if (!_criteria.SelectedGroupsWithoutVote.SequenceEqual(value))
+            if (!_selectedGroups.SequenceEqual(value))
             {
-                _criteria.SelectedGroupsWithoutVote = value.ToList();
-                this.RaisePropertyChanged();
-                UpdateSelectedGroupsWithoutVoteText();
-                OnFilterChanged();
-            }
-        }
-    }
-
-    private string _selectedGroupsWithoutVoteText = "No Groups Selected";
-    public string SelectedGroupsWithoutVoteText
-    {
-        get => _selectedGroupsWithoutVoteText;
-        private set => this.RaiseAndSetIfChanged(ref _selectedGroupsWithoutVoteText, value);
-    }
-
-    #endregion
-
-    #region Numeric Filters
-
-    public int? MinReviewerCount
-    {
-        get => _criteria.MinReviewerCount;
-        set
-        {
-            if (_criteria.MinReviewerCount != value)
-            {
-                _criteria.MinReviewerCount = value;
-                this.RaisePropertyChanged();
-                OnFilterChanged();
-            }
-        }
-    }
-
-    public int? MaxReviewerCount
-    {
-        get => _criteria.MaxReviewerCount;
-        set
-        {
-            if (_criteria.MaxReviewerCount != value)
-            {
-                _criteria.MaxReviewerCount = value;
+                _selectedGroups = value.ToList();
                 this.RaisePropertyChanged();
                 OnFilterChanged();
             }
@@ -423,246 +322,318 @@ public class FilterState : ReactiveObject
 
     #endregion
 
-    #region Filter State Properties
+    #region Display Properties
 
-    /// <summary>
-    /// Gets a human-readable summary of currently active filters
-    /// </summary>
-    public string ActiveFiltersSummary => _criteria.ActiveFiltersSummary;
+    public string CurrentFilterSource => _criteria.FilterSource ?? "Manual";
 
-    /// <summary>
-    /// Checks if any filters are currently active
-    /// </summary>
-    public bool HasActiveFilters => _criteria.HasActiveFilters || _enableGroupFiltering;
+    public string ActiveFiltersSummary
+    {
+        get
+        {
+            var filters = new List<string>();
+            
+            if (MyPullRequestsOnly) filters.Add("My PRs");
+            if (AssignedToMeOnly) filters.Add("Assigned to Me");
+            if (NeedsMyReviewOnly) filters.Add("Needs My Review");
+            if (ExcludeMyPullRequests) filters.Add("Exclude My PRs");
+            if (StatusFilter != "All") filters.Add($"Status: {StatusFilter}");
+            if (ReviewerVoteFilter != "All") filters.Add($"Vote: {ReviewerVoteFilter}");
+            if (DraftFilter != "All") filters.Add($"Draft: {DraftFilter}");
+            if (!string.IsNullOrWhiteSpace(TitleFilter)) filters.Add($"Title: {TitleFilter}");
+            if (!string.IsNullOrWhiteSpace(CreatorFilter)) filters.Add($"Creator: {CreatorFilter}");
+            if (!string.IsNullOrWhiteSpace(ReviewerFilter)) filters.Add($"Reviewer: {ReviewerFilter}");
+            if (!string.IsNullOrWhiteSpace(SourceBranchFilter)) filters.Add($"Source: {SourceBranchFilter}");
+            if (!string.IsNullOrWhiteSpace(TargetBranchFilter)) filters.Add($"Target: {TargetBranchFilter}");
+            if (!string.IsNullOrWhiteSpace(GlobalSearchText)) filters.Add($"Search: {GlobalSearchText}");
+            if (EnableGroupFiltering) filters.Add("Group Filtering");
+            if (EnableGroupsWithoutVoteFilter) filters.Add("Groups Without Vote");
+            
+            return filters.Count > 0 ? string.Join(", ", filters) : "No active filters";
+        }
+    }
 
-    /// <summary>
-    /// Gets the current filter source display text
-    /// </summary>
-    public string CurrentFilterSource => _criteria.FilterSourceDisplay;
+    public bool HasActiveFilters
+    {
+        get
+        {
+            return MyPullRequestsOnly || AssignedToMeOnly || NeedsMyReviewOnly || ExcludeMyPullRequests ||
+                   StatusFilter != "All" || ReviewerVoteFilter != "All" || DraftFilter != "All" ||
+                   !string.IsNullOrWhiteSpace(TitleFilter) || !string.IsNullOrWhiteSpace(CreatorFilter) ||
+                   !string.IsNullOrWhiteSpace(ReviewerFilter) || !string.IsNullOrWhiteSpace(SourceBranchFilter) ||
+                   !string.IsNullOrWhiteSpace(TargetBranchFilter) || !string.IsNullOrWhiteSpace(GlobalSearchText) ||
+                   EnableGroupFiltering || EnableGroupsWithoutVoteFilter;
+        }
+    }
 
-    /// <summary>
-    /// Gets the filter status text for display
-    /// </summary>
-    public string FilterStatusText => HasActiveFilters ? 
-        $"Filters Active ({ActiveFiltersSummary.Split('•').Length} applied)" : 
-        "No Filters";
+    public string FilterStatusText
+    {
+        get
+        {
+            var activeCount = GetActiveFilterCount();
+            if (activeCount == 0) return "No filters applied";
+            return $"{activeCount} filter{(activeCount == 1 ? "" : "s")} applied";
+        }
+    }
 
     #endregion
 
     #region Events
 
-    /// <summary>
-    /// Raised when any filter criteria changes
-    /// </summary>
     public event EventHandler? FilterChanged;
-
-    private void OnFilterChanged()
-    {
-        // Update display properties
-        this.RaisePropertyChanged(nameof(ActiveFiltersSummary));
-        this.RaisePropertyChanged(nameof(HasActiveFilters));
-        this.RaisePropertyChanged(nameof(FilterStatusText));
-        
-        // Raise the filter changed event
-        FilterChanged?.Invoke(this, EventArgs.Empty);
-    }
 
     #endregion
 
-    #region State Management
+    #region Public Methods
 
-    /// <summary>
-    /// Applies a saved filter view to this filter state
-    /// This properly synchronizes all UI properties with the loaded criteria
-    /// </summary>
-    public void ApplyFilterView(SavedFilterView filterView)
-    {
-        if (filterView == null) return;
-
-        // Temporarily disable change notifications to avoid multiple filter applications
-        var originalCriteria = _criteria;
-        _criteria = CloneFilterCriteria(filterView.FilterCriteria);
-        _sortCriteria = CloneSortCriteria(filterView.SortCriteria);
-        _enableGroupFiltering = filterView.EnableGroupFiltering;
-        _selectedGroups = filterView.SelectedGroups.ToList();
-
-        // Update all UI-bound properties
-        UpdateSelectedGroupsText();
-        UpdateSelectedGroupsWithoutVoteText();
-
-        // Raise property changed for all properties to update UI
-        RaiseAllPropertiesChanged();
-
-        // Finally raise the filter changed event
-        OnFilterChanged();
-    }
-
-    /// <summary>
-    /// Resets all filters to their default state
-    /// </summary>
-    public void ClearAllFilters()
+    public void ResetToDefaults()
     {
         _criteria = new FilterCriteria
         {
             CurrentUserId = _criteria.CurrentUserId,
             UserDisplayName = _criteria.UserDisplayName
         };
-        _sortCriteria = new SortCriteria();
+        
+        _statusFilter = "All";
+        _reviewerVoteFilter = "All";
         _enableGroupFiltering = false;
-        _selectedGroups = new List<string>();
+        _selectedGroups.Clear();
 
-        UpdateSelectedGroupsText();
-        UpdateSelectedGroupsWithoutVoteText();
-        RaiseAllPropertiesChanged();
-        OnFilterChanged();
-    }
-
-    /// <summary>
-    /// Creates a SavedFilterView from the current state
-    /// </summary>
-    public SavedFilterView CreateSavedFilterView(string name, string description)
-    {
-        return new SavedFilterView
-        {
-            Name = name,
-            Description = description,
-            FilterCriteria = CloneFilterCriteria(_criteria),
-            SortCriteria = CloneSortCriteria(_sortCriteria),
-            EnableGroupFiltering = _enableGroupFiltering,
-            SelectedGroups = _selectedGroups.ToList()
-        };
-    }
-
-    #endregion
-
-    #region Helper Methods
-
-    private void UpdateSelectedGroupsText()
-    {
-        if (!_selectedGroups.Any())
-        {
-            SelectedGroupsText = "All Groups";
-        }
-        else if (_selectedGroups.Count == 1)
-        {
-            SelectedGroupsText = _selectedGroups[0];
-        }
-        else
-        {
-            SelectedGroupsText = $"{_selectedGroups.Count} Groups Selected";
-        }
-    }
-
-    private void UpdateSelectedGroupsWithoutVoteText()
-    {
-        if (!_criteria.SelectedGroupsWithoutVote.Any())
-        {
-            SelectedGroupsWithoutVoteText = "No Groups Selected";
-        }
-        else if (_criteria.SelectedGroupsWithoutVote.Count == 1)
-        {
-            SelectedGroupsWithoutVoteText = _criteria.SelectedGroupsWithoutVote[0];
-        }
-        else
-        {
-            SelectedGroupsWithoutVoteText = $"{_criteria.SelectedGroupsWithoutVote.Count} Groups Selected";
-        }
-    }
-
-    private void RaiseAllPropertiesChanged()
-    {
-        // Personal filters
+        // Raise all property changed notifications
         this.RaisePropertyChanged(nameof(MyPullRequestsOnly));
         this.RaisePropertyChanged(nameof(AssignedToMeOnly));
         this.RaisePropertyChanged(nameof(NeedsMyReviewOnly));
         this.RaisePropertyChanged(nameof(ExcludeMyPullRequests));
-
-        // Status filters
-        this.RaisePropertyChanged(nameof(SelectedStatuses));
-        this.RaisePropertyChanged(nameof(IsDraft));
+        this.RaisePropertyChanged(nameof(StatusFilter));
+        this.RaisePropertyChanged(nameof(ReviewerVoteFilter));
         this.RaisePropertyChanged(nameof(DraftFilter));
-
-        // Text filters
-        this.RaisePropertyChanged(nameof(GlobalSearchText));
         this.RaisePropertyChanged(nameof(TitleFilter));
         this.RaisePropertyChanged(nameof(CreatorFilter));
         this.RaisePropertyChanged(nameof(ReviewerFilter));
         this.RaisePropertyChanged(nameof(SourceBranchFilter));
         this.RaisePropertyChanged(nameof(TargetBranchFilter));
-
-        // Reviewer vote filters
-        this.RaisePropertyChanged(nameof(SelectedReviewerVotes));
-
-        // Date filters
-        this.RaisePropertyChanged(nameof(CreatedAfter));
-        this.RaisePropertyChanged(nameof(CreatedBefore));
-        this.RaisePropertyChanged(nameof(UpdatedAfter));
-        this.RaisePropertyChanged(nameof(UpdatedBefore));
-
-        // Group filters
+        this.RaisePropertyChanged(nameof(GlobalSearchText));
         this.RaisePropertyChanged(nameof(EnableGroupFiltering));
-        this.RaisePropertyChanged(nameof(SelectedGroups));
         this.RaisePropertyChanged(nameof(EnableGroupsWithoutVoteFilter));
-        this.RaisePropertyChanged(nameof(SelectedGroupsWithoutVote));
+        
+        OnFilterChanged();
+    }
 
-        // Numeric filters
-        this.RaisePropertyChanged(nameof(MinReviewerCount));
-        this.RaisePropertyChanged(nameof(MaxReviewerCount));
+    public void SetDateRange(DateTimeOffset? createdAfter, DateTimeOffset? createdBefore, 
+        DateTimeOffset? updatedAfter = null, DateTimeOffset? updatedBefore = null)
+    {
+        var changed = false;
+        
+        if (_criteria.CreatedAfter != createdAfter)
+        {
+            _criteria.CreatedAfter = createdAfter;
+            changed = true;
+        }
+        
+        if (_criteria.CreatedBefore != createdBefore)
+        {
+            _criteria.CreatedBefore = createdBefore;
+            changed = true;
+        }
+        
+        if (_criteria.UpdatedAfter != updatedAfter)
+        {
+            _criteria.UpdatedAfter = updatedAfter;
+            changed = true;
+        }
+        
+        if (_criteria.UpdatedBefore != updatedBefore)
+        {
+            _criteria.UpdatedBefore = updatedBefore;
+            changed = true;
+        }
+        
+        if (changed)
+        {
+            OnFilterChanged();
+        }
+    }
 
-        // State properties
+    public void SetUserInfo(string userId, string displayName)
+    {
+        _criteria.CurrentUserId = userId ?? string.Empty;
+        _criteria.UserDisplayName = displayName ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Alias for ResetToDefaults for backward compatibility
+    /// </summary>
+    public void ClearAllFilters()
+    {
+        ResetToDefaults();
+    }
+
+    /// <summary>
+    /// Creates a saved filter view from the current filter state
+    /// </summary>
+    public FilterView CreateSavedFilterView(string name, string description = "")
+    {
+        return new FilterView
+        {
+            Name = name,
+            Description = description,
+            FilterCriteria = new FilterCriteria
+            {
+                MyPullRequestsOnly = _criteria.MyPullRequestsOnly,
+                AssignedToMeOnly = _criteria.AssignedToMeOnly,
+                NeedsMyReviewOnly = _criteria.NeedsMyReviewOnly,
+                ExcludeMyPullRequests = _criteria.ExcludeMyPullRequests,
+                SelectedStatuses = _criteria.SelectedStatuses.ToList(),
+                SelectedReviewerVotes = _criteria.SelectedReviewerVotes.ToList(),
+                IsDraft = _criteria.IsDraft,
+                TitleFilter = _criteria.TitleFilter,
+                CreatorFilter = _criteria.CreatorFilter,
+                ReviewerFilter = _criteria.ReviewerFilter,
+                SourceBranchFilter = _criteria.SourceBranchFilter,
+                TargetBranchFilter = _criteria.TargetBranchFilter,
+                GlobalSearchText = _criteria.GlobalSearchText,
+                CreatedAfter = _criteria.CreatedAfter,
+                CreatedBefore = _criteria.CreatedBefore,
+                UpdatedAfter = _criteria.UpdatedAfter,
+                UpdatedBefore = _criteria.UpdatedBefore,
+                EnableGroupsWithoutVoteFilter = _criteria.EnableGroupsWithoutVoteFilter,
+                CurrentUserId = _criteria.CurrentUserId,
+                UserDisplayName = _criteria.UserDisplayName
+            }
+        };
+    }
+
+    /// <summary>
+    /// Applies a saved filter view to the current filter state
+    /// </summary>
+    public void ApplyFilterView(FilterView filterView)
+    {
+        if (filterView?.FilterCriteria == null) return;
+
+        var criteria = filterView.FilterCriteria;
+        
+        // Store current user info
+        var currentUserId = _criteria.CurrentUserId;
+        var currentUserDisplayName = _criteria.UserDisplayName;
+        
+        // Apply the filter criteria
+        _criteria = new FilterCriteria
+        {
+            MyPullRequestsOnly = criteria.MyPullRequestsOnly,
+            AssignedToMeOnly = criteria.AssignedToMeOnly,
+            NeedsMyReviewOnly = criteria.NeedsMyReviewOnly,
+            ExcludeMyPullRequests = criteria.ExcludeMyPullRequests,
+            SelectedStatuses = criteria.SelectedStatuses?.ToList() ?? new List<string>(),
+            SelectedReviewerVotes = criteria.SelectedReviewerVotes?.ToList() ?? new List<string>(),
+            IsDraft = criteria.IsDraft,
+            TitleFilter = criteria.TitleFilter ?? string.Empty,
+            CreatorFilter = criteria.CreatorFilter ?? string.Empty,
+            ReviewerFilter = criteria.ReviewerFilter ?? string.Empty,
+            SourceBranchFilter = criteria.SourceBranchFilter ?? string.Empty,
+            TargetBranchFilter = criteria.TargetBranchFilter ?? string.Empty,
+            GlobalSearchText = criteria.GlobalSearchText ?? string.Empty,
+            CreatedAfter = criteria.CreatedAfter,
+            CreatedBefore = criteria.CreatedBefore,
+            UpdatedAfter = criteria.UpdatedAfter,
+            UpdatedBefore = criteria.UpdatedBefore,
+            EnableGroupsWithoutVoteFilter = criteria.EnableGroupsWithoutVoteFilter,
+            CurrentUserId = currentUserId,
+            UserDisplayName = currentUserDisplayName
+        };
+
+        // Update UI filter strings
+        _statusFilter = criteria.SelectedStatuses?.FirstOrDefault() ?? "All";
+        _reviewerVoteFilter = criteria.SelectedReviewerVotes?.FirstOrDefault() ?? "All";
+        _enableGroupFiltering = false; // Reset group filtering
+        _selectedGroups.Clear();
+
+        // Set filter source
+        _criteria.SetFilterSource("Saved Filter", filterView.Name);
+
+        // Raise all property changed notifications
+        this.RaisePropertyChanged(nameof(MyPullRequestsOnly));
+        this.RaisePropertyChanged(nameof(AssignedToMeOnly));
+        this.RaisePropertyChanged(nameof(NeedsMyReviewOnly));
+        this.RaisePropertyChanged(nameof(ExcludeMyPullRequests));
+        this.RaisePropertyChanged(nameof(StatusFilter));
+        this.RaisePropertyChanged(nameof(ReviewerVoteFilter));
+        this.RaisePropertyChanged(nameof(DraftFilter));
+        this.RaisePropertyChanged(nameof(TitleFilter));
+        this.RaisePropertyChanged(nameof(CreatorFilter));
+        this.RaisePropertyChanged(nameof(ReviewerFilter));
+        this.RaisePropertyChanged(nameof(SourceBranchFilter));
+        this.RaisePropertyChanged(nameof(TargetBranchFilter));
+        this.RaisePropertyChanged(nameof(GlobalSearchText));
+        this.RaisePropertyChanged(nameof(EnableGroupFiltering));
+        this.RaisePropertyChanged(nameof(EnableGroupsWithoutVoteFilter));
+        
+        OnFilterChanged();
+    }
+
+    /// <summary>
+    /// Sets the UpdatedAfter filter date
+    /// </summary>
+    public void UpdatedAfter(DateTimeOffset? date)
+    {
+        if (_criteria.UpdatedAfter != date)
+        {
+            _criteria.UpdatedAfter = date;
+            OnFilterChanged();
+        }
+    }
+
+    #endregion
+
+    #region Private Methods
+
+    private void UpdateStatusFilter(string value)
+    {
+        _criteria.SelectedStatuses.Clear();
+        if (value != "All")
+        {
+            _criteria.SelectedStatuses.Add(value);
+        }
+    }
+
+    private void UpdateReviewerVoteFilter(string value)
+    {
+        _criteria.SelectedReviewerVotes.Clear();
+        if (value != "All")
+        {
+            _criteria.SelectedReviewerVotes.Add(value);
+        }
+    }
+
+    private int GetActiveFilterCount()
+    {
+        var count = 0;
+        
+        if (MyPullRequestsOnly) count++;
+        if (AssignedToMeOnly) count++;
+        if (NeedsMyReviewOnly) count++;
+        if (ExcludeMyPullRequests) count++;
+        if (StatusFilter != "All") count++;
+        if (ReviewerVoteFilter != "All") count++;
+        if (DraftFilter != "All") count++;
+        if (!string.IsNullOrWhiteSpace(TitleFilter)) count++;
+        if (!string.IsNullOrWhiteSpace(CreatorFilter)) count++;
+        if (!string.IsNullOrWhiteSpace(ReviewerFilter)) count++;
+        if (!string.IsNullOrWhiteSpace(SourceBranchFilter)) count++;
+        if (!string.IsNullOrWhiteSpace(TargetBranchFilter)) count++;
+        if (!string.IsNullOrWhiteSpace(GlobalSearchText)) count++;
+        if (EnableGroupFiltering) count++;
+        if (EnableGroupsWithoutVoteFilter) count++;
+        
+        return count;
+    }
+
+    private void OnFilterChanged()
+    {
         this.RaisePropertyChanged(nameof(ActiveFiltersSummary));
         this.RaisePropertyChanged(nameof(HasActiveFilters));
-        this.RaisePropertyChanged(nameof(CurrentFilterSource));
         this.RaisePropertyChanged(nameof(FilterStatusText));
-    }
-
-    private static FilterCriteria CloneFilterCriteria(FilterCriteria source)
-    {
-        return new FilterCriteria
-        {
-            CurrentUserId = source.CurrentUserId,
-            UserDisplayName = source.UserDisplayName,
-            MyPullRequestsOnly = source.MyPullRequestsOnly,
-            AssignedToMeOnly = source.AssignedToMeOnly,
-            NeedsMyReviewOnly = source.NeedsMyReviewOnly,
-            ExcludeMyPullRequests = source.ExcludeMyPullRequests,
-            SelectedStatuses = source.SelectedStatuses.ToList(),
-            IsDraft = source.IsDraft,
-            GlobalSearchText = source.GlobalSearchText,
-            TitleFilter = source.TitleFilter,
-            CreatorFilter = source.CreatorFilter,
-            ReviewerFilter = source.ReviewerFilter,
-            SourceBranchFilter = source.SourceBranchFilter,
-            TargetBranchFilter = source.TargetBranchFilter,
-            SelectedReviewerVotes = source.SelectedReviewerVotes.ToList(),
-            CreatedAfter = source.CreatedAfter,
-            CreatedBefore = source.CreatedBefore,
-            UpdatedAfter = source.UpdatedAfter,
-            UpdatedBefore = source.UpdatedBefore,
-            EnableGroupsWithoutVoteFilter = source.EnableGroupsWithoutVoteFilter,
-            GroupsWithoutVote = source.GroupsWithoutVote.ToList(),
-            SelectedGroupsWithoutVote = source.SelectedGroupsWithoutVote.ToList(),
-            MinReviewerCount = source.MinReviewerCount,
-            MaxReviewerCount = source.MaxReviewerCount,
-            WorkflowPreset = source.WorkflowPreset,
-            CurrentFilterSource = source.CurrentFilterSource,
-            CurrentFilterSourceName = source.CurrentFilterSourceName,
-            LastApplied = source.LastApplied
-        };
-    }
-
-    private static SortCriteria CloneSortCriteria(SortCriteria source)
-    {
-        return new SortCriteria
-        {
-            PrimaryField = source.PrimaryField,
-            PrimaryDirection = source.PrimaryDirection,
-            SecondaryField = source.SecondaryField,
-            SecondaryDirection = source.SecondaryDirection,
-            TertiaryField = source.TertiaryField,
-            TertiaryDirection = source.TertiaryDirection,
-            CurrentPreset = source.CurrentPreset
-        };
+        this.RaisePropertyChanged(nameof(CurrentFilterSource));
+        
+        FilterChanged?.Invoke(this, EventArgs.Empty);
     }
 
     #endregion
