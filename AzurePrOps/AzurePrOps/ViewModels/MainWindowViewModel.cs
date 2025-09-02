@@ -34,7 +34,7 @@ public class MainWindowViewModel : ViewModelBase
     public ObservableCollection<PullRequestInfo> PullRequests { get; } = new();
     private readonly ObservableCollection<PullRequestInfo> _allPullRequests = new();
 
-    // Modular filter system - replaces scattered filter properties
+    // Modular filter system
     private readonly FilterOrchestrator _filterOrchestrator;
     
     // Legacy collections for backward compatibility (during transition)
@@ -49,112 +49,308 @@ public class MainWindowViewModel : ViewModelBase
     public AzurePrOps.ViewModels.Filters.FilterPanelViewModel FilterPanel => _filterOrchestrator.FilterPanel;
     public FilterState FilterState => _filterOrchestrator.FilterState;
 
-    // Legacy properties for backward compatibility (to be removed after UI migration)
-    [Obsolete("Use FilterOrchestrator.FilterState.Criteria instead")]
-    public FilterCriteria FilterCriteria => FilterState.Criteria;
-
-    [Obsolete("Use FilterOrchestrator.FilterState.SortCriteria instead")]
-    public SortCriteria SortCriteria => FilterState.SortCriteria;
-
-    // Filter state display properties - now delegated to FilterOrchestrator
+    // Essential filter state display properties for UI binding
     public string CurrentFilterSource => FilterState.CurrentFilterSource;
     public string ActiveFiltersSummary => FilterOrchestrator.GetFilterSummary();
     public bool HasActiveFilters => FilterOrchestrator.HasActiveFilters();
     public string FilterStatusText => FilterState.FilterStatusText;
+    public string ActiveFiltersCount => HasActiveFilters ? "Active" : "None";
+    public string FilterSummary => ActiveFiltersSummary;
 
-    // Available options for dropdowns - with proper initialization
-    public ObservableCollection<string> AvailableStatuses { get; } =
-        new() { "All", "Active", "Completed", "Abandoned" };
+    // UI binding properties that delegate to FilterOrchestrator
+    public string GlobalSearchText
+    {
+        get => FilterState.Criteria.GlobalSearchText;
+        set
+        {
+            if (FilterState.Criteria.GlobalSearchText != value)
+            {
+                FilterState.Criteria.GlobalSearchText = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
 
-    public ObservableCollection<string> AvailableReviewerVotes { get; } = new()
-        { "All", "No vote", "Approved", "Approved with suggestions", "Waiting for author", "Rejected" };
-
-    public ObservableCollection<string> AvailableCreators { get; } = new();
-    public ObservableCollection<string> AvailableReviewers { get; } = new();
-    public ObservableCollection<string> AvailableSourceBranches { get; } = new();
-    public ObservableCollection<string> AvailableTargetBranches { get; } = new();
-
-    // Group filtering - consolidated and improved
-    public ObservableCollection<string> AvailableGroups { get; } = new();
-    private GroupSettings _groupSettings = new(new List<string>(), new List<string>(), DateTime.MinValue);
-
-    #region Quick Filter Properties - Reorganized for better UX
-
-    // Personal filters section
-    private bool _showMyPullRequestsOnly = false;
-
+    // Quick filter boolean properties
     public bool ShowMyPullRequestsOnly
     {
-        get => _showMyPullRequestsOnly;
+        get => FilterState.Criteria.MyPullRequestsOnly;
         set
         {
-            this.RaiseAndSetIfChanged(ref _showMyPullRequestsOnly, value);
-            FilterState.Criteria.MyPullRequestsOnly = value;
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
+            if (FilterState.Criteria.MyPullRequestsOnly != value)
+            {
+                FilterState.Criteria.MyPullRequestsOnly = value;
+                this.RaisePropertyChanged();
+            }
         }
     }
-
-    private bool _showAssignedToMeOnly = false;
-
-    public bool ShowAssignedToMeOnly
-    {
-        get => _showAssignedToMeOnly;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _showAssignedToMeOnly, value);
-            FilterState.Criteria.AssignedToMeOnly = value;
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
-        }
-    }
-
-    private bool _showNeedsMyReviewOnly = false;
 
     public bool ShowNeedsMyReviewOnly
     {
-        get => _showNeedsMyReviewOnly;
+        get => FilterState.Criteria.NeedsMyReviewOnly;
         set
         {
-            this.RaiseAndSetIfChanged(ref _showNeedsMyReviewOnly, value);
-            FilterState.Criteria.NeedsMyReviewOnly = value;
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
+            if (FilterState.Criteria.NeedsMyReviewOnly != value)
+            {
+                FilterState.Criteria.NeedsMyReviewOnly = value;
+                this.RaisePropertyChanged();
+            }
         }
     }
 
-    private bool _excludeMyPullRequests = false;
+    public bool ShowAssignedToMeOnly
+    {
+        get => FilterState.Criteria.AssignedToMeOnly;
+        set
+        {
+            if (FilterState.Criteria.AssignedToMeOnly != value)
+            {
+                FilterState.Criteria.AssignedToMeOnly = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
 
     public bool ExcludeMyPullRequests
     {
-        get => _excludeMyPullRequests;
+        get => FilterState.Criteria.ExcludeMyPullRequests;
         set
         {
-            this.RaiseAndSetIfChanged(ref _excludeMyPullRequests, value);
-            FilterState.Criteria.ExcludeMyPullRequests = value;
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
+            if (FilterState.Criteria.ExcludeMyPullRequests != value)
+            {
+                FilterState.Criteria.ExcludeMyPullRequests = value;
+                this.RaisePropertyChanged();
+            }
         }
     }
 
-    // Status filters section
-    private string _draftFilter = "All";
+    // Filter dropdown properties
+    public string StatusFilter
+    {
+        get => FilterState.Criteria.SelectedStatuses.FirstOrDefault() ?? "All";
+        set
+        {
+            FilterState.Criteria.SelectedStatuses.Clear();
+            if (!string.IsNullOrEmpty(value) && value != "All")
+            {
+                FilterState.Criteria.SelectedStatuses.Add(value);
+            }
+            this.RaisePropertyChanged();
+        }
+    }
+
+    public string ReviewerVoteFilter
+    {
+        get => FilterState.Criteria.SelectedReviewerVotes.FirstOrDefault() ?? "All";
+        set
+        {
+            FilterState.Criteria.SelectedReviewerVotes.Clear();
+            if (!string.IsNullOrEmpty(value) && value != "All")
+            {
+                FilterState.Criteria.SelectedReviewerVotes.Add(value);
+            }
+            this.RaisePropertyChanged();
+        }
+    }
 
     public string DraftFilter
     {
-        get => _draftFilter;
+        get => FilterState.Criteria.IsDraft switch
+        {
+            true => "Drafts Only",
+            false => "Non-Drafts Only",
+            _ => "All"
+        };
         set
         {
-            this.RaiseAndSetIfChanged(ref _draftFilter, value);
             FilterState.Criteria.IsDraft = value switch
             {
                 "Drafts Only" => true,
                 "Non-Drafts Only" => false,
                 _ => null
             };
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
+            this.RaisePropertyChanged();
         }
     }
 
-    public ObservableCollection<string> DraftFilterOptions { get; } = new() { "All", "Drafts Only", "Non-Drafts Only" };
+    // Date filter properties
+    public DateTimeOffset? CreatedAfter
+    {
+        get => FilterState.Criteria.CreatedAfter;
+        set
+        {
+            if (FilterState.Criteria.CreatedAfter != value)
+            {
+                FilterState.Criteria.CreatedAfter = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
 
-    // Group filtering - consolidated
+    public DateTimeOffset? CreatedBefore
+    {
+        get => FilterState.Criteria.CreatedBefore;
+        set
+        {
+            if (FilterState.Criteria.CreatedBefore != value)
+            {
+                FilterState.Criteria.CreatedBefore = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
+
+    // Text filter properties
+    public string CreatorFilter
+    {
+        get => FilterState.Criteria.CreatorFilter;
+        set
+        {
+            if (FilterState.Criteria.CreatorFilter != value)
+            {
+                FilterState.Criteria.CreatorFilter = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
+
+    public string ReviewerFilter
+    {
+        get => FilterState.Criteria.ReviewerFilter;
+        set
+        {
+            if (FilterState.Criteria.ReviewerFilter != value)
+            {
+                FilterState.Criteria.ReviewerFilter = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
+
+    public string TitleFilter
+    {
+        get => FilterState.Criteria.TitleFilter;
+        set
+        {
+            if (FilterState.Criteria.TitleFilter != value)
+            {
+                FilterState.Criteria.TitleFilter = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
+
+    public string SourceBranchFilter
+    {
+        get => FilterState.Criteria.SourceBranchFilter;
+        set
+        {
+            if (FilterState.Criteria.SourceBranchFilter != value)
+            {
+                FilterState.Criteria.SourceBranchFilter = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
+
+    public string TargetBranchFilter
+    {
+        get => FilterState.Criteria.TargetBranchFilter;
+        set
+        {
+            if (FilterState.Criteria.TargetBranchFilter != value)
+            {
+                FilterState.Criteria.TargetBranchFilter = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
+
+    // Groups without vote filter
+    public bool EnableGroupsWithoutVoteFilter
+    {
+        get => FilterState.Criteria.EnableGroupsWithoutVoteFilter;
+        set
+        {
+            if (FilterState.Criteria.EnableGroupsWithoutVoteFilter != value)
+            {
+                FilterState.Criteria.EnableGroupsWithoutVoteFilter = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
+
+    // Available options for dropdowns - delegate to FilterOrchestrator
+    public ObservableCollection<string> AvailableStatuses => FilterOrchestrator.FilterPanel.AvailableStatuses;
+    public ObservableCollection<string> AvailableReviewerVotes => FilterOrchestrator.FilterPanel.AvailableReviewerVotes;
+    public ObservableCollection<string> DraftFilterOptions => FilterOrchestrator.FilterPanel.DraftFilterOptions;
+    public ObservableCollection<string> AvailableCreators => FilterOrchestrator.FilterPanel.AvailableCreators;
+    public ObservableCollection<string> AvailableReviewers => FilterOrchestrator.FilterPanel.AvailableReviewers;
+    public ObservableCollection<string> AvailableSourceBranches => FilterOrchestrator.FilterPanel.AvailableSourceBranches;
+    public ObservableCollection<string> AvailableTargetBranches => FilterOrchestrator.FilterPanel.AvailableTargetBranches;
+
+    // Workflow and sort presets
+    public ObservableCollection<string> WorkflowPresets { get; } = new()
+    {
+        "All Pull Requests", "Team Lead Overview", "My Pull Requests", "Need My Review",
+        "Approved & Ready for Testing", "Waiting for Author Response", "Recently Updated", "High Priority"
+    };
+
+    public ObservableCollection<string> SortPresets { get; } = new()
+    {
+        "Most Recent", "Oldest First", "Title A-Z", "Title Z-A", "Creator A-Z", "Creator Z-A",
+        "Status Priority", "Review Priority", "High Activity", "Needs Attention"
+    };
+
+    public ObservableCollection<string> DateRangePresets { get; } = new()
+    {
+        "All Time", "Today", "Yesterday", "This Week", "Last Week", "This Month", "Last Month", "Last 7 Days",
+        "Last 30 Days"
+    };
+
+    public string SelectedWorkflowPresetTooltip => GetWorkflowPresetTooltip(SelectedWorkflowPreset);
+    public string SelectedSortPresetTooltip => Models.FilteringAndSorting.SortCriteria.GetSortPresetTooltip(SelectedSortPreset);
+
+    // Preset selection properties (UI binding only)
+    private string _selectedDateRangePreset = "All Time";
+    public string SelectedDateRangePreset
+    {
+        get => _selectedDateRangePreset;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedDateRangePreset, value);
+            if (!_isApplyingFilterView) ApplyDateRangePreset(value);
+        }
+    }
+
+    private string _selectedSortPreset = "Most Recent";
+    public string SelectedSortPreset
+    {
+        get => _selectedSortPreset;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedSortPreset, value);
+            if (!_isApplyingFilterView)
+            {
+                FilterState.SortCriteria.ApplyPreset(value);
+                ApplyFiltersAndSorting();
+            }
+        }
+    }
+
+    private string _selectedWorkflowPreset = "All Pull Requests";
+    public string SelectedWorkflowPreset
+    {
+        get => _selectedWorkflowPreset;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedWorkflowPreset, value);
+            if (!_isApplyingFilterView) ApplyWorkflowPreset(value);
+        }
+    }
+
+    // Group filtering UI properties
+    private GroupSettings _groupSettings = new(new List<string>(), new List<string>(), DateTime.MinValue);
     private bool _enableGroupFiltering = false;
 
     public bool EnableGroupFiltering
@@ -168,254 +364,23 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     private string _selectedGroupsText = "All Groups";
-
     public string SelectedGroupsText
     {
         get => _selectedGroupsText;
         set => this.RaiseAndSetIfChanged(ref _selectedGroupsText, value);
     }
 
-    private bool _enableGroupsWithoutVoteFilter = false;
-
-    public bool EnableGroupsWithoutVoteFilter
-    {
-        get => _enableGroupsWithoutVoteFilter;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _enableGroupsWithoutVoteFilter, value);
-            FilterState.Criteria.EnableGroupsWithoutVoteFilter = value;
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
-        }
-    }
-
     private string _selectedGroupsWithoutVoteText = "No Groups Selected";
-
     public string SelectedGroupsWithoutVoteText
     {
         get => _selectedGroupsWithoutVoteText;
         set => this.RaiseAndSetIfChanged(ref _selectedGroupsWithoutVoteText, value);
     }
 
-    #endregion
+    public ObservableCollection<string> AvailableGroups { get; } = new();
 
-    #region Enhanced Search and Filter Properties
-
-    // Search functionality
-    private string _globalSearchText = string.Empty;
-
-    public string GlobalSearchText
-    {
-        get => _globalSearchText;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _globalSearchText, value);
-            FilterState.Criteria.GlobalSearchText = value;
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
-        }
-    }
-
-    // Text filters with proper defaults
-    private string _titleFilter = string.Empty;
-
-    public string TitleFilter
-    {
-        get => _titleFilter;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _titleFilter, value);
-            FilterState.Criteria.TitleFilter = value;
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
-        }
-    }
-
-    private string _creatorFilter = string.Empty;
-
-    public string CreatorFilter
-    {
-        get => _creatorFilter;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _creatorFilter, value);
-            FilterState.Criteria.CreatorFilter = value;
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
-        }
-    }
-
-    private string _reviewerFilter = string.Empty;
-
-    public string ReviewerFilter
-    {
-        get => _reviewerFilter;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _reviewerFilter, value);
-            FilterState.Criteria.ReviewerFilter = value;
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
-        }
-    }
-
-    private string _sourceBranchFilter = string.Empty;
-
-    public string SourceBranchFilter
-    {
-        get => _sourceBranchFilter;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _sourceBranchFilter, value);
-            FilterState.Criteria.SourceBranchFilter = value;
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
-        }
-    }
-
-    private string _targetBranchFilter = string.Empty;
-
-    public string TargetBranchFilter
-    {
-        get => _targetBranchFilter;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _targetBranchFilter, value);
-            FilterState.Criteria.TargetBranchFilter = value;
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
-        }
-    }
-
-    private string _statusFilter = "All";
-
-    public string StatusFilter
-    {
-        get => _statusFilter;
-        set
-        {
-            // Ensure we never set it to null - default to "All"
-            var safeValue = value ?? "All";
-            this.RaiseAndSetIfChanged(ref _statusFilter, safeValue);
-            UpdateStatusFilter(safeValue);
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
-        }
-    }
-
-    private string _reviewerVoteFilter = "All";
-
-    public string ReviewerVoteFilter
-    {
-        get => _reviewerVoteFilter;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _reviewerVoteFilter, value);
-            UpdateReviewerVoteFilter(value);
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
-        }
-    }
-
-    #endregion
-
-    #region Date Range Properties
-
-    private DateTimeOffset? _createdAfter;
-
-    public DateTimeOffset? CreatedAfter
-    {
-        get => _createdAfter;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _createdAfter, value);
-            FilterState.Criteria.CreatedAfter = value;
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
-        }
-    }
-
-    private DateTimeOffset? _createdBefore;
-
-    public DateTimeOffset? CreatedBefore
-    {
-        get => _createdBefore;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _createdBefore, value);
-            FilterState.Criteria.CreatedBefore = value;
-            if (!_isApplyingFilterView) ApplyFiltersAndSorting();
-        }
-    }
-
-    // Quick date range presets
-    public ObservableCollection<string> DateRangePresets { get; } = new()
-    {
-        "All Time", "Today", "Yesterday", "This Week", "Last Week", "This Month", "Last Month", "Last 7 Days",
-        "Last 30 Days"
-    };
-
-    private string _selectedDateRangePreset = "All Time";
-
-    public string SelectedDateRangePreset
-    {
-        get => _selectedDateRangePreset;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _selectedDateRangePreset, value);
-            ApplyDateRangePreset(value);
-        }
-    }
-
-    #endregion
-
-    // Sort presets with better organization
-    public ObservableCollection<string> SortPresets { get; } = new()
-    {
-        "Most Recent", "Oldest First", "Title A-Z", "Title Z-A", "Creator A-Z", "Creator Z-A",
-        "Status Priority", "Review Priority", "High Activity", "Needs Attention"
-    };
-
-    private string _selectedSortPreset = "Most Recent";
-
-    public string SelectedSortPreset
-    {
-        get => _selectedSortPreset;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _selectedSortPreset, value);
-            FilterState.SortCriteria.ApplyPreset(value);
-            this.RaisePropertyChanged(nameof(SelectedSortPresetTooltip));
-            ApplyFiltersAndSorting();
-        }
-    }
-
-    public string SelectedSortPresetTooltip =>
-        Models.FilteringAndSorting.SortCriteria.GetSortPresetTooltip(SelectedSortPreset);
-
-    // Workflow presets with enhanced options
-    public ObservableCollection<string> WorkflowPresets { get; } = new()
-    {
-        "All Pull Requests", "Team Lead Overview", "My Pull Requests", "Need My Review",
-        "Approved & Ready for Testing", "Waiting for Author Response", "Recently Updated", "High Priority"
-    };
-
-    private string _selectedWorkflowPreset = "All Pull Requests";
-
-    public string SelectedWorkflowPreset
-    {
-        get => _selectedWorkflowPreset;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _selectedWorkflowPreset, value);
-            ApplyWorkflowPreset(value);
-            this.RaisePropertyChanged(nameof(SelectedWorkflowPresetTooltip));
-            ApplyFiltersAndSorting();
-        }
-    }
-
-    public string SelectedWorkflowPresetTooltip =>
-        GetWorkflowPresetTooltip(SelectedWorkflowPreset);
-
-    public ObservableCollection<string> TitleOptions { get; } = new();
-    public ObservableCollection<string> CreatorOptions { get; } = new();
-    public ObservableCollection<string> SourceBranchOptions { get; } = new();
-    public ObservableCollection<string> TargetBranchOptions { get; } = new();
-
-    public bool LifecycleActionsEnabled => FeatureFlagManager.LifecycleActionsEnabled;
-
+    // Filter view selection properties
     private FilterView? _selectedFilterView;
-
     public FilterView? SelectedFilterView
     {
         get => _selectedFilterView;
@@ -424,31 +389,27 @@ public class MainWindowViewModel : ViewModelBase
             this.RaiseAndSetIfChanged(ref _selectedFilterView, value);
             if (value != null)
             {
-                // Check if this is actually a comprehensive saved filter disguised as a simple FilterView
                 var matchingSavedView = SavedFilterViews.FirstOrDefault(sv => sv.Name == value.Name);
                 if (matchingSavedView != null)
                 {
-                    // Apply the comprehensive saved filter instead
                     ApplySavedFilterView(matchingSavedView);
                 }
                 else
                 {
-                    // Apply as a simple filter view (original behavior)
                     _isApplyingFilterView = true;
-
-                    // Reset filters first to ensure clean state
                     ResetFiltersToDefaults();
-
-                    // Apply the simple filter properties
-                    TitleFilter = value.Title;
-                    CreatorFilter = value.Creator;
-                    SourceBranchFilter = value.SourceBranch;
-                    TargetBranchFilter = value.TargetBranch;
-                    StatusFilter = string.IsNullOrWhiteSpace(value.Status) ? "All" : value.Status;
+                    FilterState.Criteria.TitleFilter = value.Title;
+                    FilterState.Criteria.CreatorFilter = value.Creator;
+                    FilterState.Criteria.SourceBranchFilter = value.SourceBranch;
+                    FilterState.Criteria.TargetBranchFilter = value.TargetBranch;
+                    
+                    if (!string.IsNullOrWhiteSpace(value.Status) && value.Status != "All")
+                    {
+                        FilterState.Criteria.SelectedStatuses.Clear();
+                        FilterState.Criteria.SelectedStatuses.Add(value.Status);
+                    }
 
                     _isApplyingFilterView = false;
-
-                    // Apply the filters after setting all filter properties
                     ApplyFiltersAndSorting();
                 }
             }
@@ -456,7 +417,6 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     private SavedFilterView? _selectedSavedFilterView;
-
     public SavedFilterView? SelectedSavedFilterView
     {
         get => _selectedSavedFilterView;
@@ -471,15 +431,14 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     private string _newViewName = string.Empty;
-
     public string NewViewName
     {
         get => _newViewName;
         set => this.RaiseAndSetIfChanged(ref _newViewName, value);
     }
 
+    // Non-filter UI properties
     private string _newCommentText = string.Empty;
-
     public string NewCommentText
     {
         get => _newCommentText;
@@ -487,7 +446,6 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     private bool _isLoadingDiffs;
-
     public bool IsLoadingDiffs
     {
         get => _isLoadingDiffs;
@@ -495,27 +453,11 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     private PullRequestInfo? _selectedPullRequest;
-
     public PullRequestInfo? SelectedPullRequest
     {
         get => _selectedPullRequest;
         set => this.RaiseAndSetIfChanged(ref _selectedPullRequest, value);
     }
-
-    #region Filter State Properties
-
-    // Filter summary for better UX
-    public string ActiveFiltersCount => GetActiveFiltersCount();
-    public string FilterSummary => GetFilterSummary();
-
-    #endregion
-
-    // Sort field options for dropdown
-    public ObservableCollection<string> SortFieldOptions { get; } = new()
-    {
-        "Title", "Creator", "Created Date", "Status", "Source Branch",
-        "Target Branch", "Reviewer Vote", "PR ID", "Reviewer Count"
-    };
 
     // Summary statistics properties
     public int ActivePRCount =>
@@ -525,6 +467,8 @@ public class MainWindowViewModel : ViewModelBase
         pr.Reviewers.Any(r => r.Id.Equals(_settings.ReviewerId, StringComparison.OrdinalIgnoreCase) &&
                               (r.Vote.Equals("No vote", StringComparison.OrdinalIgnoreCase) ||
                                string.IsNullOrWhiteSpace(r.Vote))));
+
+    public bool LifecycleActionsEnabled => FeatureFlagManager.LifecycleActionsEnabled;
 
     // Commands
     public ReactiveCommand<Unit, Unit> RefreshCommand { get; }
@@ -694,7 +638,7 @@ public class MainWindowViewModel : ViewModelBase
         _filterOrchestrator = new FilterOrchestrator(new PullRequestFilteringSortingService());
 
         // Initialize the filter orchestrator with user information
-        var userRole = _settings.UserRole; // UserRole is already an enum, no need for HasValue/Value
+        var userRole = _settings.UserRole;
         _filterOrchestrator.Initialize(
             _settings.ReviewerId ?? string.Empty, 
             _settings.UserDisplayName ?? string.Empty, 
@@ -725,10 +669,6 @@ public class MainWindowViewModel : ViewModelBase
         // Initialize user information - will be updated automatically when app starts
         _filterOrchestrator.FilterState.Criteria.CurrentUserId = _settings.ReviewerId ?? string.Empty;
         _filterOrchestrator.FilterState.Criteria.UserDisplayName = _settings.UserDisplayName ?? string.Empty;
-
-        // Initialize the status filter to ensure "All" works properly
-        UpdateStatusFilter(_statusFilter);
-        UpdateReviewerVoteFilter(_reviewerVoteFilter);
 
         // Set up property change handlers for real-time filtering
         _filterOrchestrator.FilterState.Criteria.PropertyChanged += (_, _) => ApplyFiltersAndSorting();
@@ -1074,11 +1014,11 @@ public class MainWindowViewModel : ViewModelBase
             var view = new FilterView
             {
                 Name = NewViewName,
-                Title = TitleFilter,
-                Creator = CreatorFilter,
-                SourceBranch = SourceBranchFilter,
-                TargetBranch = TargetBranchFilter,
-                Status = StatusFilter == "All" ? string.Empty : StatusFilter
+                Title = FilterState.Criteria.TitleFilter,
+                Creator = FilterState.Criteria.CreatorFilter,
+                SourceBranch = FilterState.Criteria.SourceBranchFilter,
+                TargetBranch = FilterState.Criteria.TargetBranchFilter,
+                Status = FilterState.Criteria.SelectedStatuses.FirstOrDefault() ?? string.Empty
             };
 
             FilterViews.Add(view);
@@ -1092,29 +1032,28 @@ public class MainWindowViewModel : ViewModelBase
             var defaultName = $"Filter View {DateTime.Now:yyyy-MM-dd HH-mm-ss}";
             var viewName = NewViewName.Trim().Length > 0 ? NewViewName.Trim() : defaultName;
 
-            // Create the saved filter view object
+            // Create the saved filter view object using current FilterState
             var savedView = new SavedFilterView
             {
                 Name = viewName,
                 FilterCriteria = new FilterCriteria
                 {
-                    TitleFilter = TitleFilter,
-                    CreatorFilter = CreatorFilter,
-                    SourceBranchFilter = SourceBranchFilter,
-                    TargetBranchFilter = TargetBranchFilter,
-                    GlobalSearchText = GlobalSearchText,
-                    MyPullRequestsOnly = ShowMyPullRequestsOnly,
-                    AssignedToMeOnly = ShowAssignedToMeOnly,
-                    NeedsMyReviewOnly = ShowNeedsMyReviewOnly,
-                    ExcludeMyPullRequests = ExcludeMyPullRequests,
-                    IsDraft = DraftFilter == "Drafts Only" ? true : DraftFilter == "Non-Drafts Only" ? false : null,
-                    SelectedReviewerVotes = new List<string> { ReviewerVoteFilter != "All" ? ReviewerVoteFilter : "" }
-                        .Where(x => !string.IsNullOrEmpty(x)).ToList(),
-                    SelectedStatuses = new List<string> { StatusFilter != "All" ? StatusFilter : "" }
-                        .Where(x => !string.IsNullOrEmpty(x)).ToList(),
-                    CreatedAfter = CreatedAfter,
-                    CreatedBefore = CreatedBefore,
-                    EnableGroupsWithoutVoteFilter = EnableGroupsWithoutVoteFilter,
+                    TitleFilter = FilterState.Criteria.TitleFilter,
+                    CreatorFilter = FilterState.Criteria.CreatorFilter,
+                    SourceBranchFilter = FilterState.Criteria.SourceBranchFilter,
+                    TargetBranchFilter = FilterState.Criteria.TargetBranchFilter,
+                    ReviewerFilter = FilterState.Criteria.ReviewerFilter,
+                    GlobalSearchText = FilterState.Criteria.GlobalSearchText,
+                    MyPullRequestsOnly = FilterState.Criteria.MyPullRequestsOnly,
+                    AssignedToMeOnly = FilterState.Criteria.AssignedToMeOnly,
+                    NeedsMyReviewOnly = FilterState.Criteria.NeedsMyReviewOnly,
+                    ExcludeMyPullRequests = FilterState.Criteria.ExcludeMyPullRequests,
+                    IsDraft = FilterState.Criteria.IsDraft,
+                    SelectedReviewerVotes = new List<string>(FilterState.Criteria.SelectedReviewerVotes),
+                    SelectedStatuses = new List<string>(FilterState.Criteria.SelectedStatuses),
+                    CreatedAfter = FilterState.Criteria.CreatedAfter,
+                    CreatedBefore = FilterState.Criteria.CreatedBefore,
+                    EnableGroupsWithoutVoteFilter = FilterState.Criteria.EnableGroupsWithoutVoteFilter,
                     SelectedGroupsWithoutVote = new List<string>(FilterState.Criteria.SelectedGroupsWithoutVote)
                 },
                 SortCriteria = new SortCriteria
@@ -1199,11 +1138,7 @@ public class MainWindowViewModel : ViewModelBase
         ResetFiltersCommand = ReactiveCommand.Create(() =>
         {
             FilterState.Criteria.Reset();
-            TitleFilter = string.Empty;
-            CreatorFilter = string.Empty;
-            SourceBranchFilter = string.Empty;
-            TargetBranchFilter = string.Empty;
-            StatusFilter = "All";
+            FilterState.SortCriteria.Reset();
             SelectedWorkflowPreset = "All Pull Requests";
             EnableGroupFiltering = false;
             _groupSettings = _groupSettings with { SelectedGroups = new List<string>() };
@@ -1213,28 +1148,19 @@ public class MainWindowViewModel : ViewModelBase
         ResetSortingCommand = ReactiveCommand.Create(() =>
         {
             FilterState.SortCriteria.Reset();
-            SelectedSortPreset = "Newest First";
+            SelectedSortPreset = "Most Recent";
         });
 
         ClearAllFiltersCommand = ReactiveCommand.Create(() =>
         {
-            // Reset all filter properties to their defaults
-            ShowMyPullRequestsOnly = false;
-            ShowAssignedToMeOnly = false;
-            ShowNeedsMyReviewOnly = false;
-            StatusFilter = "All";
-            ReviewerVoteFilter = "All";
-            DraftFilter = "All";
+            // Reset all filter properties through FilterOrchestrator
+            FilterState.Criteria.Reset();
+            FilterState.SortCriteria.Reset();
+            
+            // Reset UI-specific properties
             SelectedDateRangePreset = "All Time";
-            TitleFilter = string.Empty;
-            CreatorFilter = string.Empty;
-            ReviewerFilter = string.Empty;
-            SourceBranchFilter = string.Empty;
-            TargetBranchFilter = string.Empty;
-            GlobalSearchText = string.Empty;
             EnableGroupFiltering = false;
-            EnableGroupsWithoutVoteFilter = false;
-
+            
             // Clear selected groups
             _groupSettings = _groupSettings with { SelectedGroups = new List<string>() };
             FilterState.Criteria.SelectedGroupsWithoutVote.Clear();
@@ -1248,18 +1174,23 @@ public class MainWindowViewModel : ViewModelBase
         ApplyQuickFilterMyPRsCommand = ReactiveCommand.Create(() =>
         {
             ResetFiltersToDefaults();
-            ShowMyPullRequestsOnly = true;
-            StatusFilter = "Active";
+            FilterState.Criteria.MyPullRequestsOnly = true;
+            FilterState.Criteria.SelectedStatuses.Clear();
+            FilterState.Criteria.SelectedStatuses.Add("Active");
             SelectedWorkflowPreset = "My Pull Requests";
+            ApplyFiltersAndSorting();
         });
 
         ApplyQuickFilterNeedsReviewCommand = ReactiveCommand.Create(() =>
         {
             ResetFiltersToDefaults();
-            ShowNeedsMyReviewOnly = true;
-            StatusFilter = "Active";
-            ReviewerVoteFilter = "No vote";
+            FilterState.Criteria.NeedsMyReviewOnly = true;
+            FilterState.Criteria.SelectedStatuses.Clear();
+            FilterState.Criteria.SelectedStatuses.Add("Active");
+            FilterState.Criteria.SelectedReviewerVotes.Clear();
+            FilterState.Criteria.SelectedReviewerVotes.Add("No vote");
             SelectedWorkflowPreset = "Need My Review";
+            ApplyFiltersAndSorting();
         });
 
         ApplyQuickFilterRecentCommand = ReactiveCommand.Create(() =>
@@ -1268,6 +1199,7 @@ public class MainWindowViewModel : ViewModelBase
             SelectedDateRangePreset = "Last 7 Days";
             SelectedSortPreset = "Most Recent";
             SelectedWorkflowPreset = "Recently Updated";
+            ApplyFiltersAndSorting();
         });
 
         // Initialize missing group selection commands
@@ -1418,37 +1350,36 @@ public class MainWindowViewModel : ViewModelBase
 
             // Apply all filter properties directly
             // Property setters won't trigger ApplyFiltersAndSorting due to the flag
-            TitleFilter = filterData.TitleFilter ?? string.Empty;
-            CreatorFilter = filterData.CreatorFilter ?? string.Empty;
-            SourceBranchFilter = filterData.SourceBranchFilter ?? string.Empty;
-            TargetBranchFilter = filterData.TargetBranchFilter ?? string.Empty;
-            ReviewerFilter = filterData.ReviewerFilter ?? string.Empty;
+            FilterState.Criteria.TitleFilter = filterData.TitleFilter ?? string.Empty;
+            FilterState.Criteria.CreatorFilter = filterData.CreatorFilter ?? string.Empty;
+            FilterState.Criteria.SourceBranchFilter = filterData.SourceBranchFilter ?? string.Empty;
+            FilterState.Criteria.TargetBranchFilter = filterData.TargetBranchFilter ?? string.Empty;
+            FilterState.Criteria.ReviewerFilter = filterData.ReviewerFilter ?? string.Empty;
 
             // Apply status and vote filters using the UI properties
-            StatusFilter = filterData.SelectedStatuses.Any()
-                ? filterData.SelectedStatuses.First()
-                : "All";
+            FilterState.Criteria.SelectedStatuses.Clear();
+            if (filterData.SelectedStatuses.Any())
+            {
+                FilterState.Criteria.SelectedStatuses.Add(filterData.SelectedStatuses.First());
+            }
 
-            ReviewerVoteFilter = filterData.SelectedReviewerVotes.Any()
-                ? filterData.SelectedReviewerVotes.First()
-                : "All";
+            FilterState.Criteria.SelectedReviewerVotes.Clear();
+            if (filterData.SelectedReviewerVotes.Any())
+            {
+                FilterState.Criteria.SelectedReviewerVotes.Add(filterData.SelectedReviewerVotes.First());
+            }
 
             // Apply date filters
-            CreatedAfter = filterData.CreatedAfter;
-            CreatedBefore = filterData.CreatedBefore;
+            FilterState.Criteria.CreatedAfter = filterData.CreatedAfter;
+            FilterState.Criteria.CreatedBefore = filterData.CreatedBefore;
 
             // Apply draft filter
-            DraftFilter = filterData.IsDraft switch
-            {
-                true => "Drafts Only",
-                false => "Non-Drafts Only",
-                _ => "All"
-            };
+            FilterState.Criteria.IsDraft = filterData.IsDraft;
 
             // Apply boolean filters
-            ShowMyPullRequestsOnly = filterData.MyPullRequestsOnly;
-            ShowAssignedToMeOnly = filterData.AssignedToMeOnly;
-            ShowNeedsMyReviewOnly = filterData.NeedsMyReviewOnly;
+            FilterState.Criteria.MyPullRequestsOnly = filterData.MyPullRequestsOnly;
+            FilterState.Criteria.AssignedToMeOnly = filterData.AssignedToMeOnly;
+            FilterState.Criteria.NeedsMyReviewOnly = filterData.NeedsMyReviewOnly;
 
             // Apply workflow preset if specified
             if (!string.IsNullOrEmpty(filterData.WorkflowPreset))
@@ -1491,76 +1422,15 @@ public class MainWindowViewModel : ViewModelBase
 
     private void UpdateFilterOptions()
     {
-        // Update available filter options based on current PRs
-        var statuses = _allPullRequests.Select(pr => pr.Status).Distinct().OrderBy(s => s);
-
-        // Build new status list while preserving "All" at the top
-        var newStatuses = new List<string> { "All" };
-        newStatuses.AddRange(statuses);
-
-        // Only update if the collection has changed to preserve binding
-        if (!AvailableStatuses.SequenceEqual(newStatuses))
-        {
-            var currentSelection = StatusFilter; // Preserve current selection
-
-            // Clear and rebuild the collection immediately
-            AvailableStatuses.Clear();
-            foreach (var status in newStatuses)
-                AvailableStatuses.Add(status);
-
-            // Use a timer-based approach to ensure the ComboBox has time to process the collection changes
-            var timer = new System.Timers.Timer(100); // 100ms delay
-            timer.Elapsed += (_, _) =>
-            {
-                timer.Stop();
-                timer.Dispose();
-
-                Dispatcher.UIThread.Post(() =>
-                {
-                    // Force a complete reset of the binding
-                    var targetSelection = AvailableStatuses.Contains(currentSelection) ? currentSelection : "All";
-
-                    // Completely clear the binding first
-                    _statusFilter = null;
-                    this.RaisePropertyChanged(nameof(StatusFilter));
-
-                    // Set to the correct value after a small delay
-                    Dispatcher.UIThread.Post(() =>
-                    {
-                        _statusFilter = targetSelection;
-                        this.RaisePropertyChanged(nameof(StatusFilter));
-                        UpdateStatusFilter(targetSelection);
-                    }, DispatcherPriority.ApplicationIdle);
-                }, DispatcherPriority.Background);
-            };
-            timer.Start();
-        }
-
-        var creators = _allPullRequests.Select(pr => pr.Creator).Distinct().OrderBy(c => c);
-        AvailableCreators.Clear();
-        foreach (var creator in creators)
-            AvailableCreators.Add(creator);
-
-        var reviewers = _allPullRequests.SelectMany(pr => pr.Reviewers.Select(r => r.DisplayName))
-            .Distinct().OrderBy(r => r);
-        AvailableReviewers.Clear();
-        foreach (var reviewer in reviewers)
-            AvailableReviewers.Add(reviewer);
-
-        var sourceBranches = _allPullRequests.Select(pr => pr.SourceBranch).Distinct().OrderBy(b => b);
-        AvailableSourceBranches.Clear();
-        foreach (var branch in sourceBranches)
-            AvailableSourceBranches.Add(branch);
-
-        var targetBranches = _allPullRequests.Select(pr => pr.TargetBranch).Distinct().OrderBy(b => b);
-        AvailableTargetBranches.Clear();
-        foreach (var branch in targetBranches)
-            AvailableTargetBranches.Add(branch);
+        // Filter options are now managed by FilterOrchestrator
+        // This method can be simplified or removed entirely
+        FilterOrchestrator.UpdateAvailableOptions(_allPullRequests);
     }
 
     private void UpdateAvailableOptions()
     {
-        // Update dropdown options for autocomplete
+        // Delegate to FilterOrchestrator
+        FilterOrchestrator.UpdateAvailableOptions(_allPullRequests);
     }
 
     private void ApplyFiltersAndSorting()
@@ -1588,9 +1458,8 @@ public class MainWindowViewModel : ViewModelBase
         // Update summary statistics and filter state properties
         this.RaisePropertyChanged(nameof(ActivePRCount));
         this.RaisePropertyChanged(nameof(MyReviewPendingCount));
-        this.RaisePropertyChanged(nameof(ActiveFiltersCount));
         this.RaisePropertyChanged(nameof(HasActiveFilters));
-        this.RaisePropertyChanged(nameof(FilterSummary));
+        this.RaisePropertyChanged(nameof(ActiveFiltersSummary));
     }
 
     private void UpdateStatusFilter(string value)
@@ -1632,8 +1501,9 @@ public class MainWindowViewModel : ViewModelBase
             _ => ((DateTimeOffset?)null, (DateTimeOffset?)null)
         };
 
-        CreatedAfter = after;
-        CreatedBefore = before;
+        FilterState.Criteria.CreatedAfter = after;
+        FilterState.Criteria.CreatedBefore = before;
+        ApplyFiltersAndSorting();
     }
 
     private void ApplyWorkflowPreset(string preset)
@@ -1647,12 +1517,14 @@ public class MainWindowViewModel : ViewModelBase
         switch (preset)
         {
             case "Team Lead Overview":
-                StatusFilter = "Active";
+                FilterState.Criteria.SelectedStatuses.Clear();
+                FilterState.Criteria.SelectedStatuses.Add("Active");
                 SelectedDateRangePreset = "Last 7 Days";
                 break;
             case "My Pull Requests":
-                ShowMyPullRequestsOnly = true;
-                StatusFilter = "Active";
+                FilterState.Criteria.MyPullRequestsOnly = true;
+                FilterState.Criteria.SelectedStatuses.Clear();
+                FilterState.Criteria.SelectedStatuses.Add("Active");
                 break;
             case "Need My Review":
                 ApplyNeedMyReviewPreset(userRole);
@@ -1668,7 +1540,8 @@ public class MainWindowViewModel : ViewModelBase
                 SelectedSortPreset = "Most Recent";
                 break;
             case "High Priority":
-                StatusFilter = "Active";
+                FilterState.Criteria.SelectedStatuses.Clear();
+                FilterState.Criteria.SelectedStatuses.Add("Active");
                 SelectedSortPreset = "Needs Attention";
                 break;
         }
@@ -1685,19 +1558,22 @@ public class MainWindowViewModel : ViewModelBase
 
     private void ApplyNeedMyReviewPreset(UserRole userRole)
     {
-        StatusFilter = "Active";
+        FilterState.Criteria.SelectedStatuses.Clear();
+        FilterState.Criteria.SelectedStatuses.Add("Active");
 
         switch (userRole)
         {
             case UserRole.Developer:
             case UserRole.Architect:
                 // For developers/architects: Show PRs where I haven't voted yet
-                ShowNeedsMyReviewOnly = true;
-                ReviewerVoteFilter = "No vote";
+                FilterState.Criteria.NeedsMyReviewOnly = true;
+                FilterState.Criteria.SelectedReviewerVotes.Clear();
+                FilterState.Criteria.SelectedReviewerVotes.Add("No vote");
                 break;
             case UserRole.Tester:
                 // For testers: Show PRs that are approved and ready for testing
-                ReviewerVoteFilter = "Approved";
+                FilterState.Criteria.SelectedReviewerVotes.Clear();
+                FilterState.Criteria.SelectedReviewerVotes.Add("Approved");
                 break;
             case UserRole.TeamLead:
             case UserRole.ScrumMaster:
@@ -1707,22 +1583,25 @@ public class MainWindowViewModel : ViewModelBase
             case UserRole.General:
             default:
                 // General role: Default developer behavior
-                ShowNeedsMyReviewOnly = true;
-                ReviewerVoteFilter = "No vote";
+                FilterState.Criteria.NeedsMyReviewOnly = true;
+                FilterState.Criteria.SelectedReviewerVotes.Clear();
+                FilterState.Criteria.SelectedReviewerVotes.Add("No vote");
                 break;
         }
     }
 
     private void ApplyApprovedReadyForTestingPreset(UserRole userRole)
     {
-        StatusFilter = "Active";
+        FilterState.Criteria.SelectedStatuses.Clear();
+        FilterState.Criteria.SelectedStatuses.Add("Active");
 
         switch (userRole)
         {
             case UserRole.Developer:
             case UserRole.Architect:
                 // For developers: Show PRs where I have approved
-                ReviewerVoteFilter = "Approved";
+                FilterState.Criteria.SelectedReviewerVotes.Clear();
+                FilterState.Criteria.SelectedReviewerVotes.Add("Approved");
                 break;
             case UserRole.Tester:
                 // For testers: Show ALL PRs that have been approved by anyone and are ready for testing
@@ -1737,21 +1616,24 @@ public class MainWindowViewModel : ViewModelBase
             case UserRole.General:
             default:
                 // General role: Default developer behavior
-                ReviewerVoteFilter = "Approved";
+                FilterState.Criteria.SelectedReviewerVotes.Clear();
+                FilterState.Criteria.SelectedReviewerVotes.Add("Approved");
                 break;
         }
     }
 
     private void ApplyWaitingForAuthorPreset(UserRole userRole)
     {
-        StatusFilter = "Active";
+        FilterState.Criteria.SelectedStatuses.Clear();
+        FilterState.Criteria.SelectedStatuses.Add("Active");
 
         switch (userRole)
         {
             case UserRole.Developer:
             case UserRole.Architect:
                 // For developers: Show PRs where I voted "waiting for author"
-                ReviewerVoteFilter = "Waiting for author";
+                FilterState.Criteria.SelectedReviewerVotes.Clear();
+                FilterState.Criteria.SelectedReviewerVotes.Add("Waiting for author");
                 break;
             case UserRole.Tester:
                 // For testers: Show ALL PRs waiting for author response (not just mine)
@@ -1764,68 +1646,26 @@ public class MainWindowViewModel : ViewModelBase
             case UserRole.General:
             default:
                 // General role: Default developer behavior
-                ReviewerVoteFilter = "Waiting for author";
+                FilterState.Criteria.SelectedReviewerVotes.Clear();
+                FilterState.Criteria.SelectedReviewerVotes.Add("Waiting for author");
                 break;
         }
     }
 
     private void ResetFiltersToDefaults()
     {
-        ShowMyPullRequestsOnly = false;
-        ShowAssignedToMeOnly = false;
-        ShowNeedsMyReviewOnly = false;
-        StatusFilter = "All";
-        ReviewerVoteFilter = "All";
-        DraftFilter = "All";
+        // Reset all filter properties through FilterOrchestrator
+        FilterState.Criteria.Reset();
+        FilterState.SortCriteria.Reset();
+        
+        // Reset UI-specific properties
         SelectedDateRangePreset = "All Time";
-        TitleFilter = string.Empty;
-        CreatorFilter = string.Empty;
-        ReviewerFilter = string.Empty;
-        SourceBranchFilter = string.Empty;
-        TargetBranchFilter = string.Empty;
-        GlobalSearchText = string.Empty;
         EnableGroupFiltering = false;
-        EnableGroupsWithoutVoteFilter = false;
         
         // Update filter source tracking when manually resetting
         FilterState.Criteria.SetFilterSource("Manual");
     }
 
-    private string GetActiveFiltersCount()
-    {
-        var count = 0;
-        
-        if (ShowMyPullRequestsOnly) count++;
-        if (ShowAssignedToMeOnly) count++;
-        if (ShowNeedsMyReviewOnly) count++;
-        if (StatusFilter != "All") count++;
-        if (ReviewerVoteFilter != "All") count++;
-        if (DraftFilter != "All") count++;
-        if (!string.IsNullOrWhiteSpace(TitleFilter)) count++;
-        if (!string.IsNullOrWhiteSpace(CreatorFilter)) count++;
-        if (!string.IsNullOrWhiteSpace(ReviewerFilter)) count++;
-        if (!string.IsNullOrWhiteSpace(SourceBranchFilter)) count++;
-        if (!string.IsNullOrWhiteSpace(TargetBranchFilter)) count++;
-        if (!string.IsNullOrWhiteSpace(GlobalSearchText)) count++;
-        if (CreatedAfter.HasValue || CreatedBefore.HasValue) count++;
-        if (EnableGroupFiltering) count++;
-        if (EnableGroupsWithoutVoteFilter) count++;
-
-        return count == 0 ? "No filters active" : $"{count} filter{(count == 1 ? "" : "s")} active";
-    }
-
-    private string GetFilterSummary()
-    {
-        var summary = new List<string>();
-        
-        if (ShowMyPullRequestsOnly) summary.Add("My PRs");
-        if (ShowNeedsMyReviewOnly) summary.Add("Needs Review");
-        if (StatusFilter != "All") summary.Add($"Status: {StatusFilter}");
-        if (!string.IsNullOrWhiteSpace(TitleFilter)) summary.Add($"Title: {TitleFilter}");
-        if (CreatedAfter.HasValue || CreatedBefore.HasValue) summary.Add("Date Range");
-
-        return summary.Any() ? string.Join(", ", summary) : "No active filters";
-    }
 
     private string GetWorkflowPresetTooltip(string preset)
     {

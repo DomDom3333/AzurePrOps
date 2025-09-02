@@ -248,7 +248,7 @@ public class FilterPanelViewModel : ViewModelBase
                 
             case "RecentActivity":
                 _filterState.ClearAllFilters();
-                _filterState.UpdatedAfter(DateTimeOffset.Now.AddDays(-7));
+                _filterState.UpdatedAfter = DateTimeOffset.Now.AddDays(-7);
                 break;
                 
             case "ActivePRs":
@@ -312,15 +312,22 @@ public class FilterPanelViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Updates available groups for filtering
+    /// Overload that accepts separate collections for compatibility with FilterOrchestrator
     /// </summary>
-    public void UpdateAvailableGroups(IEnumerable<string> groups)
+    public void UpdateAvailableOptions(
+        IEnumerable<string> creators,
+        IEnumerable<string> reviewers,
+        IEnumerable<string> sourceBranches,
+        IEnumerable<string> targetBranches,
+        IEnumerable<string> groups)
     {
-        var sortedGroups = groups.OrderBy(g => g).ToList();
-        
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            UpdateCollection(AvailableGroups, sortedGroups);
+            UpdateCollection(AvailableCreators, creators);
+            UpdateCollection(AvailableReviewers, reviewers);
+            UpdateCollection(AvailableSourceBranches, sourceBranches);
+            UpdateCollection(AvailableTargetBranches, targetBranches);
+            UpdateCollection(AvailableGroups, groups);
         });
     }
 
@@ -356,50 +363,58 @@ public class FilterPanelViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            // Log error but don't crash the application
             System.Diagnostics.Debug.WriteLine($"Error loading saved filter views: {ex.Message}");
         }
     }
 
-    private Task SaveFilterViewToStorage(SavedFilterView filterView)
+    private async Task SaveFilterViewToStorage(SavedFilterView savedView)
     {
         try
         {
             var preferences = FilterSortPreferencesStorage.TryLoad(out var loadedPrefs) ? loadedPrefs : new FilterSortPreferences();
             
-            // Remove existing view with same name
-            preferences.SavedViews.RemoveAll(v => v?.Name == filterView.Name);
+            if (preferences.SavedViews == null)
+            {
+                preferences.SavedViews = new List<SavedFilterView>();
+            }
             
-            // Add the new/updated view
-            preferences.SavedViews.Add(filterView);
+            // Remove existing view with same name if it exists
+            var existingView = preferences.SavedViews.FirstOrDefault(v => v.Name == savedView.Name);
+            if (existingView != null)
+            {
+                preferences.SavedViews.Remove(existingView);
+            }
             
+            preferences.SavedViews.Add(savedView);
             FilterSortPreferencesStorage.Save(preferences);
         }
         catch (Exception ex)
         {
-            // TODO: Log error
             System.Diagnostics.Debug.WriteLine($"Error saving filter view: {ex.Message}");
         }
-        
-        return Task.CompletedTask;
     }
 
-    private Task DeleteFilterViewFromStorage(SavedFilterView filterView)
+    private async Task DeleteFilterViewFromStorage(SavedFilterView viewToDelete)
     {
         try
         {
             var preferences = FilterSortPreferencesStorage.TryLoad(out var loadedPrefs) ? loadedPrefs : new FilterSortPreferences();
             
-            preferences.SavedViews.RemoveAll(v => v?.Name == filterView.Name);
-            
-            FilterSortPreferencesStorage.Save(preferences);
+            if (preferences.SavedViews != null)
+            {
+                var viewToRemove = preferences.SavedViews.FirstOrDefault(v => v.Name == viewToDelete.Name);
+                if (viewToRemove != null)
+                {
+                    preferences.SavedViews.Remove(viewToRemove);
+                    FilterSortPreferencesStorage.Save(preferences);
+                }
+            }
         }
         catch (Exception ex)
         {
-            // TODO: Log error
             System.Diagnostics.Debug.WriteLine($"Error deleting filter view: {ex.Message}");
         }
-        
-        return Task.CompletedTask;
     }
 
     #endregion

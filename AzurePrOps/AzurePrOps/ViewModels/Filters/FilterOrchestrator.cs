@@ -1,14 +1,13 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
-using System.Reactive;
 using System.Reactive.Linq;
 using ReactiveUI;
 using AzurePrOps.Models.FilteringAndSorting;
 using AzurePrOps.Models;
 using AzurePrOps.AzureConnection.Models;
 using AzurePrOps.Services;
+using AzurePrOps.ViewModels.Filters;
 
 namespace AzurePrOps.ViewModels.Filters;
 
@@ -24,7 +23,7 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
     private readonly FilterPresetManager _presetManager;
     private readonly PullRequestFilteringSortingService _filterSortService;
     
-    private bool _isInitialized = false;
+    private bool _isInitialized;
     private UserRole _currentUserRole = UserRole.General;
     private IDisposable? _filterSubscription;
 
@@ -35,7 +34,7 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
         _filterSortService = filterSortService ?? throw new ArgumentNullException(nameof(filterSortService));
         _filterState = filterState ?? new FilterState();
         _presetManager = new FilterPresetManager();
-        _filterPanel = new FilterPanelViewModel(_filterState, _presetManager);
+        _filterPanel = new FilterPanelViewModel(_filterState, _presetManager); // Fixed: Pass presetManager parameter
         
         InitializeSubscriptions();
     }
@@ -86,9 +85,7 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
     /// </summary>
     public void UpdateAvailableOptions(IEnumerable<PullRequestInfo> allPullRequests)
     {
-        if (allPullRequests == null) return;
-
-        var creators = allPullRequests.Select(pr => pr.Creator)
+        var creators = allPullRequests.Select(pr => pr.Creator ?? "Unknown")
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct()
             .OrderBy(name => name);
@@ -98,12 +95,12 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
             .Distinct()
             .OrderBy(name => name);
 
-        var sourceBranches = allPullRequests.Select(pr => pr.SourceBranch)
+        var sourceBranches = allPullRequests.Select(pr => pr.SourceBranch ?? "Unknown")
             .Where(branch => !string.IsNullOrWhiteSpace(branch))
             .Distinct()
             .OrderBy(branch => branch);
 
-        var targetBranches = allPullRequests.Select(pr => pr.TargetBranch)
+        var targetBranches = allPullRequests.Select(pr => pr.TargetBranch ?? "Unknown")
             .Where(branch => !string.IsNullOrWhiteSpace(branch))
             .Distinct()
             .OrderBy(branch => branch);
@@ -123,8 +120,6 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
     /// </summary>
     public IEnumerable<PullRequestInfo> ApplyFiltersAndSorting(IEnumerable<PullRequestInfo> pullRequests)
     {
-        if (pullRequests == null) return Enumerable.Empty<PullRequestInfo>();
-
         return _filterSortService.ApplyFiltersAndSorting(
             pullRequests, 
             _filterState.Criteria, 
@@ -191,11 +186,11 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
     }
 
     /// <summary>
-    /// Gets the current filter count
+    /// Gets the current filter count with more detailed logic
     /// </summary>
     public int GetActiveFilterCount()
     {
-        return _filterState.HasActiveFilters ? 1 : 0; // Simplified - could be more detailed
+        return _filterState.GetActiveFilterCount();
     }
 
     /// <summary>
@@ -207,122 +202,106 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
     }
 
     /// <summary>
-    /// Imports and applies a saved filter state
+    /// Imports filter state from saved filters
     /// </summary>
     public void ImportFilterState(FilterCriteria criteria)
     {
-        if (criteria == null) return;
-
-        // Temporarily disable change notifications to avoid multiple updates
-        using var _ = SuspendNotifications();
-        
-        // Apply the criteria to filter state
-        _filterState.ResetToDefaults();
-        ApplyFilterCriteria(criteria);
-    }
-
-    #endregion
-
-    #region Quick Filter Actions
-
-    /// <summary>
-    /// Quick action: Show only my pull requests
-    /// </summary>
-    public void ShowMyPullRequestsOnly()
-    {
-        ClearAllFilters();
-        _filterState.MyPullRequestsOnly = true;
-        _filterState.Criteria.SetFilterSource("Quick Filter", "My Pull Requests");
-    }
-
-    /// <summary>
-    /// Quick action: Show pull requests assigned to me
-    /// </summary>
-    public void ShowAssignedToMe()
-    {
-        ClearAllFilters();
-        _filterState.AssignedToMeOnly = true;
-        _filterState.Criteria.SetFilterSource("Quick Filter", "Assigned to Me");
-    }
-
-    /// <summary>
-    /// Quick action: Show pull requests that need my review
-    /// </summary>
-    public void ShowNeedsMyReview()
-    {
-        ClearAllFilters();
-        _filterState.NeedsMyReviewOnly = true;
-        _filterState.StatusFilter = "Active";
-        _filterState.ReviewerVoteFilter = "No vote";
-        _filterState.Criteria.SetFilterSource("Quick Filter", "Needs My Review");
-    }
-
-    /// <summary>
-    /// Quick action: Show recently updated pull requests
-    /// </summary>
-    public void ShowRecentlyUpdated(int days = 7)
-    {
-        ClearAllFilters();
-        _filterState.StatusFilter = "Active";
-        _filterState.SetDateRange(null, null, DateTimeOffset.Now.AddDays(-days), null);
-        _filterState.Criteria.SetFilterSource("Quick Filter", $"Updated Last {days} Days");
-    }
-
-    #endregion
-
-    #region Private Methods
-
-    private void InitializeSubscriptions()
-    {
-        // Subscribe to filter state changes to notify consumers
-        _filterSubscription = _filterState.WhenAnyValue(x => x.Criteria)
-            .Skip(1) // Skip initial value
-            .Subscribe(criteria => FiltersChanged?.Invoke(this, criteria));
-    }
-
-    private void ApplyFilterCriteria(FilterCriteria criteria)
-    {
-        // Apply personal filters
+        // Apply the criteria properties to the filter state instead of setting the criteria directly
         _filterState.MyPullRequestsOnly = criteria.MyPullRequestsOnly;
         _filterState.AssignedToMeOnly = criteria.AssignedToMeOnly;
         _filterState.NeedsMyReviewOnly = criteria.NeedsMyReviewOnly;
         _filterState.ExcludeMyPullRequests = criteria.ExcludeMyPullRequests;
-
-        // Apply status filters
-        if (criteria.SelectedStatuses.Count == 1)
-            _filterState.StatusFilter = criteria.SelectedStatuses.First();
-        else if (criteria.SelectedStatuses.Count == 0)
-            _filterState.StatusFilter = "All";
-
-        _filterState.IsDraft = criteria.IsDraft;
-
-        // Apply text filters
         _filterState.GlobalSearchText = criteria.GlobalSearchText;
         _filterState.TitleFilter = criteria.TitleFilter;
         _filterState.CreatorFilter = criteria.CreatorFilter;
         _filterState.ReviewerFilter = criteria.ReviewerFilter;
         _filterState.SourceBranchFilter = criteria.SourceBranchFilter;
         _filterState.TargetBranchFilter = criteria.TargetBranchFilter;
-
-        // Apply reviewer vote filters
-        if (criteria.SelectedReviewerVotes.Count == 1)
-            _filterState.ReviewerVoteFilter = criteria.SelectedReviewerVotes.First();
-        else if (criteria.SelectedReviewerVotes.Count == 0)
-            _filterState.ReviewerVoteFilter = "All";
-
-        // Apply date filters
-        _filterState.SetDateRange(criteria.CreatedAfter, criteria.CreatedBefore, 
-            criteria.UpdatedAfter, criteria.UpdatedBefore);
-
-        // Apply group filters
+        _filterState.SelectedStatuses = criteria.SelectedStatuses.ToList();
+        _filterState.SelectedReviewerVotes = criteria.SelectedReviewerVotes.ToList();
+        _filterState.IsDraft = criteria.IsDraft;
+        _filterState.CreatedAfter = criteria.CreatedAfter;
+        _filterState.CreatedBefore = criteria.CreatedBefore;
         _filterState.EnableGroupsWithoutVoteFilter = criteria.EnableGroupsWithoutVoteFilter;
+        _filterState.SelectedGroupsWithoutVote = criteria.SelectedGroupsWithoutVote.ToList();
     }
 
-    private IDisposable SuspendNotifications()
+    #endregion
+
+    #region Private Methods
+
+    /// <summary>
+    /// Initializes subscriptions to filter state changes
+    /// </summary>
+    private void InitializeSubscriptions()
     {
-        // This would temporarily disable filter change notifications
-        // Implementation depends on your specific needs
-        return System.Reactive.Disposables.Disposable.Empty;
+        // Subscribe to filter criteria changes using individual subscriptions to avoid parameter limit issues
+        _filterState.Criteria.WhenAnyValue(x => x.MyPullRequestsOnly)
+            .Subscribe(_ => OnFiltersChanged());
+        
+        _filterState.Criteria.WhenAnyValue(x => x.AssignedToMeOnly)
+            .Subscribe(_ => OnFiltersChanged());
+        
+        _filterState.Criteria.WhenAnyValue(x => x.NeedsMyReviewOnly)
+            .Subscribe(_ => OnFiltersChanged());
+        
+        _filterState.Criteria.WhenAnyValue(x => x.ExcludeMyPullRequests)
+            .Subscribe(_ => OnFiltersChanged());
+        
+        _filterState.Criteria.WhenAnyValue(x => x.GlobalSearchText)
+            .Subscribe(_ => OnFiltersChanged());
+        
+        _filterState.Criteria.WhenAnyValue(x => x.TitleFilter)
+            .Subscribe(_ => OnFiltersChanged());
+        
+        _filterState.Criteria.WhenAnyValue(x => x.CreatorFilter)
+            .Subscribe(_ => OnFiltersChanged());
+        
+        _filterState.Criteria.WhenAnyValue(x => x.ReviewerFilter)
+            .Subscribe(_ => OnFiltersChanged());
+        
+        _filterState.Criteria.WhenAnyValue(x => x.SourceBranchFilter)
+            .Subscribe(_ => OnFiltersChanged());
+        
+        _filterState.Criteria.WhenAnyValue(x => x.TargetBranchFilter)
+            .Subscribe(_ => OnFiltersChanged());
+        
+        _filterState.Criteria.WhenAnyValue(x => x.IsDraft)
+            .Subscribe(_ => OnFiltersChanged());
+        
+        _filterState.Criteria.WhenAnyValue(x => x.CreatedAfter)
+            .Subscribe(_ => OnFiltersChanged());
+        
+        _filterState.Criteria.WhenAnyValue(x => x.CreatedBefore)
+            .Subscribe(_ => OnFiltersChanged());
+        
+        _filterState.Criteria.WhenAnyValue(x => x.EnableGroupsWithoutVoteFilter)
+            .Subscribe(_ => OnFiltersChanged());
+
+        // Subscribe to filter state changes for collections
+        _filterState.WhenAnyValue(x => x.SelectedStatuses)
+            .Subscribe(_ => OnFiltersChanged());
+        
+        _filterState.WhenAnyValue(x => x.SelectedReviewerVotes)
+            .Subscribe(_ => OnFiltersChanged());
+        
+        _filterState.WhenAnyValue(x => x.SelectedGroupsWithoutVote)
+            .Subscribe(_ => OnFiltersChanged());
+
+        // Subscribe to sort criteria changes
+        _filterState.SortCriteria.WhenAnyValue(x => x.CurrentPreset)
+            .Subscribe(_ => OnFiltersChanged());
+    }
+
+    /// <summary>
+    /// Handles filter changes and notifies listeners
+    /// </summary>
+    private void OnFiltersChanged()
+    {
+        if (_isInitialized)
+        {
+            FiltersChanged?.Invoke(this, _filterState.Criteria);
+        }
     }
 
     #endregion
@@ -332,7 +311,6 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
     public void Dispose()
     {
         _filterSubscription?.Dispose();
-        // FilterPanel doesn't implement IDisposable, so we don't need to dispose it
     }
 
     #endregion

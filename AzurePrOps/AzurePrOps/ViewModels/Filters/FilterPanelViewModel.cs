@@ -55,22 +55,10 @@ public class FilterPanelViewModel : ViewModelBase
         set => _filterState.ExcludeMyPullRequests = value;
     }
 
-    public string StatusFilter
+    public string GlobalSearchText
     {
-        get => _filterState.StatusFilter;
-        set => _filterState.StatusFilter = value;
-    }
-
-    public string ReviewerVoteFilter
-    {
-        get => _filterState.ReviewerVoteFilter;
-        set => _filterState.ReviewerVoteFilter = value;
-    }
-
-    public string DraftFilter
-    {
-        get => _filterState.DraftFilter;
-        set => _filterState.DraftFilter = value;
+        get => _filterState.GlobalSearchText;
+        set => _filterState.GlobalSearchText = value;
     }
 
     public string TitleFilter
@@ -103,16 +91,22 @@ public class FilterPanelViewModel : ViewModelBase
         set => _filterState.TargetBranchFilter = value;
     }
 
-    public string GlobalSearchText
+    public DateTimeOffset? CreatedAfter
     {
-        get => _filterState.GlobalSearchText;
-        set => _filterState.GlobalSearchText = value;
+        get => _filterState.CreatedAfter;
+        set => _filterState.CreatedAfter = value;
     }
 
-    public bool EnableGroupFiltering
+    public DateTimeOffset? CreatedBefore
     {
-        get => _filterState.EnableGroupFiltering;
-        set => _filterState.EnableGroupFiltering = value;
+        get => _filterState.CreatedBefore;
+        set => _filterState.CreatedBefore = value;
+    }
+
+    public string DraftFilter
+    {
+        get => _filterState.DraftFilter;
+        set => _filterState.DraftFilter = value;
     }
 
     public bool EnableGroupsWithoutVoteFilter
@@ -121,42 +115,13 @@ public class FilterPanelViewModel : ViewModelBase
         set => _filterState.EnableGroupsWithoutVoteFilter = value;
     }
 
-    private string _selectedDateRangePreset = "All Time";
-    public string SelectedDateRangePreset
-    {
-        get => _selectedDateRangePreset;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _selectedDateRangePreset, value);
-            ApplyDateRangePreset(value);
-        }
-    }
-
     #endregion
 
-    #region Display Properties
+    #region Available Options Collections
 
-    public string ActiveFiltersSummary => _filterState.ActiveFiltersSummary;
-    public bool HasActiveFilters => _filterState.HasActiveFilters;
-    public string FilterStatusText => _filterState.FilterStatusText;
-    public string CurrentFilterSource => _filterState.CurrentFilterSource;
-
-    #endregion
-
-    #region Collections
-
-    public ObservableCollection<string> AvailableStatuses { get; } = new()
-        { "All", "Active", "Completed", "Abandoned" };
-
-    public ObservableCollection<string> AvailableReviewerVotes { get; } = new()
-        { "All", "No vote", "Approved", "Approved with suggestions", "Waiting for author", "Rejected" };
-
-    public ObservableCollection<string> DraftFilterOptions { get; } = new()
-        { "All", "Drafts Only", "Non-Drafts Only" };
-
-    public ObservableCollection<string> DateRangePresets { get; } = new()
-        { "All Time", "Last 7 days", "Last 14 days", "Last 30 days", "Last 60 days", "Last 90 days" };
-
+    public ObservableCollection<string> AvailableStatuses { get; } = new();
+    public ObservableCollection<string> AvailableReviewerVotes { get; } = new();
+    public ObservableCollection<string> DraftFilterOptions { get; } = new();
     public ObservableCollection<string> AvailableCreators { get; } = new();
     public ObservableCollection<string> AvailableReviewers { get; } = new();
     public ObservableCollection<string> AvailableSourceBranches { get; } = new();
@@ -168,116 +133,22 @@ public class FilterPanelViewModel : ViewModelBase
     #region Commands
 
     public ReactiveCommand<Unit, Unit> ClearAllFiltersCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> ResetFiltersCommand { get; private set; } = null!;
     public ReactiveCommand<string, Unit> ApplyPresetCommand { get; private set; } = null!;
-    public ReactiveCommand<Unit, Unit> SaveCurrentFiltersCommand { get; private set; } = null!;
 
     #endregion
 
-    #region Initialization
+    #region Methods
 
-    private void InitializeCommands()
-    {
-        ClearAllFiltersCommand = ReactiveCommand.Create(ClearAllFilters);
-        ApplyPresetCommand = ReactiveCommand.Create<string>(ApplyPreset);
-        SaveCurrentFiltersCommand = ReactiveCommand.Create(SaveCurrentFilters);
-    }
-
-    private void InitializeCollections()
-    {
-        // Initialize collections - these will be populated by the main ViewModel
-        // when data is loaded
-    }
-
-    private void SubscribeToFilterStateChanges()
-    {
-        // Subscribe to changes in FilterState to update UI properties
-        _filterState.WhenAnyValue(x => x.ActiveFiltersSummary)
-            .Subscribe(_ => this.RaisePropertyChanged(nameof(ActiveFiltersSummary)));
-
-        _filterState.WhenAnyValue(x => x.HasActiveFilters)
-            .Subscribe(_ => this.RaisePropertyChanged(nameof(HasActiveFilters)));
-
-        _filterState.WhenAnyValue(x => x.FilterStatusText)
-            .Subscribe(_ => this.RaisePropertyChanged(nameof(FilterStatusText)));
-
-        _filterState.WhenAnyValue(x => x.CurrentFilterSource)
-            .Subscribe(_ => this.RaisePropertyChanged(nameof(CurrentFilterSource)));
-    }
-
-    #endregion
-
-    #region Command Implementations
-
-    private void ClearAllFilters()
-    {
-        _isApplyingPreset = true;
-        try
-        {
-            _filterState.ResetToDefaults();
-            SelectedDateRangePreset = "All Time";
-        }
-        finally
-        {
-            _isApplyingPreset = false;
-        }
-    }
-
-    private void ApplyPreset(string presetName)
-    {
-        if (string.IsNullOrEmpty(presetName)) return;
-
-        _isApplyingPreset = true;
-        try
-        {
-            _presetManager.ApplyPreset(presetName, _filterState, UserRole.General);
-        }
-        finally
-        {
-            _isApplyingPreset = false;
-        }
-    }
-
-    private void SaveCurrentFilters()
-    {
-        // This would typically open a dialog to save the current filter state
-        // Implementation depends on the UI framework and requirements
-    }
-
-    #endregion
-
-    #region Helper Methods
-
-    private void ApplyDateRangePreset(string preset)
-    {
-        if (_isApplyingPreset) return;
-
-        var now = DateTimeOffset.Now;
-        switch (preset)
-        {
-            case "Last 7 days":
-                _filterState.SetDateRange(now.AddDays(-7), null);
-                break;
-            case "Last 14 days":
-                _filterState.SetDateRange(now.AddDays(-14), null);
-                break;
-            case "Last 30 days":
-                _filterState.SetDateRange(now.AddDays(-30), null);
-                break;
-            case "Last 60 days":
-                _filterState.SetDateRange(now.AddDays(-60), null);
-                break;
-            case "Last 90 days":
-                _filterState.SetDateRange(now.AddDays(-90), null);
-                break;
-            case "All Time":
-            default:
-                _filterState.SetDateRange(null, null);
-                break;
-        }
-    }
-
-    public void UpdateAvailableOptions(IEnumerable<string> creators, IEnumerable<string> reviewers,
-        IEnumerable<string> sourceBranches, IEnumerable<string> targetBranches, IEnumerable<string> groups)
+    /// <summary>
+    /// Updates the available filter options based on current data
+    /// </summary>
+    public void UpdateAvailableOptions(
+        IEnumerable<string> creators,
+        IEnumerable<string> reviewers,
+        IEnumerable<string> sourceBranches,
+        IEnumerable<string> targetBranches,
+        IEnumerable<string> groups)
     {
         UpdateCollection(AvailableCreators, creators);
         UpdateCollection(AvailableReviewers, reviewers);
@@ -286,15 +157,114 @@ public class FilterPanelViewModel : ViewModelBase
         UpdateCollection(AvailableGroups, groups);
     }
 
+    /// <summary>
+    /// Helper method to update an observable collection efficiently
+    /// </summary>
     private void UpdateCollection(ObservableCollection<string> collection, IEnumerable<string> newItems)
     {
         collection.Clear();
-        if (newItems != null)
+        foreach (var item in newItems)
         {
-            foreach (var item in newItems.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x))
-            {
-                collection.Add(item);
-            }
+            collection.Add(item);
+        }
+    }
+
+    #endregion
+
+    #region Initialization
+
+    private void InitializeCommands()
+    {
+        ClearAllFiltersCommand = ReactiveCommand.Create(() => _filterState.ResetToDefaults());
+        ResetFiltersCommand = ReactiveCommand.Create(() => _filterState.ResetToDefaults());
+        ApplyPresetCommand = ReactiveCommand.Create<string>(preset => _presetManager.ApplyPreset(preset, _filterState, UserRole.General));
+    }
+
+    private void InitializeCollections()
+    {
+        // Initialize static collections
+        AvailableStatuses.Add("All");
+        AvailableStatuses.Add("Active");
+        AvailableStatuses.Add("Completed");
+        AvailableStatuses.Add("Abandoned");
+
+        AvailableReviewerVotes.Add("All");
+        AvailableReviewerVotes.Add("No vote");
+        AvailableReviewerVotes.Add("Approved");
+        AvailableReviewerVotes.Add("Approved with suggestions");
+        AvailableReviewerVotes.Add("Waiting for author");
+        AvailableReviewerVotes.Add("Rejected");
+
+        DraftFilterOptions.Add("All");
+        DraftFilterOptions.Add("Drafts Only");
+        DraftFilterOptions.Add("Non-Drafts Only");
+    }
+
+    private void SubscribeToFilterStateChanges()
+    {
+        // Subscribe to filter state changes to update UI properties
+        // Split into multiple subscriptions to avoid WhenAnyValue parameter limit issues
+        _filterState.WhenAnyValue(x => x.MyPullRequestsOnly)
+            .Subscribe(_ => NotifyUIPropertiesChanged());
+        
+        _filterState.WhenAnyValue(x => x.AssignedToMeOnly)
+            .Subscribe(_ => NotifyUIPropertiesChanged());
+        
+        _filterState.WhenAnyValue(x => x.NeedsMyReviewOnly)
+            .Subscribe(_ => NotifyUIPropertiesChanged());
+        
+        _filterState.WhenAnyValue(x => x.ExcludeMyPullRequests)
+            .Subscribe(_ => NotifyUIPropertiesChanged());
+        
+        _filterState.WhenAnyValue(x => x.GlobalSearchText)
+            .Subscribe(_ => NotifyUIPropertiesChanged());
+        
+        _filterState.WhenAnyValue(x => x.TitleFilter)
+            .Subscribe(_ => NotifyUIPropertiesChanged());
+        
+        _filterState.WhenAnyValue(x => x.CreatorFilter)
+            .Subscribe(_ => NotifyUIPropertiesChanged());
+        
+        _filterState.WhenAnyValue(x => x.ReviewerFilter)
+            .Subscribe(_ => NotifyUIPropertiesChanged());
+        
+        _filterState.WhenAnyValue(x => x.SourceBranchFilter)
+            .Subscribe(_ => NotifyUIPropertiesChanged());
+        
+        _filterState.WhenAnyValue(x => x.TargetBranchFilter)
+            .Subscribe(_ => NotifyUIPropertiesChanged());
+        
+        _filterState.WhenAnyValue(x => x.DraftFilter)
+            .Subscribe(_ => NotifyUIPropertiesChanged());
+        
+        _filterState.WhenAnyValue(x => x.CreatedAfter)
+            .Subscribe(_ => NotifyUIPropertiesChanged());
+        
+        _filterState.WhenAnyValue(x => x.CreatedBefore)
+            .Subscribe(_ => NotifyUIPropertiesChanged());
+        
+        _filterState.WhenAnyValue(x => x.EnableGroupsWithoutVoteFilter)
+            .Subscribe(_ => NotifyUIPropertiesChanged());
+    }
+
+    private void NotifyUIPropertiesChanged()
+    {
+        if (!_isApplyingPreset)
+        {
+            this.RaisePropertyChanged(nameof(ShowMyPullRequestsOnly));
+            this.RaisePropertyChanged(nameof(ShowAssignedToMeOnly));
+            this.RaisePropertyChanged(nameof(ShowNeedsMyReviewOnly));
+            this.RaisePropertyChanged(nameof(ExcludeMyPullRequests));
+            this.RaisePropertyChanged(nameof(GlobalSearchText));
+            this.RaisePropertyChanged(nameof(TitleFilter));
+            this.RaisePropertyChanged(nameof(CreatorFilter));
+            this.RaisePropertyChanged(nameof(ReviewerFilter));
+            this.RaisePropertyChanged(nameof(SourceBranchFilter));
+            this.RaisePropertyChanged(nameof(TargetBranchFilter));
+            this.RaisePropertyChanged(nameof(DraftFilter));
+            this.RaisePropertyChanged(nameof(CreatedAfter));
+            this.RaisePropertyChanged(nameof(CreatedBefore));
+            this.RaisePropertyChanged(nameof(EnableGroupsWithoutVoteFilter));
         }
     }
 

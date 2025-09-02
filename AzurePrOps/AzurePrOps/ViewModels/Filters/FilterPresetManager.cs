@@ -192,8 +192,8 @@ public class FilterPresetManager
         
         // Set to show PRs updated in the last 7 days
         var sevenDaysAgo = DateTimeOffset.Now.AddDays(-7);
-        filterState.SetDateRange(null, null, sevenDaysAgo, null);
-        
+        filterState.UpdatedAfter = sevenDaysAgo;
+
         // Role-specific considerations for "recently updated"
         switch (userRole)
         {
