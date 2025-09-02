@@ -198,6 +198,29 @@ public class FilterPanelViewModel : ViewModelBase
         DraftFilterOptions.Add("All");
         DraftFilterOptions.Add("Drafts Only");
         DraftFilterOptions.Add("Non-Drafts Only");
+        
+        // Set default selections to ensure dropdowns are not blank
+        // These will be overridden if there are saved preferences
+        SetDefaultSelections();
+    }
+    
+    private void SetDefaultSelections()
+    {
+        // Ensure filter state has proper defaults
+        if (string.IsNullOrEmpty(_filterState.StatusFilter))
+        {
+            _filterState.StatusFilter = "All";
+        }
+        
+        if (string.IsNullOrEmpty(_filterState.ReviewerVoteFilter))
+        {
+            _filterState.ReviewerVoteFilter = "All";
+        }
+        
+        if (string.IsNullOrEmpty(_filterState.DraftFilter))
+        {
+            _filterState.DraftFilter = "All";
+        }
     }
 
     private void SubscribeToFilterStateChanges()

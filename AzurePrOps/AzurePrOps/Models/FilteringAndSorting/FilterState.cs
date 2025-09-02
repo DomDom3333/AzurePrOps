@@ -549,9 +549,10 @@ public class FilterState : ReactiveObject
         SourceBranchFilter = string.Empty;
         TargetBranchFilter = string.Empty;
         
+        // Clear dropdown selections - they will default to "All" through their property getters
         SelectedStatuses = new List<string>();
         SelectedReviewerVotes = new List<string>();
-        IsDraft = null;
+        IsDraft = null; // This defaults to "All" through DraftFilter property
         
         CreatedAfter = null;
         CreatedBefore = null;
@@ -568,6 +569,11 @@ public class FilterState : ReactiveObject
         this.RaisePropertyChanged(nameof(HasActiveFilters));
         this.RaisePropertyChanged(nameof(ActiveFiltersSummary));
         this.RaisePropertyChanged(nameof(FilterStatusText));
+        
+        // Notify that dropdown filter properties have changed to update UI
+        this.RaisePropertyChanged(nameof(StatusFilter));
+        this.RaisePropertyChanged(nameof(ReviewerVoteFilter));
+        this.RaisePropertyChanged(nameof(DraftFilter));
     }
 
     /// <summary>

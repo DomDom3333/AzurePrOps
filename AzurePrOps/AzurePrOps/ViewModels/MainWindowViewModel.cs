@@ -348,6 +348,22 @@ public class MainWindowViewModel : ViewModelBase
             if (!_isApplyingFilterView) ApplyWorkflowPreset(value);
         }
     }
+    
+    /// <summary>
+    /// Initialize default dropdown selections to ensure UI shows proper values
+    /// </summary>
+    public void InitializeDropdownDefaults()
+    {
+        // Force property change notifications for preset dropdowns
+        this.RaisePropertyChanged(nameof(SelectedWorkflowPreset));
+        this.RaisePropertyChanged(nameof(SelectedSortPreset)); 
+        this.RaisePropertyChanged(nameof(SelectedDateRangePreset));
+        
+        // Ensure filter dropdowns also show their default values
+        this.RaisePropertyChanged(nameof(StatusFilter));
+        this.RaisePropertyChanged(nameof(ReviewerVoteFilter));
+        this.RaisePropertyChanged(nameof(DraftFilter));
+    }
 
     // Group filtering UI properties
     private GroupSettings _groupSettings = new(new List<string>(), new List<string>(), DateTime.MinValue);
@@ -1292,6 +1308,9 @@ public class MainWindowViewModel : ViewModelBase
                 // Log error (removed excessive logging)
             }
         });
+        
+        // Initialize dropdown defaults to ensure UI shows proper values on startup
+        InitializeDropdownDefaults();
     }
 
     private void LoadPreferences()
