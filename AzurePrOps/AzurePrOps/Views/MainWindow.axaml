@@ -420,9 +420,9 @@
 
                             <StackPanel Spacing="8">
                                 <ComboBox
-                                    ItemsSource="{Binding FilterViews}"
+                                    ItemsSource="{Binding SavedFilterViews}"
                                     PlaceholderText="No saved views..."
-                                    SelectedItem="{Binding SelectedFilterView}">
+                                    SelectedItem="{Binding SelectedSavedFilterView}">
                                     <ComboBox.ItemTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding Name}" />
@@ -438,7 +438,7 @@
                                         Watermark="View name..." />
                                     <Button
                                         Classes="SecondaryButton"
-                                        Command="{Binding SaveViewCommand}"
+                                        Command="{Binding SaveCurrentFiltersCommand}"
                                         Content="Save"
                                         Grid.Column="1"
                                         Width="50" />
