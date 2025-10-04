@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
 using ReactiveUI;
+using Avalonia.Threading;
 using AzurePrOps.Models.FilteringAndSorting;
 using AzurePrOps.Models;
 using AzurePrOps.AzureConnection.Models;
 using AzurePrOps.Services;
-using AzurePrOps.ViewModels.Filters;
 
 namespace AzurePrOps.ViewModels.Filters;
 
@@ -235,61 +235,13 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
     /// </summary>
     private void InitializeSubscriptions()
     {
-        // Subscribe to filter criteria changes using individual subscriptions to avoid parameter limit issues
-        _filterState.Criteria.WhenAnyValue(x => x.MyPullRequestsOnly)
-            .Subscribe(_ => OnFiltersChanged());
+        // Subscribe ONLY to FilterState's FilterChanged event
+        // This is the single source of truth for all filter changes
+        // The FilterState itself handles raising this event whenever any filter property changes
+        _filterState.FilterChanged += OnFiltersChanged;
         
-        _filterState.Criteria.WhenAnyValue(x => x.AssignedToMeOnly)
-            .Subscribe(_ => OnFiltersChanged());
-        
-        _filterState.Criteria.WhenAnyValue(x => x.NeedsMyReviewOnly)
-            .Subscribe(_ => OnFiltersChanged());
-        
-        _filterState.Criteria.WhenAnyValue(x => x.ExcludeMyPullRequests)
-            .Subscribe(_ => OnFiltersChanged());
-        
-        _filterState.Criteria.WhenAnyValue(x => x.GlobalSearchText)
-            .Subscribe(_ => OnFiltersChanged());
-        
-        _filterState.Criteria.WhenAnyValue(x => x.TitleFilter)
-            .Subscribe(_ => OnFiltersChanged());
-        
-        _filterState.Criteria.WhenAnyValue(x => x.CreatorFilter)
-            .Subscribe(_ => OnFiltersChanged());
-        
-        _filterState.Criteria.WhenAnyValue(x => x.ReviewerFilter)
-            .Subscribe(_ => OnFiltersChanged());
-        
-        _filterState.Criteria.WhenAnyValue(x => x.SourceBranchFilter)
-            .Subscribe(_ => OnFiltersChanged());
-        
-        _filterState.Criteria.WhenAnyValue(x => x.TargetBranchFilter)
-            .Subscribe(_ => OnFiltersChanged());
-        
-        _filterState.Criteria.WhenAnyValue(x => x.IsDraft)
-            .Subscribe(_ => OnFiltersChanged());
-        
-        _filterState.Criteria.WhenAnyValue(x => x.CreatedAfter)
-            .Subscribe(_ => OnFiltersChanged());
-        
-        _filterState.Criteria.WhenAnyValue(x => x.CreatedBefore)
-            .Subscribe(_ => OnFiltersChanged());
-        
-        _filterState.Criteria.WhenAnyValue(x => x.EnableGroupsWithoutVoteFilter)
-            .Subscribe(_ => OnFiltersChanged());
-
-        // Subscribe to filter state changes for collections
-        _filterState.WhenAnyValue(x => x.SelectedStatuses)
-            .Subscribe(_ => OnFiltersChanged());
-        
-        _filterState.WhenAnyValue(x => x.SelectedReviewerVotes)
-            .Subscribe(_ => OnFiltersChanged());
-        
-        _filterState.WhenAnyValue(x => x.SelectedGroupsWithoutVote)
-            .Subscribe(_ => OnFiltersChanged());
-
-        // Subscribe to sort criteria changes
-        _filterState.SortCriteria.WhenAnyValue(x => x.CurrentPreset)
+        // Subscribe to sort criteria changes separately since it has its own change tracking
+        _filterSubscription = _filterState.SortCriteria.WhenAnyValue(x => x.CurrentPreset)
             .Subscribe(_ => OnFiltersChanged());
     }
 
@@ -298,10 +250,14 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
     /// </summary>
     private void OnFiltersChanged()
     {
-        if (_isInitialized)
+        // Always fire the event - initialization state shouldn't block filter updates
+        // The UI should be able to respond to filter changes regardless of initialization timing
+        
+        // Ensure the event is fired on the UI thread to prevent race conditions
+        Dispatcher.UIThread.Post(() =>
         {
             FiltersChanged?.Invoke(this, _filterState.Criteria);
-        }
+        });
     }
 
     #endregion
@@ -310,6 +266,7 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
 
     public void Dispose()
     {
+        _filterState.FilterChanged -= OnFiltersChanged;
         _filterSubscription?.Dispose();
     }
 

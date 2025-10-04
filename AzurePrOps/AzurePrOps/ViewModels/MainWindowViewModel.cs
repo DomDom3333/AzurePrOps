@@ -74,12 +74,12 @@ public class MainWindowViewModel : ViewModelBase
     // Quick filter boolean properties
     public bool ShowMyPullRequestsOnly
     {
-        get => FilterState.Criteria.MyPullRequestsOnly;
+        get => FilterState.MyPullRequestsOnly;
         set
         {
-            if (FilterState.Criteria.MyPullRequestsOnly != value)
+            if (FilterState.MyPullRequestsOnly != value)
             {
-                FilterState.Criteria.MyPullRequestsOnly = value;
+                FilterState.MyPullRequestsOnly = value;  // Use FilterState property to trigger events
                 this.RaisePropertyChanged();
             }
         }
@@ -87,12 +87,12 @@ public class MainWindowViewModel : ViewModelBase
 
     public bool ShowNeedsMyReviewOnly
     {
-        get => FilterState.Criteria.NeedsMyReviewOnly;
+        get => FilterState.NeedsMyReviewOnly;
         set
         {
-            if (FilterState.Criteria.NeedsMyReviewOnly != value)
+            if (FilterState.NeedsMyReviewOnly != value)
             {
-                FilterState.Criteria.NeedsMyReviewOnly = value;
+                FilterState.NeedsMyReviewOnly = value;  // Use FilterState property to trigger events
                 this.RaisePropertyChanged();
             }
         }
@@ -100,12 +100,12 @@ public class MainWindowViewModel : ViewModelBase
 
     public bool ShowAssignedToMeOnly
     {
-        get => FilterState.Criteria.AssignedToMeOnly;
+        get => FilterState.AssignedToMeOnly;
         set
         {
-            if (FilterState.Criteria.AssignedToMeOnly != value)
+            if (FilterState.AssignedToMeOnly != value)
             {
-                FilterState.Criteria.AssignedToMeOnly = value;
+                FilterState.AssignedToMeOnly = value;  // Use FilterState property to trigger events
                 this.RaisePropertyChanged();
             }
         }
@@ -113,12 +113,12 @@ public class MainWindowViewModel : ViewModelBase
 
     public bool ExcludeMyPullRequests
     {
-        get => FilterState.Criteria.ExcludeMyPullRequests;
+        get => FilterState.ExcludeMyPullRequests;
         set
         {
-            if (FilterState.Criteria.ExcludeMyPullRequests != value)
+            if (FilterState.ExcludeMyPullRequests != value)
             {
-                FilterState.Criteria.ExcludeMyPullRequests = value;
+                FilterState.ExcludeMyPullRequests = value;  // Use FilterState property to trigger events
                 this.RaisePropertyChanged();
             }
         }
@@ -686,9 +686,8 @@ public class MainWindowViewModel : ViewModelBase
         _filterOrchestrator.FilterState.Criteria.CurrentUserId = _settings.ReviewerId ?? string.Empty;
         _filterOrchestrator.FilterState.Criteria.UserDisplayName = _settings.UserDisplayName ?? string.Empty;
 
-        // Set up property change handlers for real-time filtering
-        _filterOrchestrator.FilterState.Criteria.PropertyChanged += (_, _) => ApplyFiltersAndSorting();
-        _filterOrchestrator.FilterState.SortCriteria.PropertyChanged += (_, _) => ApplyFiltersAndSorting();
+        // Filter changes are handled by FilterOrchestrator.FiltersChanged event subscription above
+        // No need for direct property change handlers as they create redundant subscriptions
 
         // Add error handling mechanism
         _client.SetErrorHandler(message => _ = ShowErrorMessage(message));
