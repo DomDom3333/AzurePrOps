@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using AzurePrOps.AzureConnection.Models;
 using AzurePrOps.Models.FilteringAndSorting;
+using Microsoft.Extensions.Logging;
+using AzurePrOps.Logging;
 
 namespace AzurePrOps.Services;
 
@@ -11,6 +13,7 @@ namespace AzurePrOps.Services;
 /// </summary>
 public class PullRequestFilteringSortingService
 {
+    private static readonly ILogger _logger = AppLogger.CreateLogger<PullRequestFilteringSortingService>();
     /// <summary>
     /// Applies filters and sorting to a collection of pull requests
     /// </summary>
@@ -57,24 +60,81 @@ public class PullRequestFilteringSortingService
         var query = pullRequests.AsQueryable();
 
         // Personal filters
+        // Log current user context
+        if (string.IsNullOrWhiteSpace(currentUserId))
+        {
+            _logger.LogWarning("Filter apply: CurrentUserId is empty. Filters relying on user ID may not work as expected.");
+        }
+        else
+        {
+            _logger.LogInformation("Filter apply: CurrentUserId={CurrentUserId}", currentUserId);
+        }
+
+        // Log creators present in the current PR set
+        try
+        {
+            var totalPrs = pullRequests.Count();
+            var distinctCreators = pullRequests
+                .GroupBy(pr => new { pr.CreatorId, pr.Creator })
+                .Select(g => new { g.Key.CreatorId, g.Key.Creator, Count = g.Count() })
+                .OrderByDescending(x => x.Count)
+                .ToList();
+
+            _logger.LogInformation("PR Creators Summary: TotalPRs={Total}, DistinctCreators={DistinctCount}",
+                totalPrs, distinctCreators.Count);
+
+            foreach (var dc in distinctCreators.Take(20))
+            {
+                _logger.LogInformation("Creator: Id={CreatorId}, Name={Creator}, PRs={Count}",
+                    dc.CreatorId ?? "(null)", dc.Creator ?? "(null)", dc.Count);
+            }
+
+            // Log a compact PR to Creator mapping for troubleshooting (limited)
+            foreach (var pr in pullRequests.Take(50))
+            {
+                _logger.LogInformation("PR Author Mapping: PR#{PrId} CreatorId={CreatorId} Creator={Creator}",
+                    pr.Id, pr.CreatorId ?? "(null)", pr.Creator ?? "(null)");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to log PR creators summary.");
+        }
+
         if (criteria.MyPullRequestsOnly)
         {
+            var total = pullRequests.Count();
+            var creatorIdMatches = pullRequests.Count(pr => pr.CreatorId.Equals(currentUserId, StringComparison.OrdinalIgnoreCase));
+            _logger.LogInformation("MyPullRequestsOnly active. Matching by ID only. TotalPRs={Total}, CreatorIdMatches={Matches}", total, creatorIdMatches);
+
             query = query.Where(pr => pr.CreatorId.Equals(currentUserId, StringComparison.OrdinalIgnoreCase));
         }
 
         if (criteria.ExcludeMyPullRequests)
         {
+            var total = pullRequests.Count();
+            var creatorIdMatches = pullRequests.Count(pr => pr.CreatorId.Equals(currentUserId, StringComparison.OrdinalIgnoreCase));
+            _logger.LogInformation("ExcludeMyPullRequests active. Excluding by ID only. TotalPRs={Total}, CreatorIdMatches={Matches}", total, creatorIdMatches);
+
             query = query.Where(pr => !pr.CreatorId.Equals(currentUserId, StringComparison.OrdinalIgnoreCase));
         }
 
         if (criteria.AssignedToMeOnly)
         {
+            var total = pullRequests.Count();
+            var assignedMatches = pullRequests.Count(pr => pr.Reviewers.Any(r => r.Id.Equals(currentUserId, StringComparison.OrdinalIgnoreCase)));
+            _logger.LogInformation("AssignedToMeOnly active. ReviewerId comparison only. TotalPRs={Total}, AssignedMatches={Matches}", total, assignedMatches);
+
             query = query.Where(pr => pr.Reviewers.Any(r => 
                 r.Id.Equals(currentUserId, StringComparison.OrdinalIgnoreCase)));
         }
 
         if (criteria.NeedsMyReviewOnly)
         {
+            var total = pullRequests.Count();
+            var needReviewMatches = pullRequests.Count(pr => pr.Reviewers.Any(r => r.Id.Equals(currentUserId, StringComparison.OrdinalIgnoreCase) && (r.Vote.Equals("No vote", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(r.Vote))));
+            _logger.LogInformation("NeedsMyReviewOnly active. ReviewerId + NoVote comparison. TotalPRs={Total}, NeedReviewMatches={Matches}", total, needReviewMatches);
+
             query = query.Where(pr => pr.Reviewers.Any(r => 
                 r.Id.Equals(currentUserId, StringComparison.OrdinalIgnoreCase) && 
                 (r.Vote.Equals("No vote", StringComparison.OrdinalIgnoreCase) || 

@@ -1383,6 +1383,19 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         response.EnsureSuccessStatusCode();
     }
 
+    /// <summary>
+    /// Retrieves the current user information from Azure DevOps.
+    /// 
+    /// CRITICAL: This method is essential for the "My PR" filter functionality!
+    /// 
+    /// The user ID returned by this method MUST match the creator IDs in PR data
+    /// for filtering to work correctly. This requires a specific multi-step approach:
+    /// 1. Get display name from Profile API (most reliable)
+    /// 2. Use Identity API with display name search to get matching user ID
+    /// 3. Fallback to ConnectionData API if needed
+    /// 
+    /// DO NOT modify this logic without understanding the ID matching requirements!
+    /// </summary>
     public async Task<UserInfo> GetCurrentUserAsync(string organization, string personalAccessToken)
     {
         if (string.IsNullOrWhiteSpace(organization) || string.IsNullOrWhiteSpace(personalAccessToken))
@@ -1392,79 +1405,254 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
         }
 
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
-        
+
+        // IMPORTANT: The user ID we retrieve here must exactly match the creator IDs
+        // found in pull request data. Different Azure DevOps APIs can return different
+        // ID formats, so we use a carefully orchestrated approach to ensure compatibility.
+        string idFromConnection = string.Empty;
+        string displayName = string.Empty;
+        string uniqueName = string.Empty;
+        string email = string.Empty;
+
+        // STEP 1: Get display name from Profile API
+        // 
+        // CRITICAL: We get the display name first because it's the most reliable way to
+        // identify the current user. The Profile API is more stable than other endpoints
+        // and provides consistent display names that we can use for Identity API searches.
+        //
+        // NOTE: Some JSON fields may be numbers instead of strings, hence the use of
+        // GetJsonPropertyAsString() helper to safely parse different data types.
         try
         {
-            // Try the profile API first (most reliable for getting current user info)
             var profileRequestUri = "https://app.vssps.visualstudio.com/_apis/profile/profiles/me?api-version=6.0";
-            
+
             using var profileRequest = new HttpRequestMessage(HttpMethod.Get, profileRequestUri);
             profileRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
             using var profileResponse = await _httpClient.SendAsync(profileRequest);
-            
+            NotifyAuthIfNeeded(profileResponse);
+
             if (profileResponse.IsSuccessStatusCode)
             {
                 using var profileStream = await profileResponse.Content.ReadAsStreamAsync();
                 var profileJson = await JsonDocument.ParseAsync(profileStream);
 
-                var id = profileJson.RootElement.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? string.Empty : string.Empty;
-                var displayName = profileJson.RootElement.TryGetProperty("displayName", out var displayNameProp) ? displayNameProp.GetString() ?? string.Empty : string.Empty;
-                var email = profileJson.RootElement.TryGetProperty("emailAddress", out var emailProp) ? emailProp.GetString() ?? string.Empty : string.Empty;
-                var uniqueName = profileJson.RootElement.TryGetProperty("publicAlias", out var aliasProp) ? aliasProp.GetString() ?? string.Empty : email;
+                // Use safe string extraction to handle number/string variations in JSON
+                displayName = GetJsonPropertyAsString(profileJson.RootElement, "displayName");
+                email = GetJsonPropertyAsString(profileJson.RootElement, "emailAddress");
+                var publicAlias = GetJsonPropertyAsString(profileJson.RootElement, "publicAlias");
+                var coreRevision = GetJsonPropertyAsString(profileJson.RootElement, "coreRevision");
+                
+                if (!string.IsNullOrWhiteSpace(publicAlias)) uniqueName = publicAlias;
 
-                if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(displayName))
-                {
-                    _logger.LogDebug("Retrieved user profile: {DisplayName} ({Id})", displayName, id);
-                    return new UserInfo(id, displayName, email, uniqueName);
-                }
+                _logger.LogInformation("Retrieved user profile: DisplayName={DisplayName}, Email={Email}, PublicAlias={PublicAlias}", displayName, email, publicAlias);
+            }
+            else
+            {
+                _logger.LogWarning("Profile API request failed with status: {StatusCode}, Reason: {ReasonPhrase}", 
+                    profileResponse.StatusCode, profileResponse.ReasonPhrase);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to get user profile from profile API");
+            _logger.LogWarning(ex, "Failed to get user info from profile API");
         }
 
-        try
+        // STEP 2: Get user ID from Identity API using display name search
+        //
+        // *** ABSOLUTELY CRITICAL FOR "MY PR" FILTER FUNCTIONALITY ***
+        //
+        // This is the MOST IMPORTANT part of user ID retrieval! The Identity API returns
+        // user IDs that match exactly with the creator IDs found in pull request data.
+        // Other APIs (like ConnectionData) may return different ID formats that don't match.
+        //
+        // IMPORTANT IMPLEMENTATION DETAILS:
+        // - We search by display name to find the user's identity
+        // - We try exact display name matching first (most reliable)
+        // - If exact match fails, we use the first result (fallback for API inconsistencies)
+        // - The fallback is crucial: sometimes the Identity API returns correct IDs but 
+        //   with empty/different display names due to Azure AD sync issues
+        // 
+        // DO NOT REMOVE THE FALLBACK LOGIC! It's essential for the filter to work.
+        if (string.IsNullOrEmpty(idFromConnection) && !string.IsNullOrEmpty(displayName))
         {
-            // Fallback: Try the connection data API
-            var encodedOrg = Uri.EscapeDataString(organization);
-            var connectionRequestUri = $"https://dev.azure.com/{encodedOrg}/_apis/connectionData?api-version=6.0";
-            
-            using var connectionRequest = new HttpRequestMessage(HttpMethod.Get, connectionRequestUri);
-            connectionRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
-
-            using var connectionResponse = await _httpClient.SendAsync(connectionRequest);
-            NotifyAuthIfNeeded(connectionResponse);
-            
-            if (connectionResponse.IsSuccessStatusCode)
+            try
             {
-                using var connectionStream = await connectionResponse.Content.ReadAsStreamAsync();
-                var connectionJson = await JsonDocument.ParseAsync(connectionStream);
+                var encodedOrg = Uri.EscapeDataString(organization);
+                var encodedDisplayName = Uri.EscapeDataString(displayName);
+                var identityRequestUri = $"https://vssps.dev.azure.com/{encodedOrg}/_apis/identities?searchFilter=General&filterValue={encodedDisplayName}&api-version=6.0";
 
-                if (connectionJson.RootElement.TryGetProperty("authenticatedUser", out var userProp))
+                using var identityRequest = new HttpRequestMessage(HttpMethod.Get, identityRequestUri);
+                identityRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+                using var identityResponse = await _httpClient.SendAsync(identityRequest);
+                NotifyAuthIfNeeded(identityResponse);
+
+                if (identityResponse.IsSuccessStatusCode)
                 {
-                    var id = userProp.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? string.Empty : string.Empty;
-                    var displayName = userProp.TryGetProperty("displayName", out var displayNameProp) ? displayNameProp.GetString() ?? string.Empty : string.Empty;
-                    var uniqueName = userProp.TryGetProperty("uniqueName", out var uniqueNameProp) ? uniqueNameProp.GetString() ?? string.Empty : string.Empty;
-                    
-                    // Extract email from uniqueName if it contains an email format
-                    var email = uniqueName.Contains("@") ? uniqueName : string.Empty;
+                    using var identityStream = await identityResponse.Content.ReadAsStreamAsync();
+                    var identityJson = await JsonDocument.ParseAsync(identityStream);
 
-                    if (!string.IsNullOrEmpty(id) && !string.IsNullOrEmpty(displayName))
+                    if (identityJson.RootElement.TryGetProperty("value", out var identitiesArray) && identitiesArray.GetArrayLength() > 0)
                     {
-                        _logger.LogInformation("Successfully retrieved user info from connection data: {DisplayName} ({Id})", displayName, id);
-                        return new UserInfo(id, displayName, email, uniqueName);
+                        // PRIMARY: Look for exact display name match first
+                        foreach (var identity in identitiesArray.EnumerateArray())
+                        {
+                            var identityDisplayName = identity.TryGetProperty("displayName", out var identityDisplayNameProp) ? identityDisplayNameProp.GetString() ?? string.Empty : string.Empty;
+                            var identityId = identity.TryGetProperty("id", out var identityIdProp) ? identityIdProp.GetString() ?? string.Empty : string.Empty;
+
+                            if (identityDisplayName.Equals(displayName, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(identityId))
+                            {
+                                idFromConnection = identityId;
+                                _logger.LogInformation("Retrieved current user ID from Identity API with exact name match: {DisplayName} ({Id})", displayName, idFromConnection);
+                                break;
+                            }
+                        }
+
+                        // FALLBACK: Use first valid ID even if display name doesn't match exactly
+                        // 
+                        // CRITICAL: This fallback is essential! Sometimes Azure AD sync issues cause
+                        // the Identity API to return the correct user ID but with an empty or different
+                        // display name. Since we searched by display name, the first result is very
+                        // likely the correct user, so we use it even without exact name matching.
+                        // 
+                        // This fallback has been verified to fix "My PR" filter issues where the
+                        // correct user ID exists but display name matching fails.
+                        if (string.IsNullOrEmpty(idFromConnection))
+                        {
+                            var firstIdentity = identitiesArray[0];
+                            var firstIdentityId = firstIdentity.TryGetProperty("id", out var firstIdProp) ? firstIdProp.GetString() ?? string.Empty : string.Empty;
+                            var firstIdentityDisplayName = firstIdentity.TryGetProperty("displayName", out var firstDisplayNameProp) ? firstDisplayNameProp.GetString() ?? string.Empty : string.Empty;
+                            
+                            if (!string.IsNullOrEmpty(firstIdentityId))
+                            {
+                                idFromConnection = firstIdentityId;
+                                _logger.LogInformation("Retrieved current user ID from Identity API (first result - fallback): {DisplayName} -> {Id} (SearchedName: {SearchedDisplayName})", 
+                                    firstIdentityDisplayName, idFromConnection, displayName);
+                            }
+                            
+                            // Debug logging to help troubleshoot future issues
+                            _logger.LogWarning("Identity API returned {Count} results but no exact display name match for '{DisplayName}'", identitiesArray.GetArrayLength(), displayName);
+                            for (int i = 0; i < Math.Min(3, identitiesArray.GetArrayLength()); i++)
+                            {
+                                var identity = identitiesArray[i];
+                                var identityDisplayName = identity.TryGetProperty("displayName", out var identityDisplayNameProp) ? identityDisplayNameProp.GetString() ?? string.Empty : string.Empty;
+                                var identityId = identity.TryGetProperty("id", out var identityIdProp) ? identityIdProp.GetString() ?? string.Empty : string.Empty;
+                                _logger.LogWarning("Identity result {Index}: DisplayName='{IdentityDisplayName}', Id='{IdentityId}'", i, identityDisplayName, identityId);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Identity API returned no results for display name: '{DisplayName}'", displayName);
                     }
                 }
+                else
+                {
+                    _logger.LogWarning("Identity API request failed with status: {StatusCode}, Reason: {ReasonPhrase}", 
+                        identityResponse.StatusCode, identityResponse.ReasonPhrase);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get user ID from Identity API using display name");
             }
         }
-        catch (Exception ex)
+
+        // STEP 3: Fallback to ConnectionData API (last resort)
+        //
+        // WARNING: This API often returns IDs in different formats that may not match
+        // the creator IDs in pull request data. Use only as a last resort when the
+        // Identity API fails completely.
+        //
+        // The ConnectionData API is less reliable for "My PR" filtering because:
+        // - It may return different ID formats than PR creator IDs
+        // - It's more prone to authentication/permission issues
+        // - The Identity API approach (Step 2) is much more reliable
+        if (string.IsNullOrEmpty(idFromConnection))
         {
-            _logger.LogWarning(ex, "Failed to get user info from connection data API");
+            try
+            {
+                var encodedOrg = Uri.EscapeDataString(organization);
+                var connectionRequestUri = $"https://dev.azure.com/{encodedOrg}/_apis/connectionData?api-version=6.0";
+
+                using var connectionRequest = new HttpRequestMessage(HttpMethod.Get, connectionRequestUri);
+                connectionRequest.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
+
+                using var connectionResponse = await _httpClient.SendAsync(connectionRequest);
+                NotifyAuthIfNeeded(connectionResponse);
+
+                if (connectionResponse.IsSuccessStatusCode)
+                {
+                    using var connectionStream = await connectionResponse.Content.ReadAsStreamAsync();
+                    var connectionJson = await JsonDocument.ParseAsync(connectionStream);
+
+                    _logger.LogDebug("ConnectionData API response: {Response}", connectionJson.RootElement.ToString());
+
+                    if (connectionJson.RootElement.TryGetProperty("authenticatedUser", out var userProp))
+                    {
+                        idFromConnection = userProp.TryGetProperty("id", out var idProp) ? idProp.GetString() ?? string.Empty : string.Empty;
+                        
+                        // Only fill in missing information, don't overwrite what we got from Profile API
+                        if (string.IsNullOrEmpty(displayName))
+                            displayName = userProp.TryGetProperty("displayName", out var displayNameProp) ? displayNameProp.GetString() ?? string.Empty : string.Empty;
+                        
+                        if (string.IsNullOrEmpty(uniqueName))
+                            uniqueName = userProp.TryGetProperty("uniqueName", out var uniqueNameProp) ? uniqueNameProp.GetString() ?? string.Empty : string.Empty;
+
+                        // Extract email from uniqueName if it contains an email format
+                        if (string.IsNullOrEmpty(email) && uniqueName.Contains("@")) 
+                            email = uniqueName;
+
+                        if (!string.IsNullOrEmpty(idFromConnection))
+                        {
+                            _logger.LogInformation("Retrieved current user from connectionData (fallback): {DisplayName} ({Id})", displayName, idFromConnection);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("ConnectionData API returned empty user ID. User properties: DisplayName={DisplayName}, UniqueName={UniqueName}", displayName, uniqueName);
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogWarning("ConnectionData API response missing 'authenticatedUser' property");
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("ConnectionData API request failed with status: {StatusCode}, Reason: {ReasonPhrase}", 
+                        connectionResponse.StatusCode, connectionResponse.ReasonPhrase);
+                    
+                    var responseBody = await connectionResponse.Content.ReadAsStringAsync();
+                    _logger.LogDebug("ConnectionData API error response body: {ResponseBody}", responseBody);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get user info from connection data API");
+            }
         }
 
-        _logger.LogWarning("Could not retrieve current user information from Azure DevOps");
+
+
+        // FINAL VALIDATION: Ensure we have both user ID and display name
+        //
+        // IMPORTANT: Both ID and display name are required for proper functionality:
+        // - ID is essential for "My PR" filter matching against PR creator IDs
+        // - Display name is needed for UI display and logging
+        // 
+        // If we're missing either, return empty to trigger fallback mechanisms elsewhere
+        if (!string.IsNullOrEmpty(idFromConnection) && !string.IsNullOrEmpty(displayName))
+        {
+            _logger.LogInformation("Successfully retrieved user info: {DisplayName} ({Id})", displayName, idFromConnection);
+            return new UserInfo(idFromConnection, displayName, email, uniqueName);
+        }
+
+        // Log detailed failure information for debugging
+        _logger.LogWarning("Could not retrieve complete current user information from Azure DevOps after trying all methods. ConnectionData ID: '{IdFromConnection}', DisplayName: '{DisplayName}'", 
+            idFromConnection, displayName);
+        _logger.LogWarning("This may cause 'My PR' filter to not work correctly. Check Personal Access Token permissions and network connectivity.");
+        
         return UserInfo.Empty;
     }
 
@@ -1604,5 +1792,35 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
             _logger.LogWarning(ex, "Error getting last activity for PR {PullRequestId}", pullRequestId);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Helper method to safely extract string values from JSON properties that might be strings or numbers.
+    /// 
+    /// CRITICAL: DO NOT REMOVE OR MODIFY THIS METHOD!
+    /// 
+    /// Azure DevOps APIs sometimes return the same logical field as different JSON types:
+    /// - Profile API may return some fields as numbers instead of strings
+    /// - This causes JsonException: "The requested operation requires an element of type 'String', but the target element has type 'Number'"
+    /// - This method safely handles all JSON value types and converts them to strings
+    /// 
+    /// This is essential for the Profile API step in GetCurrentUserAsync to work correctly.
+    /// </summary>
+    /// <param name="element">The JSON element to search in</param>
+    /// <param name="propertyName">The property name to extract</param>
+    /// <returns>String representation of the property value, or empty string if not found</returns>
+    private static string GetJsonPropertyAsString(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var prop))
+            return string.Empty;
+
+        return prop.ValueKind switch
+        {
+            JsonValueKind.String => prop.GetString() ?? string.Empty,
+            JsonValueKind.Number => prop.GetRawText(), // Convert number to string
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => string.Empty
+        };
     }
 }
