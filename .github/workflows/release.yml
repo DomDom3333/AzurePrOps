@@ -1,0 +1,75 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    env:
+      DOTNET_VERSION: '9.0.x'
+      PROJECT_PATH: 'AzurePrOps/AzurePrOps/AzurePrOps.csproj'
+      VERSION: '0.1.${{ github.run_number }}'
+      RELEASE_TAG: 'v0.1.${{ github.run_number }}'
+      APP_NAME: 'AzurePrOps'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore AzurePrOps/AzurePrOps.sln
+
+      - name: Build
+        run: dotnet build AzurePrOps/AzurePrOps.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test AzurePrOps/AzurePrOps.sln --configuration Release --no-build
+
+      - name: Publish win-x64 single-file
+        run: >
+          dotnet publish ${{ env.PROJECT_PATH }}
+          --configuration Release
+          --runtime win-x64
+          --self-contained true
+          /p:PublishSingleFile=true
+          /p:PublishTrimmed=false
+          /p:Version=${{ env.VERSION }}
+          --output publish/win-x64
+
+      - name: Create zip artifact
+        shell: pwsh
+        run: |
+          $zipPath = "${{ env.APP_NAME }}-${{ env.VERSION }}-win-x64.zip"
+          Compress-Archive -Path "publish/win-x64/*" -DestinationPath $zipPath -Force
+          echo "ZIP_PATH=$zipPath" >> $env:GITHUB_ENV
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-${{ env.VERSION }}-win-x64
+          path: |
+            publish/win-x64/${{ env.APP_NAME }}.exe
+            ${{ env.ZIP_PATH }}
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: ${{ env.APP_NAME }} ${{ env.VERSION }}
+          generate_release_notes: true
+          files: |
+            publish/win-x64/${{ env.APP_NAME }}.exe
+            ${{ env.ZIP_PATH }}
