@@ -269,12 +269,12 @@ public class MainWindowViewModel : ViewModelBase
     // Groups without vote filter
     public bool EnableGroupsWithoutVoteFilter
     {
-        get => FilterState.Criteria.EnableGroupsWithoutVoteFilter;
+        get => FilterState.EnableGroupsWithoutVoteFilter;
         set
         {
-            if (FilterState.Criteria.EnableGroupsWithoutVoteFilter != value)
+            if (FilterState.EnableGroupsWithoutVoteFilter != value)
             {
-                FilterState.Criteria.EnableGroupsWithoutVoteFilter = value;
+                FilterState.EnableGroupsWithoutVoteFilter = value;
                 this.RaisePropertyChanged();
             }
         }
@@ -636,13 +636,13 @@ public class MainWindowViewModel : ViewModelBase
 
     private void UpdateSelectedGroupsWithoutVoteText()
     {
-        if (!FilterState.Criteria.SelectedGroupsWithoutVote.Any())
+        if (!FilterState.SelectedGroupsWithoutVote.Any())
         {
             SelectedGroupsWithoutVoteText = "No Groups Selected";
         }
         else
         {
-            SelectedGroupsWithoutVoteText = string.Join(", ", FilterState.Criteria.SelectedGroupsWithoutVote);
+            SelectedGroupsWithoutVoteText = string.Join(", ", FilterState.SelectedGroupsWithoutVote);
         }
     }
 
@@ -1068,8 +1068,8 @@ public class MainWindowViewModel : ViewModelBase
                     SelectedStatuses = new List<string>(FilterState.Criteria.SelectedStatuses),
                     CreatedAfter = FilterState.Criteria.CreatedAfter,
                     CreatedBefore = FilterState.Criteria.CreatedBefore,
-                    EnableGroupsWithoutVoteFilter = FilterState.Criteria.EnableGroupsWithoutVoteFilter,
-                    SelectedGroupsWithoutVote = new List<string>(FilterState.Criteria.SelectedGroupsWithoutVote)
+                    EnableGroupsWithoutVoteFilter = FilterState.EnableGroupsWithoutVoteFilter,
+                    SelectedGroupsWithoutVote = new List<string>(FilterState.SelectedGroupsWithoutVote)
                 },
                 SortCriteria = new SortCriteria
                 {
@@ -1178,7 +1178,7 @@ public class MainWindowViewModel : ViewModelBase
             
             // Clear selected groups
             _groupSettings = _groupSettings with { SelectedGroups = new List<string>() };
-            FilterState.Criteria.SelectedGroupsWithoutVote.Clear();
+            FilterState.SelectedGroupsWithoutVote = new List<string>();
 
             // Update UI
             UpdateSelectedGroupsText();
@@ -1255,7 +1255,7 @@ public class MainWindowViewModel : ViewModelBase
             var groupSelectionWindow = new Views.GroupSelectionWindow();
             var groupSelectionViewModel = new GroupSelectionViewModel(
                 _groupSettings.AvailableGroups.ToList(),
-                FilterState.Criteria.SelectedGroupsWithoutVote.ToList());
+                FilterState.SelectedGroupsWithoutVote.ToList());
             groupSelectionWindow.DataContext = groupSelectionViewModel;
 
             if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -1263,11 +1263,7 @@ public class MainWindowViewModel : ViewModelBase
                 var result = await groupSelectionWindow.ShowDialog<bool>(desktop.MainWindow);
                 if (result)
                 {
-                    FilterState.Criteria.SelectedGroupsWithoutVote.Clear();
-                    foreach (var group in groupSelectionViewModel.SelectedGroups)
-                    {
-                        FilterState.Criteria.SelectedGroupsWithoutVote.Add(group);
-                    }
+                    FilterState.SelectedGroupsWithoutVote = groupSelectionViewModel.SelectedGroups.ToList();
 
                     UpdateSelectedGroupsWithoutVoteText();
                     ApplyFiltersAndSorting();
@@ -1277,7 +1273,7 @@ public class MainWindowViewModel : ViewModelBase
 
         ClearGroupsWithoutVoteSelectionCommand = ReactiveCommand.Create(() =>
         {
-            FilterState.Criteria.SelectedGroupsWithoutVote.Clear();
+            FilterState.SelectedGroupsWithoutVote = new List<string>();
             UpdateSelectedGroupsWithoutVoteText();
             ApplyFiltersAndSorting();
         });

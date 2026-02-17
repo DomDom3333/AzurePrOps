@@ -43,7 +43,6 @@ public class FilterCriteria : INotifyPropertyChanged
 
     // Group filters
     public bool EnableGroupsWithoutVoteFilter { get; set; } = false;
-    public List<string> GroupsWithoutVote { get; set; } = new();
     public List<string> SelectedGroupsWithoutVote { get; set; } = new();
 
     // Numeric filters
@@ -240,7 +239,6 @@ public class FilterCriteria : INotifyPropertyChanged
 
         // Group filters
         EnableGroupsWithoutVoteFilter = false;
-        GroupsWithoutVote.Clear();
         SelectedGroupsWithoutVote.Clear();
 
         // Numeric filters
@@ -281,7 +279,6 @@ public class FilterCriteria : INotifyPropertyChanged
             UpdatedAfter = UpdatedAfter,
             UpdatedBefore = UpdatedBefore,
             EnableGroupsWithoutVoteFilter = EnableGroupsWithoutVoteFilter,
-            GroupsWithoutVote = new List<string>(GroupsWithoutVote),
             SelectedGroupsWithoutVote = new List<string>(SelectedGroupsWithoutVote),
             MinReviewerCount = MinReviewerCount,
             MaxReviewerCount = MaxReviewerCount,
