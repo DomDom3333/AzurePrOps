@@ -206,24 +206,27 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
     /// </summary>
     public void ImportFilterState(FilterCriteria criteria)
     {
-        // Apply the criteria properties to the filter state instead of setting the criteria directly
-        _filterState.MyPullRequestsOnly = criteria.MyPullRequestsOnly;
-        _filterState.AssignedToMeOnly = criteria.AssignedToMeOnly;
-        _filterState.NeedsMyReviewOnly = criteria.NeedsMyReviewOnly;
-        _filterState.ExcludeMyPullRequests = criteria.ExcludeMyPullRequests;
-        _filterState.GlobalSearchText = criteria.GlobalSearchText;
-        _filterState.TitleFilter = criteria.TitleFilter;
-        _filterState.CreatorFilter = criteria.CreatorFilter;
-        _filterState.ReviewerFilter = criteria.ReviewerFilter;
-        _filterState.SourceBranchFilter = criteria.SourceBranchFilter;
-        _filterState.TargetBranchFilter = criteria.TargetBranchFilter;
-        _filterState.SelectedStatuses = criteria.SelectedStatuses.ToList();
-        _filterState.SelectedReviewerVotes = criteria.SelectedReviewerVotes.ToList();
-        _filterState.IsDraft = criteria.IsDraft;
-        _filterState.CreatedAfter = criteria.CreatedAfter;
-        _filterState.CreatedBefore = criteria.CreatedBefore;
-        _filterState.EnableGroupsWithoutVoteFilter = criteria.EnableGroupsWithoutVoteFilter;
-        _filterState.SelectedGroupsWithoutVote = criteria.SelectedGroupsWithoutVote.ToList();
+        _filterState.ApplyAtomically(state =>
+        {
+            state.MyPullRequestsOnly = criteria.MyPullRequestsOnly;
+            state.AssignedToMeOnly = criteria.AssignedToMeOnly;
+            state.NeedsMyReviewOnly = criteria.NeedsMyReviewOnly;
+            state.ExcludeMyPullRequests = criteria.ExcludeMyPullRequests;
+            state.GlobalSearchText = criteria.GlobalSearchText;
+            state.TitleFilter = criteria.TitleFilter;
+            state.CreatorFilter = criteria.CreatorFilter;
+            state.ReviewerFilter = criteria.ReviewerFilter;
+            state.SourceBranchFilter = criteria.SourceBranchFilter;
+            state.TargetBranchFilter = criteria.TargetBranchFilter;
+            state.SelectedStatuses = criteria.SelectedStatuses.ToList();
+            state.SelectedReviewerVotes = criteria.SelectedReviewerVotes.ToList();
+            state.IsDraft = criteria.IsDraft;
+            state.CreatedAfter = criteria.CreatedAfter;
+            state.CreatedBefore = criteria.CreatedBefore;
+            state.EnableGroupsWithoutVoteFilter = criteria.EnableGroupsWithoutVoteFilter;
+            state.SelectedGroupsWithoutVote = criteria.SelectedGroupsWithoutVote.ToList();
+            state.SetFilterSource(criteria.CurrentFilterSource, criteria.CurrentFilterSourceName);
+        });
     }
 
     #endregion
