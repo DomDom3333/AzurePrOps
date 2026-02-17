@@ -81,7 +81,6 @@ public class SavedFilterView
             UpdatedAfter = original.UpdatedAfter,
             UpdatedBefore = original.UpdatedBefore,
             EnableGroupsWithoutVoteFilter = original.EnableGroupsWithoutVoteFilter,
-            GroupsWithoutVote = new List<string>(original.GroupsWithoutVote),
             SelectedGroupsWithoutVote = new List<string>(original.SelectedGroupsWithoutVote),
             MinReviewerCount = original.MinReviewerCount,
             MaxReviewerCount = original.MaxReviewerCount,

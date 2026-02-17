@@ -224,11 +224,11 @@ public class PullRequestFilteringSortingService
         }
 
         // Group filters
-        if (criteria.EnableGroupsWithoutVoteFilter && criteria.GroupsWithoutVote.Any())
+        if (criteria.EnableGroupsWithoutVoteFilter && criteria.SelectedGroupsWithoutVote.Any())
         {
             query = query.Where(pr => pr.Reviewers.Any(r => 
                 r.IsGroup && 
-                criteria.GroupsWithoutVote.Contains(r.DisplayName, StringComparer.OrdinalIgnoreCase) &&
+                criteria.SelectedGroupsWithoutVote.Contains(r.DisplayName, StringComparer.OrdinalIgnoreCase) &&
                 (r.Vote.Equals("No vote", StringComparison.OrdinalIgnoreCase) || 
                  string.IsNullOrWhiteSpace(r.Vote))));
         }

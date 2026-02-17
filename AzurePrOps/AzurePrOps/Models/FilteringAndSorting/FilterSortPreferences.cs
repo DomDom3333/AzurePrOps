@@ -55,7 +55,6 @@ public class FilterSortPreferences
                 UpdatedAfter = FilterCriteria.UpdatedAfter,
                 UpdatedBefore = FilterCriteria.UpdatedBefore,
                 EnableGroupsWithoutVoteFilter = FilterCriteria.EnableGroupsWithoutVoteFilter,
-                GroupsWithoutVote = new List<string>(FilterCriteria.GroupsWithoutVote),
                 SelectedGroupsWithoutVote = new List<string>(FilterCriteria.SelectedGroupsWithoutVote),
                 MinReviewerCount = FilterCriteria.MinReviewerCount,
                 MaxReviewerCount = FilterCriteria.MaxReviewerCount,
