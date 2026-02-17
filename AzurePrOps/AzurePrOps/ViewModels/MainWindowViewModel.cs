@@ -12,6 +12,7 @@ using System.Reactive;
 using System.Reactive.Linq;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Threading;
 using Avalonia.Threading;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -25,11 +26,16 @@ namespace AzurePrOps.ViewModels;
 
 public class MainWindowViewModel : ViewModelBase
 {
+    private static readonly TimeSpan TextFilterDebounce = TimeSpan.FromMilliseconds(300);
     private readonly AzureDevOpsClient _client = new();
     private readonly IPullRequestService _pullRequestService;
     private Models.ConnectionSettings _settings;
     private readonly AuthenticationService _authService;
     private IReadOnlyList<string> _userGroupMemberships = new List<string>();
+    private bool _skipNextOrchestratorApply;
+    private CancellationTokenSource? _refreshCts;
+    private IDisposable? _textFilterDebounceSubscription;
+    private int _refreshVersion;
 
     public ObservableCollection<PullRequestInfo> PullRequests { get; } = new();
     private readonly ObservableCollection<PullRequestInfo> _allPullRequests = new();
@@ -65,8 +71,10 @@ public class MainWindowViewModel : ViewModelBase
         {
             if (FilterState.Criteria.GlobalSearchText != value)
             {
+                _skipNextOrchestratorApply = true;
                 FilterState.Criteria.GlobalSearchText = value;
                 this.RaisePropertyChanged();
+                DebouncedApplyFiltersAndSorting();
             }
         }
     }
@@ -221,8 +229,10 @@ public class MainWindowViewModel : ViewModelBase
         {
             if (FilterState.Criteria.ReviewerFilter != value)
             {
+                _skipNextOrchestratorApply = true;
                 FilterState.Criteria.ReviewerFilter = value;
                 this.RaisePropertyChanged();
+                DebouncedApplyFiltersAndSorting();
             }
         }
     }
@@ -234,8 +244,10 @@ public class MainWindowViewModel : ViewModelBase
         {
             if (FilterState.Criteria.TitleFilter != value)
             {
+                _skipNextOrchestratorApply = true;
                 FilterState.Criteria.TitleFilter = value;
                 this.RaisePropertyChanged();
+                DebouncedApplyFiltersAndSorting();
             }
         }
     }
@@ -661,7 +673,16 @@ public class MainWindowViewModel : ViewModelBase
             userRole);
 
         // Subscribe to filter changes to automatically apply filtering
-        _filterOrchestrator.FiltersChanged += (_, criteria) => ApplyFiltersAndSorting();
+        _filterOrchestrator.FiltersChanged += (_, criteria) =>
+        {
+            if (_skipNextOrchestratorApply)
+            {
+                _skipNextOrchestratorApply = false;
+                return;
+            }
+
+            ApplyFiltersAndSorting();
+        };
 
         // Get the AuthenticationService from the service registry
         _authService = ServiceRegistry.Resolve<AuthenticationService>() ?? new AuthenticationService();
@@ -700,6 +721,12 @@ public class MainWindowViewModel : ViewModelBase
 
         RefreshCommand = ReactiveCommand.CreateFromTask(async () =>
         {
+            var refreshVersion = Interlocked.Increment(ref _refreshVersion);
+            var cts = new CancellationTokenSource();
+            var previousCts = Interlocked.Exchange(ref _refreshCts, cts);
+            previousCts?.Cancel();
+            previousCts?.Dispose();
+
             try
             {
                 // Validate PAT before making API calls
@@ -720,6 +747,11 @@ public class MainWindowViewModel : ViewModelBase
                     _settings.Project,
                     _settings.Repository,
                     personalAccessToken);
+
+                if (!IsCurrentRefresh(refreshVersion, cts.Token))
+                {
+                    return;
+                }
 
                 // Fetch user group memberships for filtering
                 // TODO: Re-enable when performance is improved - currently takes too long
@@ -742,7 +774,11 @@ public class MainWindowViewModel : ViewModelBase
                     _allPullRequests.Add(pr with { ReviewerVote = vote, ShowDraftBadge = showDraft });
                 }
 
-                UpdateFilterOptions();
+                if (!IsCurrentRefresh(refreshVersion, cts.Token))
+                {
+                    return;
+                }
+
                 UpdateAvailableOptions();
                 ApplyFiltersAndSorting();
 
@@ -754,6 +790,14 @@ public class MainWindowViewModel : ViewModelBase
                 // Handle the error appropriately
                 // Show the error message in a way that's compatible with the application UI
                 await ShowErrorMessage($"Failed to refresh pull requests: {ex.Message}");
+            }
+            finally
+            {
+                if (ReferenceEquals(_refreshCts, cts))
+                {
+                    _refreshCts = null;
+                }
+                cts.Dispose();
             }
         });
 
@@ -1434,17 +1478,24 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private void UpdateFilterOptions()
-    {
-        // Filter options are now managed by FilterOrchestrator
-        // This method can be simplified or removed entirely
-        FilterOrchestrator.UpdateAvailableOptions(_allPullRequests);
-    }
-
     private void UpdateAvailableOptions()
     {
         // Delegate to FilterOrchestrator
         FilterOrchestrator.UpdateAvailableOptions(_allPullRequests);
+    }
+
+    private bool IsCurrentRefresh(int refreshVersion, CancellationToken cancellationToken)
+    {
+        return !cancellationToken.IsCancellationRequested && refreshVersion == _refreshVersion;
+    }
+
+    private void DebouncedApplyFiltersAndSorting()
+    {
+        _textFilterDebounceSubscription?.Dispose();
+        _textFilterDebounceSubscription = Observable
+            .Timer(TextFilterDebounce)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(_ => ApplyFiltersAndSorting());
     }
 
     private void ApplyFiltersAndSorting()
@@ -1461,19 +1512,62 @@ public class MainWindowViewModel : ViewModelBase
         }
 
         // Use the FilterOrchestrator to apply filters and sorting
-        var result = _filterOrchestrator.ApplyFiltersAndSorting(filteredPRs);
+        var result = _filterOrchestrator.ApplyFiltersAndSorting(filteredPRs).ToList();
 
-        PullRequests.Clear();
-        foreach (var pr in result)
-        {
-            PullRequests.Add(pr);
-        }
+        SyncPullRequestCollection(result);
 
         // Update summary statistics and filter state properties
         this.RaisePropertyChanged(nameof(ActivePRCount));
         this.RaisePropertyChanged(nameof(MyReviewPendingCount));
         this.RaisePropertyChanged(nameof(HasActiveFilters));
         this.RaisePropertyChanged(nameof(ActiveFiltersSummary));
+    }
+
+    private void SyncPullRequestCollection(IReadOnlyList<PullRequestInfo> latest)
+    {
+        var existingIndexById = PullRequests
+            .Select((pr, index) => (pr.Id, index))
+            .ToDictionary(x => x.Id, x => x.index);
+
+        for (var targetIndex = 0; targetIndex < latest.Count; targetIndex++)
+        {
+            var targetItem = latest[targetIndex];
+
+            if (targetIndex < PullRequests.Count && PullRequests[targetIndex].Id == targetItem.Id)
+            {
+                if (!Equals(PullRequests[targetIndex], targetItem))
+                {
+                    PullRequests[targetIndex] = targetItem;
+                }
+
+                continue;
+            }
+
+            if (existingIndexById.TryGetValue(targetItem.Id, out var currentIndex) && currentIndex < PullRequests.Count)
+            {
+                PullRequests.Move(currentIndex, targetIndex);
+                if (!Equals(PullRequests[targetIndex], targetItem))
+                {
+                    PullRequests[targetIndex] = targetItem;
+                }
+
+                existingIndexById = PullRequests
+                    .Select((pr, index) => (pr.Id, index))
+                    .ToDictionary(x => x.Id, x => x.index);
+            }
+            else
+            {
+                PullRequests.Insert(targetIndex, targetItem);
+                existingIndexById = PullRequests
+                    .Select((pr, index) => (pr.Id, index))
+                    .ToDictionary(x => x.Id, x => x.index);
+            }
+        }
+
+        while (PullRequests.Count > latest.Count)
+        {
+            PullRequests.RemoveAt(PullRequests.Count - 1);
+        }
     }
 
     private void UpdateStatusFilter(string value)
