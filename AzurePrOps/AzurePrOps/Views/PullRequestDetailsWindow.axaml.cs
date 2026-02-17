@@ -17,11 +17,11 @@ namespace AzurePrOps.Views;
 
 public partial class PullRequestDetailsWindow : Window
 {
-    private readonly Dictionary<string, DiffViewer> _diffViewerMap = new();
+    private readonly Dictionary<string, DiffViewer> _diffViewerMap = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _expansionSemaphore = new(1);
     private CancellationTokenSource? _expansionCancellation;
-    private readonly HashSet<string> _expandingDiffs = new();
-    private readonly Dictionary<string, Expander> _expanderCache = new();
+    private readonly HashSet<string> _expandingDiffs = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Expander> _expanderCache = new(StringComparer.OrdinalIgnoreCase);
     
     public PullRequestDetailsWindow()
     {
@@ -119,7 +119,7 @@ public partial class PullRequestDetailsWindow : Window
         }
     }
 
-    private async Task SmartExpansionWorkerAsync(List<FileDiff> sortedDiffs, CancellationToken cancellationToken)
+    private async Task SmartExpansionWorkerAsync(List<FileDiffListItemViewModel> sortedDiffs, CancellationToken cancellationToken)
     {
         int processedCount = 0;
         const int batchSize = 5;
@@ -178,7 +178,7 @@ public partial class PullRequestDetailsWindow : Window
                 // Search for the expander in the visual tree
                 var expander = this.GetVisualDescendants()
                     .OfType<Expander>()
-                    .FirstOrDefault(exp => exp.DataContext is FileDiff diff && diff.FilePath == filePath);
+                    .FirstOrDefault(exp => exp.DataContext is FileDiffListItemViewModel diff && diff.FilePath == filePath);
                 
                 if (expander != null)
                 {
@@ -231,7 +231,7 @@ public partial class PullRequestDetailsWindow : Window
 
     private void Expander_Expanding(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        if (sender is Expander expander && expander.DataContext is FileDiff diff)
+        if (sender is Expander expander && expander.DataContext is FileDiffListItemViewModel diff)
         {
             // Cache this expander for future use
             _expanderCache[diff.FilePath] = expander;
@@ -241,7 +241,7 @@ public partial class PullRequestDetailsWindow : Window
         }
     }
 
-    private async Task CreateDiffViewerAsync(Expander expander, FileDiff diff)
+    private async Task CreateDiffViewerAsync(Expander expander, FileDiffListItemViewModel diff)
     {
         try
         {
@@ -265,6 +265,14 @@ public partial class PullRequestDetailsWindow : Window
 
             await Task.Delay(50);
 
+            if (DataContext is not PullRequestDetailsWindowViewModel vm)
+                return;
+
+            var loadToken = vm.BeginDiffContentLoad();
+            await vm.EnsureDiffContentLoadedAsync(diff.FilePath, loadToken);
+            if (loadToken.IsCancellationRequested)
+                return;
+
             // Create DiffViewer on UI thread
             var diffViewer = new DiffViewer
             {
@@ -274,10 +282,7 @@ public partial class PullRequestDetailsWindow : Window
             };
 
             // Set PullRequestId if available
-            if (DataContext is PullRequestDetailsWindowViewModel vm)
-            {
-                diffViewer.PullRequestId = vm.PullRequestId;
-            }
+            diffViewer.PullRequestId = vm.PullRequestId;
 
             // Add to UI and map immediately
             if (diffContainer != null)
@@ -286,28 +291,13 @@ public partial class PullRequestDetailsWindow : Window
                 diffContainer.Child = diffViewer;
                 diffContainer.MinHeight = 500;
             }
-
-            // Process diff data
-            await Task.Run(async () =>
-            {
-                await Task.Delay(100);
-                
-                var oldText = diff.OldText ?? string.Empty;
-                var newText = diff.NewText ?? string.Empty;
-                
-                Dispatcher.UIThread.Post(() =>
-                {
-                    try
-                    {
-                        diffViewer.OldText = oldText;
-                        diffViewer.NewText = newText;
-                    }
-                    catch (Exception)
-                    {
-                        // Log error if needed
-                    }
-                }, DispatcherPriority.Background);
-            });
+            // Apply loaded diff data
+            diffViewer.OldText = diff.OldText ?? string.Empty;
+            diffViewer.NewText = diff.NewText ?? string.Empty;
+        }
+        catch (OperationCanceledException)
+        {
+            // User switched files rapidly; ignore.
         }
         catch (Exception ex)
         {
@@ -332,7 +322,7 @@ public partial class PullRequestDetailsWindow : Window
 
     private void ViewInIDE_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
-        if (sender is Control btn && btn.DataContext is FileDiff diff)
+        if (sender is Control btn && btn.DataContext is FileDiffListItemViewModel diff)
         {
             if (_diffViewerMap.TryGetValue(diff.FilePath, out var viewer))
             {
@@ -362,7 +352,7 @@ public partial class PullRequestDetailsWindow : Window
     /// <summary>
     /// Estimate rendering complexity to prioritize simpler files first
     /// </summary>
-    private static int EstimateRenderComplexity(FileDiff diff)
+    private static int EstimateRenderComplexity(FileDiffListItemViewModel diff)
     {
         int complexity = 0;
         

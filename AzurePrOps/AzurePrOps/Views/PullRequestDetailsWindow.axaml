@@ -531,9 +531,14 @@
                                 FontSize="16"
                                 FontWeight="SemiBold"
                                 Text="📁 Changed Files" />
-                            <ItemsControl ItemsSource="{Binding FileDiffs}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="review:FileDiff">
+                            <ListBox ItemsSource="{Binding FileDiffs}">
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <VirtualizingStackPanel />
+                                    </ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FileDiffListItemViewModel">
                                         <Border
                                             Background="{StaticResource SurfaceBrush}"
                                             CornerRadius="4"
@@ -557,8 +562,8 @@
                                             </Grid>
                                         </Border>
                                     </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
                         </StackPanel>
                     </Border>
 
@@ -632,9 +637,14 @@
                         Grid.Row="1"
                         Padding="0"
                         VerticalScrollBarVisibility="Auto">
-                        <ItemsControl ItemsSource="{Binding FileDiffs}" Margin="0">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="review:FileDiff">
+                        <ListBox ItemsSource="{Binding FileDiffs}" Margin="0">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel />
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:FileDiffListItemViewModel">
                                     <Border
                                         Background="{StaticResource SurfaceBrush}"
                                         BorderBrush="{StaticResource BorderBrush}"
@@ -703,8 +713,8 @@
                                         </Expander>
                                     </Border>
                                 </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
                     </ScrollViewer>
 
                 </Grid>
