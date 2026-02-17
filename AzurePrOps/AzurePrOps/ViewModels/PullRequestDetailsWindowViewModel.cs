@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using AzurePrOps.Logging;
 using AzurePrOps.Views;
@@ -73,8 +74,12 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _newCommentText, value);
     }
 
-    public ObservableCollection<ReviewModels.FileDiff> FileDiffs { get; } = new();
+    public ObservableCollection<FileDiffListItemViewModel> FileDiffs { get; } = new();
     
+    private readonly Dictionary<string, FileDiffListItemViewModel> _fileDiffLookup = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _diffLoadSemaphore = new(1, 1);
+    private CancellationTokenSource? _diffLoadCancellation;
+
     // Total metrics properties for overview section
     private int _filesChanged;
     public int FilesChanged
@@ -277,16 +282,7 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
         {
             try
             {
-                var diffs = await _pullRequestService.GetPullRequestDiffAsync(
-                    _settings.Organization,
-                    _settings.Project,
-                    _settings.Repository,
-                    PullRequest.Id,
-                    _settings.PersonalAccessToken,
-                    null,
-                    null);
-
-                await LoadDiffsAsync(diffs);
+                await LoadPullRequestDiffMetadataAsync();
             }
             catch (Exception ex)
             {
@@ -569,175 +565,184 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
         ReviewTimeMin = Math.Max(2.0, Math.Min(240.0, ReviewTimeMin)); // 2 min to 4 hours max
     }
 
-    public async Task LoadDiffsAsync(IEnumerable<ReviewModels.FileDiff> diffs)
+    private async Task LoadDiffMetadataAsync(IEnumerable<ReviewModels.FileDiff> diffs)
     {
-        // Offload heavy diff processing to a background thread to avoid blocking the UI thread
         var diffList = diffs.ToList();
-        var totalCount = diffList.Count;
-        
+
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            LoadingStatus = "Processing file diffs...";
-            LoadingProgress = 10.0;
-        });
+            LoadingStatus = "Loading changed files...";
+            LoadingProgress = 45.0;
 
-        var processed = await Task.Run(() =>
-        {
-            var localProcessed = new List<ReviewModels.FileDiff>();
-            _logger.LogDebug("Processing {Count} diffs", totalCount);
-            
-            for (int i = 0; i < diffList.Count; i++)
+            FileDiffs.Clear();
+            _fileDiffLookup.Clear();
+
+            foreach (var diff in diffList)
             {
-                var d = diffList[i];
-                var fileDiff = d;
-                _logger.LogDebug("Processing diff for {Path}", fileDiff.FilePath);
-                _logger.LogDebug("  Original OldText length: {Length}", fileDiff.OldText?.Length ?? 0);
-                _logger.LogDebug("  Original NewText length: {Length}", fileDiff.NewText?.Length ?? 0);
-                _logger.LogDebug("  Original Diff length: {Length}", fileDiff.Diff?.Length ?? 0);
+                var item = new FileDiffListItemViewModel(diff.FilePath, diff.Diff ?? string.Empty);
+                FileDiffs.Add(item);
+                _fileDiffLookup[item.FilePath] = item;
+            }
+        });
+    }
 
-                if (string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText) && !string.IsNullOrEmpty(fileDiff.Diff))
+    public async Task EnsureDiffContentLoadedAsync(string filePath, CancellationToken cancellationToken)
+    {
+        if (!_fileDiffLookup.TryGetValue(filePath, out var listItem) || listItem.IsContentLoaded)
+        {
+            return;
+        }
+
+        await _diffLoadSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            if (listItem.IsContentLoaded)
+            {
+                return;
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                LoadingStatus = $"Loading diff: {System.IO.Path.GetFileName(filePath)}";
+            });
+
+            var processed = await Task.Run(() => BuildDiffContent(listItem), cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                listItem.OldText = processed.OldText;
+                listItem.NewText = processed.NewText;
+                listItem.IsContentLoaded = true;
+            });
+        }
+        finally
+        {
+            _diffLoadSemaphore.Release();
+        }
+    }
+
+    public CancellationToken BeginDiffContentLoad()
+    {
+        var oldCts = Interlocked.Exchange(ref _diffLoadCancellation, new CancellationTokenSource());
+        if (oldCts != null)
+        {
+            try { oldCts.Cancel(); } catch { }
+            oldCts.Dispose();
+        }
+
+        return _diffLoadCancellation.Token;
+    }
+
+    private ReviewModels.FileDiff BuildDiffContent(FileDiffListItemViewModel listItem)
+    {
+        var fileDiff = new ReviewModels.FileDiff(listItem.FilePath, listItem.Diff, listItem.OldText, listItem.NewText);
+
+        if (string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText) && !string.IsNullOrEmpty(fileDiff.Diff))
+        {
+            var (oldContent, newContent) = ParseDiffToContent(fileDiff.Diff);
+
+            bool isNewFile = oldContent.Contains("[FILE ADDED]");
+            bool isDeletedFile = newContent.Contains("[FILE DELETED]");
+
+            if (string.IsNullOrWhiteSpace(oldContent) && string.IsNullOrWhiteSpace(newContent))
+            {
+                if (fileDiff.Diff.Contains("new file mode") || fileDiff.Diff.Contains("/dev/null") && fileDiff.Diff.Contains("+++ b/"))
                 {
-                    _logger.LogDebug("  Creating placeholder content for {Path}", fileDiff.FilePath);
-                    var (oldContent, newContent) = ParseDiffToContent(fileDiff.Diff);
-
-                    bool isNewFile = oldContent.Contains("[FILE ADDED]");
-                    bool isDeletedFile = newContent.Contains("[FILE DELETED]");
-
-                    _logger.LogDebug("  Parsed diff content: isNewFile={IsNew}, isDeletedFile={IsDeleted}", isNewFile, isDeletedFile);
-                    _logger.LogDebug("  oldContent length: {OldLength}, newContent length: {NewLength}", oldContent.Length, newContent.Length);
-
-                    if (string.IsNullOrWhiteSpace(oldContent) && string.IsNullOrWhiteSpace(newContent))
+                    oldContent = "[FILE ADDED]\n";
+                    var addedLines = new List<string>();
+                    foreach (var line in fileDiff.Diff.Split('\n'))
                     {
-                        if (fileDiff.Diff.Contains("new file mode") || fileDiff.Diff.Contains("/dev/null") && fileDiff.Diff.Contains("+++ b/"))
+                        if (line.StartsWith("+") && !line.StartsWith("+++ "))
                         {
-                            oldContent = "[FILE ADDED]\n";
-                            var addedLines = new List<string>();
-                            foreach (var line in fileDiff.Diff.Split('\n'))
-                            {
-                                if (line.StartsWith("+") && !line.StartsWith("+++ "))
-                                {
-                                    addedLines.Add(line.Substring(1));
-                                }
-                            }
-                            newContent = string.Join("\n", addedLines);
-                            if (string.IsNullOrWhiteSpace(newContent))
-                            {
-                                newContent = "[Added file content not available]\n";
-                            }
-                        }
-                        else if (fileDiff.Diff.Contains("deleted file mode") || fileDiff.Diff.Contains("--- a/") && fileDiff.Diff.Contains("+++ /dev/null"))
-                        {
-                            var removedLines = new List<string>();
-                            foreach (var line in fileDiff.Diff.Split('\n'))
-                            {
-                                if (line.StartsWith("-") && !line.StartsWith("--- "))
-                                {
-                                    removedLines.Add(line.Substring(1));
-                                }
-                            }
-                            oldContent = string.Join("\n", removedLines);
-                            if (string.IsNullOrWhiteSpace(oldContent))
-                            {
-                                oldContent = "[Deleted file content not available]\n";
-                            }
-                            newContent = "[FILE DELETED]\n";
-                        }
-                        else
-                        {
-                            oldContent = "[No original content could be extracted]\n";
-                            newContent = "[No modified content could be extracted]\n";
-
-                            if (!string.IsNullOrEmpty(fileDiff.Diff))
-                            {
-                                newContent = fileDiff.Diff;
-                            }
+                            addedLines.Add(line.Substring(1));
                         }
                     }
-
-                    string oldText = !string.IsNullOrEmpty(oldContent) ? oldContent : isNewFile ? "[FILE ADDED]\n" : "[Original content not available]";
-                    string newText = !string.IsNullOrEmpty(newContent) ? newContent : isDeletedFile ? "[FILE DELETED]\n" : "[Modified content not available]";
-
-                    if ((string.IsNullOrWhiteSpace(oldText) || oldText.StartsWith("[")) &&
-                        (string.IsNullOrWhiteSpace(newText) || newText.StartsWith("[")) &&
-                        !string.IsNullOrEmpty(fileDiff.Diff))
+                    newContent = string.Join("\n", addedLines);
+                    if (string.IsNullOrWhiteSpace(newContent))
                     {
-                        string diffHeader = "Showing raw diff content:\n\n";
-                        oldText = "[Original content]\n" + diffHeader + fileDiff.Diff;
-                        newText = "[Modified content]\n" + diffHeader + fileDiff.Diff;
+                        newContent = "[Added file content not available]\n";
                     }
-
-                    if (!oldText.Contains('\n')) oldText += "\n \n ";
-                    if (!newText.Contains('\n')) newText += "\n \n ";
-
-                    fileDiff = new ReviewModels.FileDiff(
-                        fileDiff.FilePath,
-                        fileDiff.Diff,
-                        oldText,
-                        newText
-                    );
                 }
-                else if (string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText))
+                else if (fileDiff.Diff.Contains("deleted file mode") || fileDiff.Diff.Contains("--- a/") && fileDiff.Diff.Contains("+++ /dev/null"))
                 {
-                    _logger.LogWarning("  WARNING: No content available for {Path}", fileDiff.FilePath);
-                    fileDiff = new ReviewModels.FileDiff(
-                        fileDiff.FilePath,
-                        "No diff content available.",
-                        "[No original content available]\n \n ",
-                        "[No new content available]\n \n "
-                    );
-                }
-                else if (string.IsNullOrEmpty(fileDiff.OldText) && !string.IsNullOrEmpty(fileDiff.NewText))
-                {
-                    _logger.LogDebug("  New file detected: {Path}", fileDiff.FilePath);
-                    fileDiff = new ReviewModels.FileDiff(
-                        fileDiff.FilePath,
-                        fileDiff.Diff ?? string.Empty,
-                        "[FILE ADDED]\n",
-                        fileDiff.NewText
-                    );
-                }
-                else if (!string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText))
-                {
-                    _logger.LogDebug("  Deleted file detected: {Path}", fileDiff.FilePath);
-                    fileDiff = new ReviewModels.FileDiff(
-                        fileDiff.FilePath,
-                        fileDiff.Diff ?? string.Empty,
-                        fileDiff.OldText,
-                        "[FILE DELETED]\n"
-                    );
-                }
-
-                _logger.LogDebug("  Final OldText length: {Length}", fileDiff.OldText?.Length ?? 0);
-                _logger.LogDebug("  Final NewText length: {Length}", fileDiff.NewText?.Length ?? 0);
-                localProcessed.Add(fileDiff);
-
-                // Update progress every few items
-                if (totalCount > 0 && (i % Math.Max(1, totalCount / 10) == 0 || i == totalCount - 1))
-                {
-                    var progressPercent = 10.0 + (i + 1) * 80.0 / totalCount; // 10% to 90%
-                    var status = $"Processing diff {i + 1}/{totalCount}...";
-                    
-                    Dispatcher.UIThread.Post(() =>
+                    var removedLines = new List<string>();
+                    foreach (var line in fileDiff.Diff.Split('\n'))
                     {
-                        LoadingProgress = progressPercent;
-                        LoadingStatus = status;
-                    });
+                        if (line.StartsWith("-") && !line.StartsWith("--- "))
+                        {
+                            removedLines.Add(line.Substring(1));
+                        }
+                    }
+                    oldContent = string.Join("\n", removedLines);
+                    if (string.IsNullOrWhiteSpace(oldContent))
+                    {
+                        oldContent = "[Deleted file content not available]\n";
+                    }
+                    newContent = "[FILE DELETED]\n";
+                }
+                else
+                {
+                    oldContent = "[No original content could be extracted]\n";
+                    newContent = "[No modified content could be extracted]\n";
+
+                    if (!string.IsNullOrEmpty(fileDiff.Diff))
+                    {
+                        newContent = fileDiff.Diff;
+                    }
                 }
             }
-            return localProcessed;
-        }).ConfigureAwait(false);
 
-        await Dispatcher.UIThread.InvokeAsync(() =>
+            string oldText = !string.IsNullOrEmpty(oldContent) ? oldContent : isNewFile ? "[FILE ADDED]\n" : "[Original content not available]";
+            string newText = !string.IsNullOrEmpty(newContent) ? newContent : isDeletedFile ? "[FILE DELETED]\n" : "[Modified content not available]";
+
+            if ((string.IsNullOrWhiteSpace(oldText) || oldText.StartsWith("[")) &&
+                (string.IsNullOrWhiteSpace(newText) || newText.StartsWith("[")) &&
+                !string.IsNullOrEmpty(fileDiff.Diff))
+            {
+                string diffHeader = "Showing raw diff content:\n\n";
+                oldText = "[Original content]\n" + diffHeader + fileDiff.Diff;
+                newText = "[Modified content]\n" + diffHeader + fileDiff.Diff;
+            }
+
+            if (!oldText.Contains('\n')) oldText += "\n \n ";
+            if (!newText.Contains('\n')) newText += "\n \n ";
+
+            fileDiff = new ReviewModels.FileDiff(
+                fileDiff.FilePath,
+                fileDiff.Diff,
+                oldText,
+                newText
+            );
+        }
+        else if (string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText))
         {
-            FileDiffs.Clear();
-            foreach (var fd in processed)
-                FileDiffs.Add(fd);
-            
-            // Mark loading as complete
-            IsLoading = false;
-            LoadingStatus = "Loading complete";
-            LoadingProgress = 100.0;
-        });
+            fileDiff = new ReviewModels.FileDiff(
+                fileDiff.FilePath,
+                "No diff content available.",
+                "[No original content available]\n \n ",
+                "[No new content available]\n \n ");
+        }
+        else if (string.IsNullOrEmpty(fileDiff.OldText) && !string.IsNullOrEmpty(fileDiff.NewText))
+        {
+            fileDiff = new ReviewModels.FileDiff(
+                fileDiff.FilePath,
+                fileDiff.Diff ?? string.Empty,
+                "[FILE ADDED]\n",
+                fileDiff.NewText
+            );
+        }
+        else if (!string.IsNullOrEmpty(fileDiff.OldText) && string.IsNullOrEmpty(fileDiff.NewText))
+        {
+            fileDiff = new ReviewModels.FileDiff(
+                fileDiff.FilePath,
+                fileDiff.Diff ?? string.Empty,
+                fileDiff.OldText,
+                "[FILE DELETED]\n"
+            );
+        }
+
+        return fileDiff;
     }
 
     private async Task LoadThreadsAsync()
@@ -900,23 +905,22 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
             LoadingProgress = 5.0;
 
             // Start both loading tasks
-            var diffsTask = diffs != null ? LoadDiffsAsync(diffs) : LoadPullRequestDiffsAsync();
+            var diffsTask = diffs != null ? LoadDiffMetadataAsync(diffs) : LoadPullRequestDiffMetadataAsync();
             var threadsTask = LoadThreadsAsync();
 
             // Wait for threads to complete first (usually faster)
             await threadsTask;
             
-            LoadingStatus = "Loading file differences...";
-            LoadingProgress = 50.0;
+            LoadingStatus = "Loading file list...";
+            LoadingProgress = 65.0;
 
-            // Wait for diffs to complete
+            // Wait for file metadata to complete
             await diffsTask;
 
-            // Final completion
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 IsLoading = false;
-                LoadingStatus = "Load complete";
+                LoadingStatus = "File list ready";
                 LoadingProgress = 100.0;
             });
         }
@@ -932,7 +936,7 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
         }
     }
 
-    private async Task LoadPullRequestDiffsAsync()
+    private async Task LoadPullRequestDiffMetadataAsync()
     {
         try
         {
@@ -948,7 +952,7 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
                 null,
                 null);
 
-            await LoadDiffsAsync(diffs);
+            await LoadDiffMetadataAsync(diffs);
         }
         catch (Exception ex)
         {
