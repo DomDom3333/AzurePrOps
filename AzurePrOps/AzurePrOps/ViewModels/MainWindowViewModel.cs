@@ -18,8 +18,10 @@ using Avalonia.Controls.ApplicationLifetimes;
 using System.Diagnostics;
 using AzurePrOps.Views;
 using System.Linq;
+using System.Threading;
 using AzurePrOps.Infrastructure;
 using AzurePrOps.ViewModels.Filters;
+using System.Reactive.Subjects;
 
 namespace AzurePrOps.ViewModels;
 
@@ -36,6 +38,10 @@ public class MainWindowViewModel : ViewModelBase
 
     // Modular filter system
     private readonly FilterOrchestrator _filterOrchestrator;
+    private readonly Subject<Unit> _textFilterChanges = new();
+    private FilterCriteria _lastAppliedCriteria = new();
+    private CancellationTokenSource? _refreshCancellationTokenSource;
+    private int _refreshRequestVersion;
     
     // Legacy collections for backward compatibility (during transition)
     public ObservableCollection<FilterView> FilterViews { get; } = new();
@@ -656,7 +662,11 @@ public class MainWindowViewModel : ViewModelBase
             userRole);
 
         // Subscribe to filter changes to automatically apply filtering
-        _filterOrchestrator.FiltersChanged += (_, criteria) => ApplyFiltersAndSorting();
+        _filterOrchestrator.FiltersChanged += (_, criteria) => OnFiltersChanged(criteria);
+
+        _textFilterChanges
+            .Throttle(TimeSpan.FromMilliseconds(250), RxApp.MainThreadScheduler)
+            .Subscribe(_ => ApplyFiltersAndSorting());
 
         // Get the AuthenticationService from the service registry
         _authService = ServiceRegistry.Resolve<AuthenticationService>() ?? new AuthenticationService();
@@ -710,11 +720,27 @@ public class MainWindowViewModel : ViewModelBase
                     return;
                 }
 
+                var refreshVersion = Interlocked.Increment(ref _refreshRequestVersion);
+                var previousCancellation = Interlocked.Exchange(ref _refreshCancellationTokenSource, new CancellationTokenSource());
+                previousCancellation?.Cancel();
+                previousCancellation?.Dispose();
+
+                var refreshCancellation = _refreshCancellationTokenSource;
+                if (refreshCancellation == null)
+                {
+                    return;
+                }
+
                 var prs = await _client.GetPullRequestsAsync(
                     _settings.Organization,
                     _settings.Project,
                     _settings.Repository,
                     personalAccessToken);
+
+                if (refreshCancellation.IsCancellationRequested || refreshVersion != _refreshRequestVersion)
+                {
+                    return;
+                }
 
                 // Fetch user group memberships for filtering
                 // TODO: Re-enable when performance is improved - currently takes too long
@@ -725,21 +751,27 @@ public class MainWindowViewModel : ViewModelBase
                 // Temporarily disabled due to performance issues - return empty list
                 _userGroupMemberships = new List<string>();
 
-                _allPullRequests.Clear();
-
                 // Clear the selected pull request when refreshing
                 SelectedPullRequest = null;
 
-                foreach (var pr in prs.OrderByDescending(p => p.Created))
-                {
-                    var vote = pr.Reviewers.FirstOrDefault(r => r.Id == _settings.ReviewerId)?.Vote ?? "No vote";
-                    var showDraft = pr.IsDraft && FeatureFlagManager.LifecycleActionsEnabled;
-                    _allPullRequests.Add(pr with { ReviewerVote = vote, ShowDraftBadge = showDraft });
-                }
+                var transformedPullRequests = prs
+                    .OrderByDescending(p => p.Created)
+                    .Select(pr =>
+                    {
+                        var vote = pr.Reviewers.FirstOrDefault(r => r.Id == _settings.ReviewerId)?.Vote ?? "No vote";
+                        var showDraft = pr.IsDraft && FeatureFlagManager.LifecycleActionsEnabled;
+                        return pr with { ReviewerVote = vote, ShowDraftBadge = showDraft };
+                    })
+                    .ToList();
 
-                UpdateFilterOptions();
+                UpdatePullRequestCollection(_allPullRequests, transformedPullRequests);
                 UpdateAvailableOptions();
                 ApplyFiltersAndSorting();
+
+                if (refreshCancellation.IsCancellationRequested || refreshVersion != _refreshRequestVersion)
+                {
+                    return;
+                }
 
                 // Load and cache groups from pull requests
                 await LoadAndCacheGroupsAsync();
@@ -1404,17 +1436,108 @@ public class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private void UpdateFilterOptions()
-    {
-        // Filter options are now managed by FilterOrchestrator
-        // This method can be simplified or removed entirely
-        FilterOrchestrator.UpdateAvailableOptions(_allPullRequests);
-    }
-
     private void UpdateAvailableOptions()
     {
         // Delegate to FilterOrchestrator
         FilterOrchestrator.UpdateAvailableOptions(_allPullRequests);
+    }
+
+    private void OnFiltersChanged(FilterCriteria criteria)
+    {
+        if (HasOnlyTextDrivenFilterChanges(criteria, _lastAppliedCriteria))
+        {
+            _textFilterChanges.OnNext(Unit.Default);
+            return;
+        }
+
+        ApplyFiltersAndSorting();
+    }
+
+    private static bool HasOnlyTextDrivenFilterChanges(FilterCriteria current, FilterCriteria previous)
+    {
+        var hasTextChange = !string.Equals(current.GlobalSearchText, previous.GlobalSearchText, StringComparison.Ordinal)
+            || !string.Equals(current.TitleFilter, previous.TitleFilter, StringComparison.Ordinal)
+            || !string.Equals(current.ReviewerFilter, previous.ReviewerFilter, StringComparison.Ordinal);
+
+        if (!hasTextChange)
+        {
+            return false;
+        }
+
+        return string.Equals(current.CreatorFilter, previous.CreatorFilter, StringComparison.Ordinal)
+            && string.Equals(current.SourceBranchFilter, previous.SourceBranchFilter, StringComparison.Ordinal)
+            && string.Equals(current.TargetBranchFilter, previous.TargetBranchFilter, StringComparison.Ordinal)
+            && current.MyPullRequestsOnly == previous.MyPullRequestsOnly
+            && current.AssignedToMeOnly == previous.AssignedToMeOnly
+            && current.NeedsMyReviewOnly == previous.NeedsMyReviewOnly
+            && current.ExcludeMyPullRequests == previous.ExcludeMyPullRequests
+            && current.IsDraft == previous.IsDraft
+            && current.CreatedAfter == previous.CreatedAfter
+            && current.CreatedBefore == previous.CreatedBefore
+            && current.EnableGroupsWithoutVoteFilter == previous.EnableGroupsWithoutVoteFilter
+            && current.SelectedStatuses.SequenceEqual(previous.SelectedStatuses)
+            && current.SelectedReviewerVotes.SequenceEqual(previous.SelectedReviewerVotes)
+            && current.SelectedGroupsWithoutVote.SequenceEqual(previous.SelectedGroupsWithoutVote);
+    }
+
+    private static void UpdatePullRequestCollection(ObservableCollection<PullRequestInfo> target, IReadOnlyList<PullRequestInfo> source)
+    {
+        var sourceIds = new HashSet<int>(source.Select(pr => pr.Id));
+
+        for (var index = target.Count - 1; index >= 0; index--)
+        {
+            if (!sourceIds.Contains(target[index].Id))
+            {
+                target.RemoveAt(index);
+            }
+        }
+
+        for (var desiredIndex = 0; desiredIndex < source.Count; desiredIndex++)
+        {
+            var desiredPullRequest = source[desiredIndex];
+
+            if (desiredIndex < target.Count && target[desiredIndex].Id == desiredPullRequest.Id)
+            {
+                if (!Equals(target[desiredIndex], desiredPullRequest))
+                {
+                    target[desiredIndex] = desiredPullRequest;
+                }
+
+                continue;
+            }
+
+            var existingIndex = IndexOfPullRequest(target, desiredPullRequest.Id, desiredIndex + 1);
+            if (existingIndex >= 0)
+            {
+                target.Move(existingIndex, desiredIndex);
+                if (!Equals(target[desiredIndex], desiredPullRequest))
+                {
+                    target[desiredIndex] = desiredPullRequest;
+                }
+
+                continue;
+            }
+
+            target.Insert(desiredIndex, desiredPullRequest);
+        }
+
+        while (target.Count > source.Count)
+        {
+            target.RemoveAt(target.Count - 1);
+        }
+    }
+
+    private static int IndexOfPullRequest(ObservableCollection<PullRequestInfo> collection, int pullRequestId, int startIndex)
+    {
+        for (var index = Math.Max(0, startIndex); index < collection.Count; index++)
+        {
+            if (collection[index].Id == pullRequestId)
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     private void ApplyFiltersAndSorting()
@@ -1433,11 +1556,8 @@ public class MainWindowViewModel : ViewModelBase
         // Use the FilterOrchestrator to apply filters and sorting
         var result = _filterOrchestrator.ApplyFiltersAndSorting(filteredPRs);
 
-        PullRequests.Clear();
-        foreach (var pr in result)
-        {
-            PullRequests.Add(pr);
-        }
+        UpdatePullRequestCollection(PullRequests, result.ToList());
+        _lastAppliedCriteria = FilterState.Criteria.Clone();
 
         // Update summary statistics and filter state properties
         this.RaisePropertyChanged(nameof(ActivePRCount));
