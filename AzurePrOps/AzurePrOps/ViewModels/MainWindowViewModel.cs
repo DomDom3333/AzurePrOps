@@ -34,7 +34,8 @@ public class MainWindowViewModel : ViewModelBase
     private IReadOnlyList<string> _userGroupMemberships = new List<string>();
     private CancellationTokenSource? _refreshCts;
     private CancellationTokenSource? _textFilterDebounceCts;
-    private DateTimeOffset _lastTextFilterChangeUtc;
+    private int _textFilterMutationVersion;
+    private bool _isTextFilterDebouncing;
     private int _refreshVersion;
 
     public ObservableCollection<PullRequestInfo> PullRequests { get; } = new();
@@ -71,10 +72,10 @@ public class MainWindowViewModel : ViewModelBase
         {
             if (FilterState.Criteria.GlobalSearchText != value)
             {
-                _lastTextFilterChangeUtc = DateTimeOffset.UtcNow;
+                var mutationVersion = Interlocked.Increment(ref _textFilterMutationVersion);
                 FilterState.Criteria.GlobalSearchText = value;
                 this.RaisePropertyChanged();
-                _ = DebouncedApplyFiltersAndSortingAsync();
+                _ = DebouncedApplyFiltersAndSortingAsync(mutationVersion);
             }
         }
     }
@@ -229,10 +230,10 @@ public class MainWindowViewModel : ViewModelBase
         {
             if (FilterState.Criteria.ReviewerFilter != value)
             {
-                _lastTextFilterChangeUtc = DateTimeOffset.UtcNow;
+                var mutationVersion = Interlocked.Increment(ref _textFilterMutationVersion);
                 FilterState.Criteria.ReviewerFilter = value;
                 this.RaisePropertyChanged();
-                _ = DebouncedApplyFiltersAndSortingAsync();
+                _ = DebouncedApplyFiltersAndSortingAsync(mutationVersion);
             }
         }
     }
@@ -244,10 +245,10 @@ public class MainWindowViewModel : ViewModelBase
         {
             if (FilterState.Criteria.TitleFilter != value)
             {
-                _lastTextFilterChangeUtc = DateTimeOffset.UtcNow;
+                var mutationVersion = Interlocked.Increment(ref _textFilterMutationVersion);
                 FilterState.Criteria.TitleFilter = value;
                 this.RaisePropertyChanged();
-                _ = DebouncedApplyFiltersAndSortingAsync();
+                _ = DebouncedApplyFiltersAndSortingAsync(mutationVersion);
             }
         }
     }
@@ -675,7 +676,7 @@ public class MainWindowViewModel : ViewModelBase
         // Subscribe to filter changes to automatically apply filtering
         _filterOrchestrator.FiltersChanged += (_, criteria) =>
         {
-            if (DateTimeOffset.UtcNow - _lastTextFilterChangeUtc < TextFilterDebounce)
+            if (_isTextFilterDebouncing)
             {
                 return;
             }
@@ -1488,18 +1489,20 @@ public class MainWindowViewModel : ViewModelBase
         return !cancellationToken.IsCancellationRequested && refreshVersion == _refreshVersion;
     }
 
-    private async Task DebouncedApplyFiltersAndSortingAsync()
+    private async Task DebouncedApplyFiltersAndSortingAsync(int mutationVersion)
     {
         var cts = new CancellationTokenSource();
         var previousCts = Interlocked.Exchange(ref _textFilterDebounceCts, cts);
         previousCts?.Cancel();
         previousCts?.Dispose();
 
+        _isTextFilterDebouncing = true;
+
         try
         {
             await Task.Delay(TextFilterDebounce, cts.Token);
 
-            if (cts.IsCancellationRequested)
+            if (cts.IsCancellationRequested || mutationVersion != _textFilterMutationVersion)
             {
                 return;
             }
@@ -1515,6 +1518,7 @@ public class MainWindowViewModel : ViewModelBase
             if (ReferenceEquals(_textFilterDebounceCts, cts))
             {
                 _textFilterDebounceCts = null;
+                _isTextFilterDebouncing = false;
             }
 
             cts.Dispose();
