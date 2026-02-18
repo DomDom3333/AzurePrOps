@@ -41,6 +41,40 @@ public class MainWindowFilterCommandEventTests
     }
 
     [Fact]
+    public void QuickFilterRecent_TriggersFilterChangedEvent()
+    {
+        var vm = CreateViewModel();
+        var events = 0;
+        vm.FilterState.FilterChanged += () => events++;
+
+        vm.ApplyQuickFilterRecentCommand.Execute().Subscribe();
+
+        Assert.True(events >= 1);
+    }
+
+    [Fact]
+    public void SaveCurrentFiltersCommand_AddsSavedFilterView()
+    {
+        var vm = CreateViewModel();
+        vm.NewViewName = "My Saved Filters";
+
+        vm.SaveCurrentFiltersCommand.Execute().Subscribe();
+
+        Assert.Contains(vm.SavedFilterViews, view => view.Name == "My Saved Filters");
+    }
+
+    [Fact]
+    public void MainWindow_ContainsBindingsForRecentAndSaveCurrentCommands()
+    {
+        var projectRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../AzurePrOps"));
+        var viewPath = Path.Combine(projectRoot, "Views", "MainWindow.axaml");
+        var axaml = File.ReadAllText(viewPath);
+
+        Assert.Contains("Command=\"{Binding ApplyQuickFilterRecentCommand}\"", axaml);
+        Assert.Contains("Command=\"{Binding SaveCurrentFiltersCommand}\"", axaml);
+    }
+
+    [Fact]
     public void WorkflowPreset_TriggersSingleFilterChangedEvent()
     {
         var vm = CreateViewModel();
