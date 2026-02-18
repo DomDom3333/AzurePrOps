@@ -18,6 +18,8 @@ public class FilterState : ReactiveObject
     private SortCriteria _sortCriteria = new();
     private bool _enableGroupFiltering = false;
     private List<string> _selectedGroups = new();
+    private int _atomicUpdateDepth;
+    private bool _hasPendingFilterChange;
 
     /// <summary>
     /// The underlying filter criteria - this is what gets passed to the filtering service
@@ -38,6 +40,32 @@ public class FilterState : ReactiveObject
     }
 
     #region Personal Filters
+
+    public string CurrentUserId
+    {
+        get => _criteria.CurrentUserId;
+        set
+        {
+            if (_criteria.CurrentUserId != value)
+            {
+                _criteria.CurrentUserId = value ?? string.Empty;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
+
+    public string UserDisplayName
+    {
+        get => _criteria.UserDisplayName;
+        set
+        {
+            if (_criteria.UserDisplayName != value)
+            {
+                _criteria.UserDisplayName = value ?? string.Empty;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
     
     public bool MyPullRequestsOnly
     {
@@ -48,7 +76,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.MyPullRequestsOnly = value;
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -62,7 +90,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.AssignedToMeOnly = value;
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -76,7 +104,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.NeedsMyReviewOnly = value;
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -90,7 +118,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.ExcludeMyPullRequests = value;
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -108,7 +136,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.SelectedStatuses = value.ToList();
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -123,7 +151,7 @@ public class FilterState : ReactiveObject
                 _criteria.IsDraft = value;
                 this.RaisePropertyChanged();
                 this.RaisePropertyChanged(nameof(DraftFilter));
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -164,7 +192,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.GlobalSearchText = value ?? string.Empty;
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -178,7 +206,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.TitleFilter = value ?? string.Empty;
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -192,7 +220,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.CreatorFilter = value ?? string.Empty;
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -206,7 +234,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.ReviewerFilter = value ?? string.Empty;
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -220,7 +248,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.SourceBranchFilter = value ?? string.Empty;
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -234,7 +262,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.TargetBranchFilter = value ?? string.Empty;
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -252,7 +280,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.CreatedAfter = value;
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -266,7 +294,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.CreatedBefore = value;
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -281,7 +309,7 @@ public class FilterState : ReactiveObject
         set
         {
             this.RaiseAndSetIfChanged(ref _enableGroupFiltering, value);
-            OnFilterChanged();
+            NotifyFilterChanged();
         }
     }
 
@@ -294,7 +322,7 @@ public class FilterState : ReactiveObject
             {
                 _selectedGroups = value?.ToList() ?? new List<string>();
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -308,7 +336,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.EnableGroupsWithoutVoteFilter = value;
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -322,7 +350,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.SelectedGroupsWithoutVote = value?.ToList() ?? new List<string>();
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -340,7 +368,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.SelectedReviewerVotes = value?.ToList() ?? new List<string>();
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -396,7 +424,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.UpdatedAfter = value;
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -410,7 +438,7 @@ public class FilterState : ReactiveObject
             {
                 _criteria.UpdatedBefore = value;
                 this.RaisePropertyChanged();
-                OnFilterChanged();
+                NotifyFilterChanged();
             }
         }
     }
@@ -519,9 +547,36 @@ public class FilterState : ReactiveObject
     /// </summary>
     public void SetUserInfo(string userId, string userDisplayName)
     {
-        _criteria.CurrentUserId = userId;
-        _criteria.UserDisplayName = userDisplayName;
+        CurrentUserId = userId;
+        UserDisplayName = userDisplayName;
         this.RaisePropertyChanged(nameof(CurrentFilterSource));
+    }
+
+    public void SetFilterSource(string source, string sourceName = "")
+    {
+        _criteria.SetFilterSource(source, sourceName);
+        this.RaisePropertyChanged(nameof(CurrentFilterSource));
+        NotifyFilterChanged();
+    }
+
+    public void ApplyAtomically(Action<FilterState> applyChanges)
+    {
+        if (applyChanges == null) return;
+
+        _atomicUpdateDepth++;
+        try
+        {
+            applyChanges(this);
+        }
+        finally
+        {
+            _atomicUpdateDepth--;
+            if (_atomicUpdateDepth == 0 && _hasPendingFilterChange)
+            {
+                _hasPendingFilterChange = false;
+                OnFilterChanged();
+            }
+        }
     }
 
     /// <summary>
@@ -537,35 +592,39 @@ public class FilterState : ReactiveObject
     /// </summary>
     public void ClearAllFilters()
     {
-        MyPullRequestsOnly = false;
-        AssignedToMeOnly = false;
-        NeedsMyReviewOnly = false;
-        ExcludeMyPullRequests = false;
-        
-        GlobalSearchText = string.Empty;
-        TitleFilter = string.Empty;
-        CreatorFilter = string.Empty;
-        ReviewerFilter = string.Empty;
-        SourceBranchFilter = string.Empty;
-        TargetBranchFilter = string.Empty;
-        
-        // Clear dropdown selections - they will default to "All" through their property getters
-        SelectedStatuses = new List<string>();
-        SelectedReviewerVotes = new List<string>();
-        IsDraft = null; // This defaults to "All" through DraftFilter property
-        
-        CreatedAfter = null;
-        CreatedBefore = null;
-        UpdatedAfter = null;
-        UpdatedBefore = null;
-        
-        EnableGroupFiltering = false;
-        SelectedGroups = new List<string>();
-        EnableGroupsWithoutVoteFilter = false;
-        SelectedGroupsWithoutVote = new List<string>();
-        
-        _criteria.CurrentFilterSource = "Manual";
-        this.RaisePropertyChanged(nameof(CurrentFilterSource));
+        ApplyAtomically(state =>
+        {
+            state.MyPullRequestsOnly = false;
+            state.AssignedToMeOnly = false;
+            state.NeedsMyReviewOnly = false;
+            state.ExcludeMyPullRequests = false;
+
+            state.GlobalSearchText = string.Empty;
+            state.TitleFilter = string.Empty;
+            state.CreatorFilter = string.Empty;
+            state.ReviewerFilter = string.Empty;
+            state.SourceBranchFilter = string.Empty;
+            state.TargetBranchFilter = string.Empty;
+
+            // Clear dropdown selections - they will default to "All" through their property getters
+            state.SelectedStatuses = new List<string>();
+            state.SelectedReviewerVotes = new List<string>();
+            state.IsDraft = null; // This defaults to "All" through DraftFilter property
+
+            state.CreatedAfter = null;
+            state.CreatedBefore = null;
+            state.UpdatedAfter = null;
+            state.UpdatedBefore = null;
+
+            state.EnableGroupFiltering = false;
+            state.SelectedGroups = new List<string>();
+            state.EnableGroupsWithoutVoteFilter = false;
+            state.SelectedGroupsWithoutVote = new List<string>();
+
+            state._criteria.CurrentFilterSource = "Manual";
+            state.RaisePropertyChanged(nameof(CurrentFilterSource));
+        });
+
         this.RaisePropertyChanged(nameof(HasActiveFilters));
         this.RaisePropertyChanged(nameof(ActiveFiltersSummary));
         this.RaisePropertyChanged(nameof(FilterStatusText));
@@ -635,6 +694,17 @@ public class FilterState : ReactiveObject
     /// Event raised when any filter property changes
     /// </summary>
     public event Action? FilterChanged;
+
+    private void NotifyFilterChanged()
+    {
+        if (_atomicUpdateDepth > 0)
+        {
+            _hasPendingFilterChange = true;
+            return;
+        }
+
+        OnFilterChanged();
+    }
 
     #endregion
 }
