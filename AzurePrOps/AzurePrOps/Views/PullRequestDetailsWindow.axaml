@@ -618,6 +618,24 @@
                                 Orientation="Horizontal"
                                 Spacing="8">
                                 <Button
+                                    Name="ExpandAllButton"
+                                    Classes="SecondaryButton"
+                                    Click="ExpandAll_Click"
+                                    Content="📂 Expand all"
+                                    ToolTip.Tip="Expand all visible diffs with progress and cancellation" />
+                                <ProgressBar
+                                    Name="ExpandProgressBar"
+                                    Height="6"
+                                    IsVisible="False"
+                                    Maximum="1"
+                                    Width="120" />
+                                <TextBlock
+                                    Name="ExpandProgressText"
+                                    FontSize="11"
+                                    Foreground="{StaticResource MutedBrush}"
+                                    IsVisible="False"
+                                    VerticalAlignment="Center" />
+                                <Button
                                     Classes="SecondaryButton"
                                     Command="{Binding OpenDiffSettingsCommand}"
                                     Content="⚙️ Settings"
