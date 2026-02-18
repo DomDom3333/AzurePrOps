@@ -323,7 +323,7 @@ public partial class PullRequestDetailsWindow : Window
                 return;
 
             // First, show loading placeholder on UI thread
-            var diffContainer = expander.FindDescendantOfType<Border>();
+            var diffContainer = FindDiffContainer(expander);
             if (diffContainer != null)
             {
                 var loadingText = new TextBlock
@@ -341,7 +341,7 @@ public partial class PullRequestDetailsWindow : Window
             if (DataContext is not PullRequestDetailsWindowViewModel vm)
                 return;
 
-            var loadToken = vm.BeginDiffContentLoad();
+            var loadToken = _expansionCancellation?.Token ?? CancellationToken.None;
             await vm.EnsureDiffContentLoadedAsync(diff.FilePath, loadToken);
             if (loadToken.IsCancellationRequested)
                 return;
@@ -377,8 +377,8 @@ public partial class PullRequestDetailsWindow : Window
             // Log error if needed
             
             // Show error on UI thread
-            var diffContainer = expander.FindDescendantOfType<Border>();
-            if (diffContainer?.Child is not TextBlock)
+            var diffContainer = FindDiffContainer(expander);
+            if (diffContainer is { Child: not TextBlock })
             {
                 var errorText = new TextBlock
                 {
@@ -391,6 +391,14 @@ public partial class PullRequestDetailsWindow : Window
                 diffContainer.Child = errorText;
             }
         }
+    }
+
+    private static Border? FindDiffContainer(Expander expander)
+    {
+        return expander
+            .GetVisualDescendants()
+            .OfType<Border>()
+            .FirstOrDefault(border => string.Equals(border.Name, "DiffContainer", StringComparison.Ordinal));
     }
 
     private void ViewInIDE_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
