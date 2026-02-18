@@ -18,6 +18,7 @@ public class FilterPanelViewModel : ViewModelBase
     private readonly FilterState _filterState;
     private readonly FilterPresetManager _presetManager;
     private bool _isApplyingPreset = false;
+    private bool _isApplyingSavedView;
 
     public FilterPanelViewModel(FilterState filterState, FilterPresetManager presetManager)
     {
@@ -135,6 +136,35 @@ public class FilterPanelViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> ClearAllFiltersCommand { get; private set; } = null!;
     public ReactiveCommand<Unit, Unit> ResetFiltersCommand { get; private set; } = null!;
     public ReactiveCommand<string, Unit> ApplyPresetCommand { get; private set; } = null!;
+    public ReactiveCommand<Unit, Unit> SaveCurrentFiltersCommand { get; private set; } = null!;
+    public ReactiveCommand<SavedFilterView, Unit> ApplySavedViewCommand { get; private set; } = null!;
+
+    #endregion
+
+    #region Saved Views
+
+    public ObservableCollection<SavedFilterView> SavedFilterViews { get; } = new();
+
+    private SavedFilterView? _selectedSavedFilterView;
+    public SavedFilterView? SelectedSavedFilterView
+    {
+        get => _selectedSavedFilterView;
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _selectedSavedFilterView, value);
+            if (value != null && !_isApplyingSavedView)
+            {
+                ApplySavedView(value);
+            }
+        }
+    }
+
+    private string _newSavedViewName = string.Empty;
+    public string NewSavedViewName
+    {
+        get => _newSavedViewName;
+        set => this.RaiseAndSetIfChanged(ref _newSavedViewName, value);
+    }
 
     #endregion
 
@@ -178,6 +208,8 @@ public class FilterPanelViewModel : ViewModelBase
         ClearAllFiltersCommand = ReactiveCommand.Create(() => _filterState.ResetToDefaults());
         ResetFiltersCommand = ReactiveCommand.Create(() => _filterState.ResetToDefaults());
         ApplyPresetCommand = ReactiveCommand.Create<string>(preset => _presetManager.ApplyPreset(preset, _filterState, UserRole.General));
+        SaveCurrentFiltersCommand = ReactiveCommand.Create(SaveCurrentFilters);
+        ApplySavedViewCommand = ReactiveCommand.Create<SavedFilterView>(ApplySavedView);
     }
 
     private void InitializeCollections()
@@ -202,6 +234,7 @@ public class FilterPanelViewModel : ViewModelBase
         // Set default selections to ensure dropdowns are not blank
         // These will be overridden if there are saved preferences
         SetDefaultSelections();
+        LoadSavedViews();
     }
     
     private void SetDefaultSelections()
@@ -289,6 +322,128 @@ public class FilterPanelViewModel : ViewModelBase
             this.RaisePropertyChanged(nameof(CreatedBefore));
             this.RaisePropertyChanged(nameof(EnableGroupsWithoutVoteFilter));
         }
+    }
+
+    private void SaveCurrentFilters()
+    {
+        var preferences = LoadPreferences();
+        var defaultName = $"Filter View {DateTime.Now:yyyy-MM-dd HH-mm-ss}";
+        var viewName = string.IsNullOrWhiteSpace(NewSavedViewName) ? defaultName : NewSavedViewName.Trim();
+
+        var savedView = new SavedFilterView
+        {
+            Name = viewName,
+            FilterCriteria = _filterState.Criteria.Clone(),
+            SortCriteria = new SortCriteria
+            {
+                CurrentPreset = _filterState.SortCriteria.CurrentPreset
+            },
+            LastUsed = DateTime.Now
+        };
+
+        var existing = preferences.SavedViews.FirstOrDefault(v => string.Equals(v.Name, viewName, StringComparison.OrdinalIgnoreCase));
+        if (existing != null)
+        {
+            preferences.SavedViews.Remove(existing);
+            var existingInCollection = SavedFilterViews.FirstOrDefault(v => string.Equals(v.Name, viewName, StringComparison.OrdinalIgnoreCase));
+            if (existingInCollection != null)
+            {
+                SavedFilterViews.Remove(existingInCollection);
+            }
+        }
+
+        preferences.SavedViews.Add(savedView);
+        preferences.LastSelectedView = savedView.Name;
+        FilterSortPreferencesStorage.Save(preferences);
+
+        SavedFilterViews.Add(savedView);
+        _isApplyingSavedView = true;
+        SelectedSavedFilterView = savedView;
+        _isApplyingSavedView = false;
+        NewSavedViewName = string.Empty;
+    }
+
+    private void ApplySavedView(SavedFilterView savedView)
+    {
+        if (savedView?.FilterCriteria == null)
+        {
+            return;
+        }
+
+        _isApplyingSavedView = true;
+        try
+        {
+            _filterState.ApplyAtomically(state =>
+            {
+                state.ResetToDefaults();
+                var criteria = savedView.FilterCriteria;
+
+                state.TitleFilter = criteria.TitleFilter ?? string.Empty;
+                state.CreatorFilter = criteria.CreatorFilter ?? string.Empty;
+                state.SourceBranchFilter = criteria.SourceBranchFilter ?? string.Empty;
+                state.TargetBranchFilter = criteria.TargetBranchFilter ?? string.Empty;
+                state.ReviewerFilter = criteria.ReviewerFilter ?? string.Empty;
+                state.GlobalSearchText = criteria.GlobalSearchText ?? string.Empty;
+                state.MyPullRequestsOnly = criteria.MyPullRequestsOnly;
+                state.AssignedToMeOnly = criteria.AssignedToMeOnly;
+                state.NeedsMyReviewOnly = criteria.NeedsMyReviewOnly;
+                state.ExcludeMyPullRequests = criteria.ExcludeMyPullRequests;
+                state.IsDraft = criteria.IsDraft;
+                state.SelectedReviewerVotes = criteria.SelectedReviewerVotes.ToList();
+                state.SelectedStatuses = criteria.SelectedStatuses.ToList();
+                state.CreatedAfter = criteria.CreatedAfter;
+                state.CreatedBefore = criteria.CreatedBefore;
+                state.EnableGroupsWithoutVoteFilter = criteria.EnableGroupsWithoutVoteFilter;
+                state.SelectedGroupsWithoutVote = criteria.SelectedGroupsWithoutVote.ToList();
+                state.SetFilterSource("SavedView", savedView.Name);
+            });
+
+            _filterState.SortCriteria.CurrentPreset = savedView.SortCriteria?.CurrentPreset ?? "Most Recent";
+
+            savedView.LastUsed = DateTime.Now;
+            var preferences = LoadPreferences();
+            preferences.LastSelectedView = savedView.Name;
+            var viewToUpdate = preferences.SavedViews.FirstOrDefault(v => v.Name == savedView.Name);
+            if (viewToUpdate != null)
+            {
+                viewToUpdate.LastUsed = savedView.LastUsed;
+            }
+
+            FilterSortPreferencesStorage.Save(preferences);
+        }
+        finally
+        {
+            _isApplyingSavedView = false;
+        }
+    }
+
+    public void LoadSavedViews()
+    {
+        var preferences = LoadPreferences();
+        SavedFilterViews.Clear();
+        foreach (var view in preferences.SavedViews)
+        {
+            SavedFilterViews.Add(view);
+        }
+
+        if (!string.IsNullOrWhiteSpace(preferences.LastSelectedView))
+        {
+            var last = SavedFilterViews.FirstOrDefault(v => v.Name == preferences.LastSelectedView);
+            if (last != null)
+            {
+                _isApplyingSavedView = true;
+                SelectedSavedFilterView = last;
+                _isApplyingSavedView = false;
+                ApplySavedView(last);
+            }
+        }
+    }
+
+    private static FilterSortPreferences LoadPreferences()
+    {
+        return FilterSortPreferencesStorage.TryLoad(out var preferences) && preferences != null
+            ? preferences
+            : new FilterSortPreferences();
     }
 
     #endregion

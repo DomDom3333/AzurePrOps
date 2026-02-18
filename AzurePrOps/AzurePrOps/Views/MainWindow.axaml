@@ -431,9 +431,9 @@
 
                             <StackPanel Spacing="8">
                                 <ComboBox
-                                    ItemsSource="{Binding FilterViews}"
+                                    ItemsSource="{Binding SavedFilterViews}"
                                     PlaceholderText="No saved views..."
-                                    SelectedItem="{Binding SelectedFilterView}">
+                                    SelectedItem="{Binding SelectedSavedFilterView}">
                                     <ComboBox.ItemTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding Name}" />
@@ -455,13 +455,6 @@
                                         Grid.Column="1"
                                         Margin="0,0,4,0"
                                         ToolTip.Tip="Save all currently active filters as a reusable saved view" />
-                                    <Button
-                                        Classes="SecondaryButton"
-                                        Command="{Binding SaveViewCommand}"
-                                        Content="Save"
-                                        Grid.Column="2"
-                                        ToolTip.Tip="Save the basic view fields"
-                                        Width="50" />
                                 </Grid>
                             </StackPanel>
 
