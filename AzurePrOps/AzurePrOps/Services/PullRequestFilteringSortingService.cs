@@ -57,7 +57,8 @@ public class PullRequestFilteringSortingService
         IReadOnlyList<string> userGroupMemberships,
         string currentUserId)
     {
-        var query = pullRequests.AsQueryable();
+        var prs = pullRequests as IList<PullRequestInfo> ?? pullRequests.ToList();
+        var query = prs.AsQueryable();
 
         // Personal filters
         // Log current user context
@@ -70,74 +71,74 @@ public class PullRequestFilteringSortingService
             _logger.LogInformation("Filter apply: CurrentUserId={CurrentUserId}", currentUserId);
         }
 
-        // Log creators present in the current PR set
-        try
+        // Keep high-volume diagnostics in debug mode only.
+        if (_logger.IsEnabled(LogLevel.Debug))
         {
-            var totalPrs = pullRequests.Count();
-            var distinctCreators = pullRequests
-                .GroupBy(pr => new { pr.CreatorId, pr.Creator })
-                .Select(g => new { g.Key.CreatorId, g.Key.Creator, Count = g.Count() })
-                .OrderByDescending(x => x.Count)
-                .ToList();
-
-            _logger.LogInformation("PR Creators Summary: TotalPRs={Total}, DistinctCreators={DistinctCount}",
-                totalPrs, distinctCreators.Count);
-
-            foreach (var dc in distinctCreators.Take(20))
+            try
             {
-                _logger.LogInformation("Creator: Id={CreatorId}, Name={Creator}, PRs={Count}",
-                    dc.CreatorId ?? "(null)", dc.Creator ?? "(null)", dc.Count);
+                var distinctCreators = prs
+                    .GroupBy(pr => new { pr.CreatorId, pr.Creator })
+                    .Select(g => new { g.Key.CreatorId, g.Key.Creator, Count = g.Count() })
+                    .OrderByDescending(x => x.Count)
+                    .ToList();
+
+                _logger.LogDebug("PR Creators Summary: TotalPRs={Total}, DistinctCreators={DistinctCount}",
+                    prs.Count, distinctCreators.Count);
+
+                foreach (var dc in distinctCreators.Take(20))
+                {
+                    _logger.LogDebug("Creator: Id={CreatorId}, Name={Creator}, PRs={Count}",
+                        dc.CreatorId ?? "(null)", dc.Creator ?? "(null)", dc.Count);
+                }
+
+                // Log a compact PR to Creator mapping for troubleshooting (limited)
+                foreach (var pr in prs.Take(50))
+                {
+                    _logger.LogDebug("PR Author Mapping: PR#{PrId} CreatorId={CreatorId} Creator={Creator}",
+                        pr.Id, pr.CreatorId ?? "(null)", pr.Creator ?? "(null)");
+                }
             }
-
-            // Log a compact PR to Creator mapping for troubleshooting (limited)
-            foreach (var pr in pullRequests.Take(50))
+            catch (Exception ex)
             {
-                _logger.LogInformation("PR Author Mapping: PR#{PrId} CreatorId={CreatorId} Creator={Creator}",
-                    pr.Id, pr.CreatorId ?? "(null)", pr.Creator ?? "(null)");
+                _logger.LogWarning(ex, "Failed to log PR creators summary.");
             }
         }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to log PR creators summary.");
-        }
+
+        var totalCount = prs.Count;
 
         if (criteria.MyPullRequestsOnly)
         {
-            var total = pullRequests.Count();
-            var creatorIdMatches = pullRequests.Count(pr => pr.CreatorId.Equals(currentUserId, StringComparison.OrdinalIgnoreCase));
-            _logger.LogInformation("MyPullRequestsOnly active. Matching by ID only. TotalPRs={Total}, CreatorIdMatches={Matches}", total, creatorIdMatches);
+            var creatorIdMatches = prs.Count(pr => StringEqualsIgnoreCase(pr.CreatorId, currentUserId));
+            _logger.LogInformation("MyPullRequestsOnly active. Matching by ID only. TotalPRs={Total}, CreatorIdMatches={Matches}", totalCount, creatorIdMatches);
 
-            query = query.Where(pr => pr.CreatorId.Equals(currentUserId, StringComparison.OrdinalIgnoreCase));
+            query = query.Where(pr => StringEqualsIgnoreCase(pr.CreatorId, currentUserId));
         }
 
         if (criteria.ExcludeMyPullRequests)
         {
-            var total = pullRequests.Count();
-            var creatorIdMatches = pullRequests.Count(pr => pr.CreatorId.Equals(currentUserId, StringComparison.OrdinalIgnoreCase));
-            _logger.LogInformation("ExcludeMyPullRequests active. Excluding by ID only. TotalPRs={Total}, CreatorIdMatches={Matches}", total, creatorIdMatches);
+            var creatorIdMatches = prs.Count(pr => StringEqualsIgnoreCase(pr.CreatorId, currentUserId));
+            _logger.LogInformation("ExcludeMyPullRequests active. Excluding by ID only. TotalPRs={Total}, CreatorIdMatches={Matches}", totalCount, creatorIdMatches);
 
-            query = query.Where(pr => !pr.CreatorId.Equals(currentUserId, StringComparison.OrdinalIgnoreCase));
+            query = query.Where(pr => !StringEqualsIgnoreCase(pr.CreatorId, currentUserId));
         }
 
         if (criteria.AssignedToMeOnly)
         {
-            var total = pullRequests.Count();
-            var assignedMatches = pullRequests.Count(pr => pr.Reviewers.Any(r => r.Id.Equals(currentUserId, StringComparison.OrdinalIgnoreCase)));
-            _logger.LogInformation("AssignedToMeOnly active. ReviewerId comparison only. TotalPRs={Total}, AssignedMatches={Matches}", total, assignedMatches);
+            var assignedMatches = prs.Count(pr => pr.Reviewers.Any(r => StringEqualsIgnoreCase(r.Id, currentUserId)));
+            _logger.LogInformation("AssignedToMeOnly active. ReviewerId comparison only. TotalPRs={Total}, AssignedMatches={Matches}", totalCount, assignedMatches);
 
             query = query.Where(pr => pr.Reviewers.Any(r => 
-                r.Id.Equals(currentUserId, StringComparison.OrdinalIgnoreCase)));
+                StringEqualsIgnoreCase(r.Id, currentUserId)));
         }
 
         if (criteria.NeedsMyReviewOnly)
         {
-            var total = pullRequests.Count();
-            var needReviewMatches = pullRequests.Count(pr => pr.Reviewers.Any(r => r.Id.Equals(currentUserId, StringComparison.OrdinalIgnoreCase) && (r.Vote.Equals("No vote", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(r.Vote))));
-            _logger.LogInformation("NeedsMyReviewOnly active. ReviewerId + NoVote comparison. TotalPRs={Total}, NeedReviewMatches={Matches}", total, needReviewMatches);
+            var needReviewMatches = prs.Count(pr => pr.Reviewers.Any(r => StringEqualsIgnoreCase(r.Id, currentUserId) && (StringEqualsIgnoreCase(r.Vote, "No vote") || string.IsNullOrWhiteSpace(r.Vote))));
+            _logger.LogInformation("NeedsMyReviewOnly active. ReviewerId + NoVote comparison. TotalPRs={Total}, NeedReviewMatches={Matches}", totalCount, needReviewMatches);
 
             query = query.Where(pr => pr.Reviewers.Any(r => 
-                r.Id.Equals(currentUserId, StringComparison.OrdinalIgnoreCase) && 
-                (r.Vote.Equals("No vote", StringComparison.OrdinalIgnoreCase) || 
+                StringEqualsIgnoreCase(r.Id, currentUserId) && 
+                (StringEqualsIgnoreCase(r.Vote, "No vote") || 
                  string.IsNullOrWhiteSpace(r.Vote))));
         }
 
@@ -157,42 +158,42 @@ public class PullRequestFilteringSortingService
         {
             var searchText = criteria.GlobalSearchText.ToLowerInvariant();
             query = query.Where(pr => 
-                pr.Title.ToLowerInvariant().Contains(searchText) ||
-                pr.Creator.ToLowerInvariant().Contains(searchText) ||
-                pr.SourceBranch.ToLowerInvariant().Contains(searchText) ||
-                pr.TargetBranch.ToLowerInvariant().Contains(searchText) ||
+                ContainsInvariant(pr.Title, searchText) ||
+                ContainsInvariant(pr.Creator, searchText) ||
+                ContainsInvariant(pr.SourceBranch, searchText) ||
+                ContainsInvariant(pr.TargetBranch, searchText) ||
                 pr.Id.ToString().Contains(searchText));
         }
 
         if (!string.IsNullOrWhiteSpace(criteria.TitleFilter))
         {
             var titleText = criteria.TitleFilter.ToLowerInvariant();
-            query = query.Where(pr => pr.Title.ToLowerInvariant().Contains(titleText));
+            query = query.Where(pr => ContainsInvariant(pr.Title, titleText));
         }
 
         if (!string.IsNullOrWhiteSpace(criteria.CreatorFilter))
         {
             var creatorText = criteria.CreatorFilter.ToLowerInvariant();
-            query = query.Where(pr => pr.Creator.ToLowerInvariant().Contains(creatorText));
+            query = query.Where(pr => ContainsInvariant(pr.Creator, creatorText));
         }
 
         if (!string.IsNullOrWhiteSpace(criteria.ReviewerFilter))
         {
             var reviewerText = criteria.ReviewerFilter.ToLowerInvariant();
             query = query.Where(pr => pr.Reviewers.Any(r => 
-                r.DisplayName.ToLowerInvariant().Contains(reviewerText)));
+                ContainsInvariant(r.DisplayName, reviewerText)));
         }
 
         if (!string.IsNullOrWhiteSpace(criteria.SourceBranchFilter))
         {
             var sourceBranchText = criteria.SourceBranchFilter.ToLowerInvariant();
-            query = query.Where(pr => pr.SourceBranch.ToLowerInvariant().Contains(sourceBranchText));
+            query = query.Where(pr => ContainsInvariant(pr.SourceBranch, sourceBranchText));
         }
 
         if (!string.IsNullOrWhiteSpace(criteria.TargetBranchFilter))
         {
             var targetBranchText = criteria.TargetBranchFilter.ToLowerInvariant();
-            query = query.Where(pr => pr.TargetBranch.ToLowerInvariant().Contains(targetBranchText));
+            query = query.Where(pr => ContainsInvariant(pr.TargetBranch, targetBranchText));
         }
 
         // Reviewer vote filters
@@ -229,7 +230,7 @@ public class PullRequestFilteringSortingService
             query = query.Where(pr => pr.Reviewers.Any(r => 
                 r.IsGroup && 
                 criteria.SelectedGroupsWithoutVote.Contains(r.DisplayName, StringComparer.OrdinalIgnoreCase) &&
-                (r.Vote.Equals("No vote", StringComparison.OrdinalIgnoreCase) || 
+                (StringEqualsIgnoreCase(r.Vote, "No vote") || 
                  string.IsNullOrWhiteSpace(r.Vote))));
         }
 
@@ -246,6 +247,12 @@ public class PullRequestFilteringSortingService
 
         return query;
     }
+
+    private static bool StringEqualsIgnoreCase(string? value, string? other)
+        => string.Equals(value, other, StringComparison.OrdinalIgnoreCase);
+
+    private static bool ContainsInvariant(string? source, string textLower)
+        => !string.IsNullOrEmpty(source) && source.Contains(textLower, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Applies sorting criteria to the pull requests

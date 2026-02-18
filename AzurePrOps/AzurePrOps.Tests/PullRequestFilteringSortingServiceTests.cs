@@ -52,6 +52,51 @@ public class PullRequestFilteringSortingServiceTests
         Assert.Equal(2, result[0].Id);
     }
 
+
+    [Fact]
+    public void ApplyFiltersAndSorting_LargeSequenceWithMultipleFilters_EnumeratesSourceOnce()
+    {
+        var criteria = new FilterCriteria
+        {
+            MyPullRequestsOnly = true,
+            AssignedToMeOnly = true,
+            NeedsMyReviewOnly = true,
+            GlobalSearchText = "PR"
+        };
+
+        var sort = new SortCriteria();
+        const string currentUserId = "user-1";
+
+        var baseData = Enumerable.Range(1, 20000)
+            .Select(i => new PullRequestInfo(
+                i,
+                $"PR {i}",
+                i % 2 == 0 ? "Creator" : null!,
+                i % 2 == 0 ? currentUserId : $"other-{i}",
+                DateTime.UtcNow.AddMinutes(-i),
+                "active",
+                new[]
+                {
+                    new ReviewerInfo(currentUserId, "Current User", "No vote", false)
+                },
+                i % 3 == 0 ? "feature/x" : null!,
+                "main",
+                $"https://example.local/pr/{i}"))
+            .ToList();
+
+        var countingEnumerable = new CountingEnumerable<PullRequestInfo>(baseData);
+
+        var result = _service.ApplyFiltersAndSorting(
+                countingEnumerable,
+                criteria,
+                sort,
+                Array.Empty<string>(),
+                currentUserId)
+            .ToList();
+
+        Assert.NotEmpty(result);
+        Assert.Equal(1, countingEnumerable.EnumerationCount);
+    }
     private static PullRequestInfo CreatePullRequest(int id, params ReviewerInfo[] reviewers)
     {
         return new PullRequestInfo(
@@ -66,4 +111,25 @@ public class PullRequestFilteringSortingServiceTests
             "main",
             $"https://example.local/pr/{id}");
     }
+}
+
+
+internal sealed class CountingEnumerable<T> : IEnumerable<T>
+{
+    private readonly IEnumerable<T> _inner;
+
+    public CountingEnumerable(IEnumerable<T> inner)
+    {
+        _inner = inner;
+    }
+
+    public int EnumerationCount { get; private set; }
+
+    public IEnumerator<T> GetEnumerator()
+    {
+        EnumerationCount++;
+        return _inner.GetEnumerator();
+    }
+
+    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
 }
