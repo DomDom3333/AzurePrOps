@@ -480,17 +480,14 @@ public class SettingsWindowViewModel : ViewModelBase
         catch (UnauthorizedAccessException ex)
         {
             ErrorMessage = "Unable to connect to Azure DevOps: Invalid credentials. Please check your Personal Access Token.";
-            throw new InvalidOperationException(ErrorMessage, ex);
         }
         catch (HttpRequestException ex)
         {
             ErrorMessage = $"Unable to connect to Azure DevOps: {ex.Message}";
-            throw new InvalidOperationException(ErrorMessage, ex);
         }
         catch (Exception ex)
         {
             ErrorMessage = $"An unexpected error occurred: {ex.Message}";
-            throw new InvalidOperationException(ErrorMessage, ex);
         }
         finally
         {

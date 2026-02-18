@@ -559,7 +559,9 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
 
         var authToken = Convert.ToBase64String(System.Text.Encoding.ASCII.GetBytes($":{personalAccessToken}"));
 
-        var uri = $"{AzureDevOpsVsspsUrl}/_apis/accounts?memberId={userId}&api-version={ApiVersion}";
+        // Query all organizations accessible by the token (no memberId filter needed)
+        var uri = $"{AzureDevOpsVsspsUrl}/_apis/accounts?api-version={ApiVersion}";
+            
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", authToken);
 
@@ -587,6 +589,7 @@ public partial class AzureDevOpsClient : IAzureDevOpsClient
                 list.Add(new NamedItem(id, name));
             }
         }
+        
         return list;
     }
 
