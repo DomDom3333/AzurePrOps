@@ -31,7 +31,11 @@ public class MainWindowViewModel : ViewModelBase
     private readonly IPullRequestService _pullRequestService;
     private Models.ConnectionSettings _settings;
     private readonly AuthenticationService _authService;
-    private IReadOnlyList<string> _userGroupMemberships = new List<string>();
+    private static readonly TimeSpan GroupMembershipCacheTtl = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan GroupMembershipFetchTimeout = TimeSpan.FromSeconds(8);
+
+    private IReadOnlyList<string> _userGroupMemberships = Array.Empty<string>();
+    private DateTimeOffset _userGroupMembershipsLastUpdated = DateTimeOffset.MinValue;
 
     public ObservableCollection<PullRequestInfo> PullRequests { get; } = new();
     private readonly ObservableCollection<PullRequestInfo> _allPullRequests = new();
@@ -501,46 +505,26 @@ public class MainWindowViewModel : ViewModelBase
         });
     }
 
-    private async Task LoadAndCacheGroupsAsync()
+    private async Task LoadAndCacheGroupsAsync(CancellationToken cancellationToken = default)
     {
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             // Load cached group settings
             _groupSettings = await GroupSettingsStorage.LoadAsync();
 
-            // Validate PAT before making API calls
-            if (!await _authService.ValidateAndRedirectIfNeededAsync())
-            {
-                return; // User was redirected to login
-            }
+            cancellationToken.ThrowIfCancellationRequested();
 
-            var personalAccessToken = ConnectionSettingsStorage.GetPersonalAccessToken();
-            if (string.IsNullOrEmpty(personalAccessToken))
-            {
-                _authService.RedirectToLogin();
-                return;
-            }
-
-            // Get pull requests to extract groups from
-            var prs = await _client.GetPullRequestsAsync(
-                _settings.Organization,
-                _settings.Project,
-                _settings.Repository,
-                personalAccessToken);
-
-            // Extract available groups from pull requests
-            var allGroups = new HashSet<string>();
-            foreach (var pr in prs)
-            {
-                var groups = pr.Reviewers.Where(r => r.IsGroup).Select(r => r.DisplayName);
-                foreach (var group in groups)
-                {
-                    allGroups.Add(group);
-                }
-            }
+            // Extract available groups from already-loaded pull requests
+            var currentGroups = _allPullRequests
+                .SelectMany(pr => pr.Reviewers.Where(r => r.IsGroup).Select(r => r.DisplayName))
+                .Where(group => !string.IsNullOrWhiteSpace(group))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(group => group)
+                .ToList();
 
             // Update group settings if cache is expired or groups have changed
-            var currentGroups = allGroups.OrderBy(g => g).ToList();
             if (_groupSettings.IsExpired || !_groupSettings.AvailableGroups.SequenceEqual(currentGroups))
             {
                 _groupSettings = _groupSettings with
@@ -550,6 +534,8 @@ public class MainWindowViewModel : ViewModelBase
                 };
                 await GroupSettingsStorage.SaveAsync(_groupSettings);
             }
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             // Update UI collections
             AvailableGroups.Clear();
@@ -571,17 +557,59 @@ public class MainWindowViewModel : ViewModelBase
             FilterState.SelectedGroups = _groupSettings.SelectedGroups.ToList();
             UpdateSelectedGroupsText();
         }
-        catch (UnauthorizedAccessException ex)
+        catch (OperationCanceledException)
         {
-            _authService.HandlePatValidationError(ex, "LoadAndCacheGroupsAsync");
-        }
-        catch (System.Net.Http.HttpRequestException ex) when (ex.Message.Contains("401") || ex.Message.Contains("403"))
-        {
-            _authService.HandlePatValidationError(ex, "LoadAndCacheGroupsAsync");
+            // No-op: cancellation is expected when a newer refresh starts.
         }
         catch (Exception)
         {
             // Log error (removed excessive logging)
+        }
+    }
+
+    private async Task<IReadOnlyList<string>> GetUserGroupMembershipsAsync(
+        string personalAccessToken,
+        CancellationToken cancellationToken,
+        bool forceRefresh = false)
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (!forceRefresh
+            && _userGroupMemberships.Count > 0
+            && (now - _userGroupMembershipsLastUpdated) < GroupMembershipCacheTtl)
+        {
+            return _userGroupMemberships;
+        }
+
+        using var timeoutCts = new CancellationTokenSource(GroupMembershipFetchTimeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+        try
+        {
+            var memberships = await _client.GetUserGroupMembershipsAsync(
+                _settings.Organization,
+                personalAccessToken).WaitAsync(linkedCts.Token);
+
+            _userGroupMemberships = memberships;
+            _userGroupMembershipsLastUpdated = DateTimeOffset.UtcNow;
+            return _userGroupMemberships;
+        }
+        catch (OperationCanceledException)
+        {
+            if (_userGroupMemberships.Count > 0)
+            {
+                return _userGroupMemberships;
+            }
+
+            throw;
+        }
+        catch (Exception)
+        {
+            if (_userGroupMemberships.Count > 0)
+            {
+                return _userGroupMemberships;
+            }
+
+            return Array.Empty<string>();
         }
     }
 
@@ -690,25 +718,20 @@ public class MainWindowViewModel : ViewModelBase
                     return;
                 }
 
+                var cancellationToken = refreshCancellation.Token;
+
                 var prs = await _client.GetPullRequestsAsync(
                     _settings.Organization,
                     _settings.Project,
                     _settings.Repository,
                     personalAccessToken);
 
-                if (refreshCancellation.IsCancellationRequested || refreshVersion != _refreshRequestVersion)
+                if (cancellationToken.IsCancellationRequested || refreshVersion != _refreshRequestVersion)
                 {
                     return;
                 }
 
-                // Fetch user group memberships for filtering
-                // TODO: Re-enable when performance is improved - currently takes too long
-                // _userGroupMemberships = await _client.GetUserGroupMembershipsAsync(
-                //     _settings.Organization,
-                //     personalAccessToken);
-
-                // Temporarily disabled due to performance issues - return empty list
-                _userGroupMemberships = new List<string>();
+                _userGroupMemberships = await GetUserGroupMembershipsAsync(personalAccessToken, cancellationToken);
 
                 // Clear the selected pull request when refreshing
                 SelectedPullRequest = null;
@@ -727,13 +750,13 @@ public class MainWindowViewModel : ViewModelBase
                 UpdateAvailableOptions();
                 ApplyFiltersAndSorting();
 
-                if (refreshCancellation.IsCancellationRequested || refreshVersion != _refreshRequestVersion)
+                if (cancellationToken.IsCancellationRequested || refreshVersion != _refreshRequestVersion)
                 {
                     return;
                 }
 
                 // Load and cache groups from pull requests
-                await LoadAndCacheGroupsAsync();
+                await LoadAndCacheGroupsAsync(cancellationToken);
             }
             catch (Exception ex)
             {
@@ -1224,7 +1247,7 @@ public class MainWindowViewModel : ViewModelBase
     private void UpdateAvailableOptions()
     {
         // Delegate to FilterOrchestrator
-        FilterOrchestrator.UpdateAvailableOptions(_allPullRequests);
+        FilterOrchestrator.UpdateAvailableOptions(_allPullRequests, _userGroupMemberships);
     }
 
     private void OnFiltersChanged(FilterCriteria criteria)
@@ -1259,6 +1282,8 @@ public class MainWindowViewModel : ViewModelBase
             && current.IsDraft == previous.IsDraft
             && current.CreatedAfter == previous.CreatedAfter
             && current.CreatedBefore == previous.CreatedBefore
+            && current.EnableGroupFiltering == previous.EnableGroupFiltering
+            && current.SelectedGroups.SequenceEqual(previous.SelectedGroups)
             && current.EnableGroupsWithoutVoteFilter == previous.EnableGroupsWithoutVoteFilter
             && current.SelectedStatuses.SequenceEqual(previous.SelectedStatuses)
             && current.SelectedReviewerVotes.SequenceEqual(previous.SelectedReviewerVotes)
@@ -1327,19 +1352,8 @@ public class MainWindowViewModel : ViewModelBase
 
     private void ApplyFiltersAndSorting()
     {
-        var filteredPRs = _allPullRequests.AsEnumerable();
-
-        // Apply group filtering if enabled
-        if (FilterState.EnableGroupFiltering && FilterState.SelectedGroups.Any())
-        {
-            filteredPRs = filteredPRs.Where(pr =>
-                pr.Reviewers.Any(reviewer =>
-                    reviewer.IsGroup &&
-                    FilterState.SelectedGroups.Contains(reviewer.DisplayName)));
-        }
-
         // Use the FilterOrchestrator to apply filters and sorting
-        var result = _filterOrchestrator.ApplyFiltersAndSorting(filteredPRs);
+        var result = _filterOrchestrator.ApplyFiltersAndSorting(_allPullRequests, _userGroupMemberships);
 
         UpdatePullRequestCollection(PullRequests, result.ToList());
         _lastAppliedCriteria = FilterState.Criteria.Clone();
@@ -1528,6 +1542,7 @@ public class MainWindowViewModel : ViewModelBase
     private void ResetFiltersToDefaults()
     {
         FilterState.ClearAllFilters();
+        FilterState.SetFilterSource("Manual");
         FilterState.SortCriteria.Reset();
         SelectedDateRangePreset = "All Time";
         SetWorkflowPresetDisplayOnly("All Pull Requests");

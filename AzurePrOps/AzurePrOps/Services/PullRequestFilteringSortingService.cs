@@ -224,6 +224,13 @@ public class PullRequestFilteringSortingService
             query = query.Where(pr => pr.EffectiveLastActivity <= criteria.UpdatedBefore.Value);
         }
 
+        if (criteria.EnableGroupFiltering && criteria.SelectedGroups.Any())
+        {
+            query = query.Where(pr => pr.Reviewers.Any(r =>
+                r.IsGroup &&
+                criteria.SelectedGroups.Contains(r.DisplayName, StringComparer.OrdinalIgnoreCase)));
+        }
+
         // Group filters
         if (criteria.EnableGroupsWithoutVoteFilter && criteria.SelectedGroupsWithoutVote.Any())
         {

@@ -26,6 +26,7 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
     private bool _isInitialized;
     private UserRole _currentUserRole = UserRole.General;
     private IDisposable? _filterSubscription;
+    private IReadOnlyList<string> _userGroupMemberships = Array.Empty<string>();
 
     public FilterOrchestrator(
         PullRequestFilteringSortingService filterSortService,
@@ -83,8 +84,9 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
     /// <summary>
     /// Updates the available filter options based on current data
     /// </summary>
-    public void UpdateAvailableOptions(IEnumerable<PullRequestInfo> allPullRequests)
+    public void UpdateAvailableOptions(IEnumerable<PullRequestInfo> allPullRequests, IReadOnlyList<string>? userGroupMemberships = null)
     {
+        _userGroupMemberships = userGroupMemberships ?? _userGroupMemberships;
         var creators = allPullRequests.Select(pr => pr.Creator ?? "Unknown")
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct()
@@ -105,8 +107,16 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
             .Distinct()
             .OrderBy(branch => branch);
 
-        // TODO: Extract groups from pull request data or user memberships
-        var groups = Enumerable.Empty<string>();
+        var groupsFromReviewers = allPullRequests
+            .SelectMany(pr => pr.Reviewers?.Where(r => r.IsGroup).Select(r => r.DisplayName) ?? Enumerable.Empty<string>());
+
+        var groupsFromMemberships = _userGroupMemberships;
+
+        var groups = groupsFromReviewers
+            .Concat(groupsFromMemberships)
+            .Where(group => !string.IsNullOrWhiteSpace(group))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(group => group);
 
         _filterPanel.UpdateAvailableOptions(creators, reviewers, sourceBranches, targetBranches, groups);
     }
@@ -118,13 +128,15 @@ public class FilterOrchestrator : ReactiveObject, IDisposable
     /// <summary>
     /// Applies filters and sorting to a collection of pull requests
     /// </summary>
-    public IEnumerable<PullRequestInfo> ApplyFiltersAndSorting(IEnumerable<PullRequestInfo> pullRequests)
+    public IEnumerable<PullRequestInfo> ApplyFiltersAndSorting(IEnumerable<PullRequestInfo> pullRequests, IReadOnlyList<string>? userGroupMemberships = null)
     {
+        _userGroupMemberships = userGroupMemberships ?? _userGroupMemberships;
+
         return _filterSortService.ApplyFiltersAndSorting(
             pullRequests, 
             _filterState.Criteria, 
             _filterState.SortCriteria, 
-            new List<string>(), // userGroupMemberships - empty for now
+            _userGroupMemberships,
             _filterState.Criteria.CurrentUserId);
     }
 

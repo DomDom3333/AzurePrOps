@@ -16,8 +16,6 @@ public class FilterState : ReactiveObject
 {
     private FilterCriteria _criteria = new();
     private SortCriteria _sortCriteria = new();
-    private bool _enableGroupFiltering = false;
-    private List<string> _selectedGroups = new();
     private int _atomicUpdateDepth;
     private bool _hasPendingFilterChange;
 
@@ -305,22 +303,26 @@ public class FilterState : ReactiveObject
 
     public bool EnableGroupFiltering
     {
-        get => _enableGroupFiltering;
+        get => _criteria.EnableGroupFiltering;
         set
         {
-            this.RaiseAndSetIfChanged(ref _enableGroupFiltering, value);
-            NotifyFilterChanged();
+            if (_criteria.EnableGroupFiltering != value)
+            {
+                _criteria.EnableGroupFiltering = value;
+                this.RaisePropertyChanged();
+                NotifyFilterChanged();
+            }
         }
     }
 
     public List<string> SelectedGroups
     {
-        get => _selectedGroups;
+        get => _criteria.SelectedGroups;
         set
         {
-            if (!_selectedGroups.SequenceEqual(value))
+            if (!_criteria.SelectedGroups.SequenceEqual(value))
             {
-                _selectedGroups = value?.ToList() ?? new List<string>();
+                _criteria.SelectedGroups = value?.ToList() ?? new List<string>();
                 this.RaisePropertyChanged();
                 NotifyFilterChanged();
             }
@@ -633,6 +635,7 @@ public class FilterState : ReactiveObject
         this.RaisePropertyChanged(nameof(StatusFilter));
         this.RaisePropertyChanged(nameof(ReviewerVoteFilter));
         this.RaisePropertyChanged(nameof(DraftFilter));
+
     }
 
     /// <summary>
