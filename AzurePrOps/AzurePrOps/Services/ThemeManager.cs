@@ -90,7 +90,10 @@ public static class ThemeManager
         try
         {
             var darkThemeUri = new Uri("avares://AzurePrOps/Styles/DarkTheme.xaml");
-            var darkThemeStyle = new StyleInclude(darkThemeUri);
+            var darkThemeStyle = new StyleInclude(darkThemeUri)
+            {
+                Source = darkThemeUri
+            };
             
             // Add dark theme resources to application styles
             Application.Current?.Styles.Add(darkThemeStyle);
