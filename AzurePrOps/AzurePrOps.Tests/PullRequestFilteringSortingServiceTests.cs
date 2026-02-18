@@ -97,6 +97,113 @@ public class PullRequestFilteringSortingServiceTests
         Assert.NotEmpty(result);
         Assert.Equal(1, countingEnumerable.EnumerationCount);
     }
+
+    [Fact]
+    public void ApplyFiltersAndSorting_PersonalFilters_MatchAcrossMixedIdentityFormats()
+    {
+        var currentUserIdentity = " John.Doe@Contoso.com ";
+        var pullRequests = new[]
+        {
+            new PullRequestInfo(
+                1,
+                "PR 1",
+                "john.doe",
+                "  JOHN.DOE  ",
+                DateTime.UtcNow,
+                "active",
+                new[] { new ReviewerInfo("john.doe@contoso.com", "John Doe", "No vote", false) },
+                "feature/one",
+                "main",
+                "https://example.local/pr/1"),
+            new PullRequestInfo(
+                2,
+                "PR 2",
+                "someone else",
+                "other-user",
+                DateTime.UtcNow,
+                "active",
+                new[] { new ReviewerInfo("DOMAIN\\John.Doe", "John Doe", "No vote", false) },
+                "feature/two",
+                "main",
+                "https://example.local/pr/2"),
+            new PullRequestInfo(
+                3,
+                "PR 3",
+                "someone else",
+                "other-user-2",
+                DateTime.UtcNow,
+                "active",
+                new[] { new ReviewerInfo(" jane.smith@contoso.com ", "Jane Smith", "No vote", false) },
+                "feature/three",
+                "main",
+                "https://example.local/pr/3")
+        };
+
+        var sort = new SortCriteria();
+
+        var myPrOnly = _service.ApplyFiltersAndSorting(
+                pullRequests,
+                new FilterCriteria { MyPullRequestsOnly = true },
+                sort,
+                Array.Empty<string>(),
+                currentUserIdentity)
+            .Select(pr => pr.Id)
+            .ToList();
+
+        var assignedToMeOnly = _service.ApplyFiltersAndSorting(
+                pullRequests,
+                new FilterCriteria { AssignedToMeOnly = true },
+                sort,
+                Array.Empty<string>(),
+                currentUserIdentity)
+            .Select(pr => pr.Id)
+            .ToList();
+
+        var needsMyReviewOnly = _service.ApplyFiltersAndSorting(
+                pullRequests,
+                new FilterCriteria { NeedsMyReviewOnly = true },
+                sort,
+                Array.Empty<string>(),
+                currentUserIdentity)
+            .Select(pr => pr.Id)
+            .ToList();
+
+        var excludeMyPrs = _service.ApplyFiltersAndSorting(
+                pullRequests,
+                new FilterCriteria { ExcludeMyPullRequests = true },
+                sort,
+                Array.Empty<string>(),
+                currentUserIdentity)
+            .Select(pr => pr.Id)
+            .ToList();
+
+        Assert.Equal(new[] { 1 }, myPrOnly);
+        Assert.Equal(new[] { 1, 2 }, assignedToMeOnly.OrderBy(id => id));
+        Assert.Equal(new[] { 1, 2 }, needsMyReviewOnly.OrderBy(id => id));
+        Assert.Equal(new[] { 2, 3 }, excludeMyPrs.OrderBy(id => id));
+    }
+
+    [Fact]
+    public void ApplyFiltersAndSorting_NeedsMyReviewOnly_ExcludesWhenVoteAlreadyPresentEvenIfIdentityMatches()
+    {
+        var currentUserIdentity = "john.doe@contoso.com";
+        var pullRequests = new[]
+        {
+            CreatePullRequest(1, new ReviewerInfo("DOMAIN\\john.doe", "John Doe", "Approved", false)),
+            CreatePullRequest(2, new ReviewerInfo("john.doe", "John Doe", "No vote", false))
+        };
+
+        var result = _service.ApplyFiltersAndSorting(
+                pullRequests,
+                new FilterCriteria { NeedsMyReviewOnly = true },
+                new SortCriteria(),
+                Array.Empty<string>(),
+                currentUserIdentity)
+            .ToList();
+
+        Assert.Single(result);
+        Assert.Equal(2, result[0].Id);
+    }
     private static PullRequestInfo CreatePullRequest(int id, params ReviewerInfo[] reviewers)
     {
         return new PullRequestInfo(

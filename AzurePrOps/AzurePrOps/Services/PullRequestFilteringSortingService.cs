@@ -108,36 +108,36 @@ public class PullRequestFilteringSortingService
 
         if (criteria.MyPullRequestsOnly)
         {
-            var creatorIdMatches = prs.Count(pr => StringEqualsIgnoreCase(pr.CreatorId, currentUserId));
-            _logger.LogInformation("MyPullRequestsOnly active. Matching by ID only. TotalPRs={Total}, CreatorIdMatches={Matches}", totalCount, creatorIdMatches);
+            var creatorMatches = prs.Count(pr => IsCurrentUser(pr.CreatorId, pr.Creator, currentUserId));
+            _logger.LogInformation("MyPullRequestsOnly active. Matching by normalized identity. TotalPRs={Total}, CreatorMatches={Matches}", totalCount, creatorMatches);
 
-            query = query.Where(pr => StringEqualsIgnoreCase(pr.CreatorId, currentUserId));
+            query = query.Where(pr => IsCurrentUser(pr.CreatorId, pr.Creator, currentUserId));
         }
 
         if (criteria.ExcludeMyPullRequests)
         {
-            var creatorIdMatches = prs.Count(pr => StringEqualsIgnoreCase(pr.CreatorId, currentUserId));
-            _logger.LogInformation("ExcludeMyPullRequests active. Excluding by ID only. TotalPRs={Total}, CreatorIdMatches={Matches}", totalCount, creatorIdMatches);
+            var creatorMatches = prs.Count(pr => IsCurrentUser(pr.CreatorId, pr.Creator, currentUserId));
+            _logger.LogInformation("ExcludeMyPullRequests active. Excluding by normalized identity. TotalPRs={Total}, CreatorMatches={Matches}", totalCount, creatorMatches);
 
-            query = query.Where(pr => !StringEqualsIgnoreCase(pr.CreatorId, currentUserId));
+            query = query.Where(pr => !IsCurrentUser(pr.CreatorId, pr.Creator, currentUserId));
         }
 
         if (criteria.AssignedToMeOnly)
         {
-            var assignedMatches = prs.Count(pr => pr.Reviewers.Any(r => StringEqualsIgnoreCase(r.Id, currentUserId)));
-            _logger.LogInformation("AssignedToMeOnly active. ReviewerId comparison only. TotalPRs={Total}, AssignedMatches={Matches}", totalCount, assignedMatches);
+            var assignedMatches = prs.Count(pr => pr.Reviewers.Any(r => IsCurrentUser(r.Id, r.DisplayName, currentUserId)));
+            _logger.LogInformation("AssignedToMeOnly active. Reviewer normalized identity comparison. TotalPRs={Total}, AssignedMatches={Matches}", totalCount, assignedMatches);
 
             query = query.Where(pr => pr.Reviewers.Any(r => 
-                StringEqualsIgnoreCase(r.Id, currentUserId)));
+                IsCurrentUser(r.Id, r.DisplayName, currentUserId)));
         }
 
         if (criteria.NeedsMyReviewOnly)
         {
-            var needReviewMatches = prs.Count(pr => pr.Reviewers.Any(r => StringEqualsIgnoreCase(r.Id, currentUserId) && (StringEqualsIgnoreCase(r.Vote, "No vote") || string.IsNullOrWhiteSpace(r.Vote))));
-            _logger.LogInformation("NeedsMyReviewOnly active. ReviewerId + NoVote comparison. TotalPRs={Total}, NeedReviewMatches={Matches}", totalCount, needReviewMatches);
+            var needReviewMatches = prs.Count(pr => pr.Reviewers.Any(r => IsCurrentUser(r.Id, r.DisplayName, currentUserId) && (StringEqualsIgnoreCase(r.Vote, "No vote") || string.IsNullOrWhiteSpace(r.Vote))));
+            _logger.LogInformation("NeedsMyReviewOnly active. Reviewer normalized identity + NoVote comparison. TotalPRs={Total}, NeedReviewMatches={Matches}", totalCount, needReviewMatches);
 
             query = query.Where(pr => pr.Reviewers.Any(r => 
-                StringEqualsIgnoreCase(r.Id, currentUserId) && 
+                IsCurrentUser(r.Id, r.DisplayName, currentUserId) && 
                 (StringEqualsIgnoreCase(r.Vote, "No vote") || 
                  string.IsNullOrWhiteSpace(r.Vote))));
         }
@@ -257,6 +257,91 @@ public class PullRequestFilteringSortingService
 
     private static bool StringEqualsIgnoreCase(string? value, string? other)
         => string.Equals(value, other, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsCurrentUser(string? subjectId, string? subjectDisplay, string? currentUserIdentity)
+    {
+        var subjectKeys = BuildIdentityKeys(subjectId, subjectDisplay);
+        if (subjectKeys.Count == 0)
+        {
+            return false;
+        }
+
+        var currentUserKeys = BuildIdentityKeys(currentUserIdentity);
+        return currentUserKeys.Overlaps(subjectKeys);
+    }
+
+    private static HashSet<string> BuildIdentityKeys(params string?[] values)
+    {
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var value in values)
+        {
+            var normalized = NormalizeIdentityValue(value);
+            if (string.IsNullOrEmpty(normalized))
+            {
+                continue;
+            }
+
+            keys.Add(normalized);
+            keys.Add(RemoveIdentityDelimiters(normalized));
+
+            if (TryGetEmailParts(normalized, out var emailAddress, out var emailAlias))
+            {
+                keys.Add(emailAddress);
+                keys.Add(emailAlias);
+            }
+
+            var domainAlias = ExtractDomainAlias(normalized);
+            if (!string.IsNullOrEmpty(domainAlias))
+            {
+                keys.Add(domainAlias);
+            }
+        }
+
+        keys.RemoveWhere(string.IsNullOrWhiteSpace);
+        return keys;
+    }
+
+    private static string? NormalizeIdentityValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return value.Trim().ToLowerInvariant();
+    }
+
+    private static string RemoveIdentityDelimiters(string value)
+        => new(value.Where(char.IsLetterOrDigit).ToArray());
+
+    private static bool TryGetEmailParts(string value, out string address, out string alias)
+    {
+        address = string.Empty;
+        alias = string.Empty;
+
+        var atIndex = value.IndexOf('@');
+        if (atIndex <= 0 || atIndex == value.Length - 1)
+        {
+            return false;
+        }
+
+        address = value;
+        alias = value[..atIndex];
+
+        return !string.IsNullOrWhiteSpace(alias);
+    }
+
+    private static string? ExtractDomainAlias(string value)
+    {
+        var slashIndex = value.LastIndexOf('\\');
+        if (slashIndex <= 0 || slashIndex == value.Length - 1)
+        {
+            return null;
+        }
+
+        return value[(slashIndex + 1)..];
+    }
 
     private static bool ContainsInvariant(string? source, string textLower)
         => !string.IsNullOrEmpty(source) && source.Contains(textLower, StringComparison.OrdinalIgnoreCase);
