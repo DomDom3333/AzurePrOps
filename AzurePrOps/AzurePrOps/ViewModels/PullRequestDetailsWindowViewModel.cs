@@ -78,7 +78,6 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
     
     private readonly Dictionary<string, FileDiffListItemViewModel> _fileDiffLookup = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _diffLoadSemaphore = new(1, 1);
-    private CancellationTokenSource? _diffLoadCancellation;
 
     // Total metrics properties for overview section
     private int _filesChanged;
@@ -620,18 +619,6 @@ public class PullRequestDetailsWindowViewModel : ViewModelBase
         {
             _diffLoadSemaphore.Release();
         }
-    }
-
-    public CancellationToken BeginDiffContentLoad()
-    {
-        var oldCts = Interlocked.Exchange(ref _diffLoadCancellation, new CancellationTokenSource());
-        if (oldCts != null)
-        {
-            try { oldCts.Cancel(); } catch { }
-            oldCts.Dispose();
-        }
-
-        return _diffLoadCancellation.Token;
     }
 
     private ReviewModels.FileDiff BuildDiffContent(FileDiffListItemViewModel listItem)
