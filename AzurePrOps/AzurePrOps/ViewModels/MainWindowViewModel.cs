@@ -32,9 +32,9 @@ public class MainWindowViewModel : ViewModelBase
     private Models.ConnectionSettings _settings;
     private readonly AuthenticationService _authService;
     private IReadOnlyList<string> _userGroupMemberships = new List<string>();
-    private bool _skipNextOrchestratorApply;
     private CancellationTokenSource? _refreshCts;
-    private IDisposable? _textFilterDebounceSubscription;
+    private CancellationTokenSource? _textFilterDebounceCts;
+    private DateTimeOffset _lastTextFilterChangeUtc;
     private int _refreshVersion;
 
     public ObservableCollection<PullRequestInfo> PullRequests { get; } = new();
@@ -71,10 +71,10 @@ public class MainWindowViewModel : ViewModelBase
         {
             if (FilterState.Criteria.GlobalSearchText != value)
             {
-                _skipNextOrchestratorApply = true;
+                _lastTextFilterChangeUtc = DateTimeOffset.UtcNow;
                 FilterState.Criteria.GlobalSearchText = value;
                 this.RaisePropertyChanged();
-                DebouncedApplyFiltersAndSorting();
+                _ = DebouncedApplyFiltersAndSortingAsync();
             }
         }
     }
@@ -229,10 +229,10 @@ public class MainWindowViewModel : ViewModelBase
         {
             if (FilterState.Criteria.ReviewerFilter != value)
             {
-                _skipNextOrchestratorApply = true;
+                _lastTextFilterChangeUtc = DateTimeOffset.UtcNow;
                 FilterState.Criteria.ReviewerFilter = value;
                 this.RaisePropertyChanged();
-                DebouncedApplyFiltersAndSorting();
+                _ = DebouncedApplyFiltersAndSortingAsync();
             }
         }
     }
@@ -244,10 +244,10 @@ public class MainWindowViewModel : ViewModelBase
         {
             if (FilterState.Criteria.TitleFilter != value)
             {
-                _skipNextOrchestratorApply = true;
+                _lastTextFilterChangeUtc = DateTimeOffset.UtcNow;
                 FilterState.Criteria.TitleFilter = value;
                 this.RaisePropertyChanged();
-                DebouncedApplyFiltersAndSorting();
+                _ = DebouncedApplyFiltersAndSortingAsync();
             }
         }
     }
@@ -675,9 +675,8 @@ public class MainWindowViewModel : ViewModelBase
         // Subscribe to filter changes to automatically apply filtering
         _filterOrchestrator.FiltersChanged += (_, criteria) =>
         {
-            if (_skipNextOrchestratorApply)
+            if (DateTimeOffset.UtcNow - _lastTextFilterChangeUtc < TextFilterDebounce)
             {
-                _skipNextOrchestratorApply = false;
                 return;
             }
 
@@ -1489,13 +1488,37 @@ public class MainWindowViewModel : ViewModelBase
         return !cancellationToken.IsCancellationRequested && refreshVersion == _refreshVersion;
     }
 
-    private void DebouncedApplyFiltersAndSorting()
+    private async Task DebouncedApplyFiltersAndSortingAsync()
     {
-        _textFilterDebounceSubscription?.Dispose();
-        _textFilterDebounceSubscription = Observable
-            .Timer(TextFilterDebounce)
-            .ObserveOn(RxApp.MainThreadScheduler)
-            .Subscribe(_ => ApplyFiltersAndSorting());
+        var cts = new CancellationTokenSource();
+        var previousCts = Interlocked.Exchange(ref _textFilterDebounceCts, cts);
+        previousCts?.Cancel();
+        previousCts?.Dispose();
+
+        try
+        {
+            await Task.Delay(TextFilterDebounce, cts.Token);
+
+            if (cts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await Dispatcher.UIThread.InvokeAsync(ApplyFiltersAndSorting);
+        }
+        catch (TaskCanceledException)
+        {
+            // Debounced by a newer text change.
+        }
+        finally
+        {
+            if (ReferenceEquals(_textFilterDebounceCts, cts))
+            {
+                _textFilterDebounceCts = null;
+            }
+
+            cts.Dispose();
+        }
     }
 
     private void ApplyFiltersAndSorting()
