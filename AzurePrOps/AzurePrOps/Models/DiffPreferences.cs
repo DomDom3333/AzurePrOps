@@ -17,6 +17,12 @@ public static class DiffPreferences
 
     static DiffPreferences()
     {
+        ReloadFromStorage();
+    }
+
+
+    internal static void ReloadFromStorage()
+    {
         var loaded = DiffPreferencesStorage.Load();
         _ignoreWhitespace = loaded.IgnoreWhitespace;
         _wrapLines = loaded.WrapLines;

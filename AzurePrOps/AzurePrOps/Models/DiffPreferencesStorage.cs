@@ -8,10 +8,14 @@ public record DiffPreferencesData(bool IgnoreWhitespace, bool WrapLines, bool Ig
 
 public static class DiffPreferencesStorage
 {
-    private static readonly string FilePath = Path.Combine(
+    private static readonly string DefaultFilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "AzurePrOps",
         "diffsettings.json");
+
+    public static string? OverrideFilePath { get; set; }
+
+    private static string FilePath => OverrideFilePath ?? DefaultFilePath;
 
     public static DiffPreferencesData Load()
     {

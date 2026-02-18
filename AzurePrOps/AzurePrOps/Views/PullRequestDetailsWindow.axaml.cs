@@ -17,28 +17,24 @@ namespace AzurePrOps.Views;
 
 public partial class PullRequestDetailsWindow : Window
 {
+    private const int AutoExpandInitialLimit = 10;
     private readonly Dictionary<string, DiffViewer> _diffViewerMap = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _expansionSemaphore = new(1);
     private CancellationTokenSource? _expansionCancellation;
     private readonly HashSet<string> _expandingDiffs = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Expander> _expanderCache = new(StringComparer.OrdinalIgnoreCase);
+    private bool _isExpansionInProgress;
     
     public PullRequestDetailsWindow()
     {
         InitializeComponent();
 
-        // Enable ExpandAllOnOpen by default if not already enabled
-        if (!DiffPreferences.ExpandAllOnOpen)
-        {
-            DiffPreferences.ExpandAllOnOpen = true;
-        }
-
-        // Auto-expand diffs when window loads if user preference is enabled
+        // Auto-expand a capped number of diffs when window loads if user preference is enabled
         this.Loaded += async (_, _) =>
         {
             if (DataContext is PullRequestDetailsWindowViewModel viewModel && DiffPreferences.ExpandAllOnOpen)
             {
-                await StartAsyncExpansionAsync(viewModel);
+                await StartAsyncExpansionAsync(viewModel, isExplicitExpandAll: false);
             }
         };
         
@@ -54,11 +50,11 @@ public partial class PullRequestDetailsWindow : Window
     {
         if (DataContext is PullRequestDetailsWindowViewModel viewModel)
         {
-            await StartAsyncExpansionAsync(viewModel);
+            await StartAsyncExpansionAsync(viewModel, isExplicitExpandAll: true);
         }
     }
 
-    private async Task StartAsyncExpansionAsync(PullRequestDetailsWindowViewModel viewModel)
+    private async Task StartAsyncExpansionAsync(PullRequestDetailsWindowViewModel viewModel, bool isExplicitExpandAll)
     {
         try
         {
@@ -69,6 +65,7 @@ public partial class PullRequestDetailsWindow : Window
                 _expansionCancellation.Dispose();
             }
             _expansionCancellation = new CancellationTokenSource();
+            _isExpansionInProgress = true;
             
             // Wait for the diffs to load first
             int waitAttempts = 0;
@@ -91,23 +88,24 @@ public partial class PullRequestDetailsWindow : Window
                 .OrderBy(EstimateRenderComplexity)
                 .ThenBy(d => d.FilePath)
                 .ToList();
-            
-            // Start background expansion with smart throttling
-            _ = Task.Run(async () =>
+
+            var filePaths = sortedDiffs.Select(diff => diff.FilePath).ToList();
+            List<string> targetPaths;
+
+            if (isExplicitExpandAll)
             {
-                try
-                {
-                    await SmartExpansionWorkerAsync(sortedDiffs, _expansionCancellation.Token);
-                }
-                catch (OperationCanceledException)
-                {
-                    // Expansion was cancelled, this is expected
-                }
-                catch (Exception)
-                {
-                    // Log error if needed, but don't show to user
-                }
-            }, _expansionCancellation.Token);
+                targetPaths = filePaths
+                    .Where(path => !IsDiffExpanded(path))
+                    .ToList();
+                await RunExpandAllWithProgressAsync(targetPaths, _expansionCancellation.Token);
+            }
+            else
+            {
+                var autoExpandCount = CalculateAutoExpandCount(DiffPreferences.ExpandAllOnOpen, filePaths.Count);
+                targetPaths = filePaths.Take(autoExpandCount).ToList();
+                await SmartExpansionWorkerAsync(targetPaths, _expansionCancellation.Token);
+                await Dispatcher.UIThread.InvokeAsync(() => UpdateExpandProgressUi(0, 0, false));
+            }
         }
         catch (OperationCanceledException)
         {
@@ -117,14 +115,43 @@ public partial class PullRequestDetailsWindow : Window
         {
             // Log error if needed, but don't show to user
         }
+        finally
+        {
+            _isExpansionInProgress = false;
+        }
     }
 
-    private async Task SmartExpansionWorkerAsync(List<FileDiffListItemViewModel> sortedDiffs, CancellationToken cancellationToken)
+    internal static int CalculateAutoExpandCount(bool expandAllOnOpen, int fileCount)
+    {
+        if (!expandAllOnOpen || fileCount <= 0)
+            return 0;
+
+        return Math.Min(fileCount, AutoExpandInitialLimit);
+    }
+
+    private async Task RunExpandAllWithProgressAsync(List<string> filePaths, CancellationToken cancellationToken)
+    {
+        if (filePaths.Count == 0)
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => UpdateExpandProgressUi(0, 0, false));
+            return;
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(() => UpdateExpandProgressUi(0, filePaths.Count, true));
+
+        await SmartExpansionWorkerAsync(filePaths, cancellationToken, (processed, total) =>
+        {
+            _ = Dispatcher.UIThread.InvokeAsync(() => UpdateExpandProgressUi(processed, total, true));
+        });
+
+        await Dispatcher.UIThread.InvokeAsync(() => UpdateExpandProgressUi(filePaths.Count, filePaths.Count, false));
+    }
+
+    private async Task SmartExpansionWorkerAsync(List<string> filePaths, CancellationToken cancellationToken, Action<int, int>? progress = null)
     {
         int processedCount = 0;
         const int batchSize = 5;
-        
-        var filePaths = sortedDiffs.Select(diff => diff.FilePath).ToList();
+        int total = filePaths.Count;
         
         foreach (var filePath in filePaths)
         {
@@ -145,6 +172,7 @@ public partial class PullRequestDetailsWindow : Window
                 await ExpandDiffAsync(filePath, cancellationToken);
                 
                 processedCount++;
+                progress?.Invoke(processedCount, total);
                 
                 // Add longer delays between batches to prevent system overload
                 if (processedCount % batchSize == 0)
@@ -165,6 +193,51 @@ public partial class PullRequestDetailsWindow : Window
                 _expansionSemaphore.Release();
             }
         }
+    }
+
+    private bool IsDiffExpanded(string filePath)
+    {
+        if (_expanderCache.TryGetValue(filePath, out var cachedExpander))
+            return cachedExpander.IsExpanded;
+
+        var expander = this.GetVisualDescendants()
+            .OfType<Expander>()
+            .FirstOrDefault(exp => exp.DataContext is FileDiffListItemViewModel diff && diff.FilePath == filePath);
+
+        if (expander == null)
+            return false;
+
+        _expanderCache[filePath] = expander;
+        return expander.IsExpanded;
+    }
+
+    private void UpdateExpandProgressUi(int processed, int total, bool isRunning)
+    {
+        if (ExpandAllButton == null || ExpandProgressBar == null || ExpandProgressText == null)
+            return;
+
+        ExpandAllButton.Content = isRunning ? "⏹ Cancel" : "📂 Expand all";
+        ExpandProgressBar.IsVisible = isRunning || (total > 0 && processed > 0);
+        ExpandProgressText.IsVisible = total > 0;
+        ExpandProgressBar.Maximum = Math.Max(total, 1);
+        ExpandProgressBar.Value = Math.Min(processed, total);
+        ExpandProgressText.Text = total > 0
+            ? $"Expanded {processed}/{total}"
+            : "";
+    }
+
+    private async void ExpandAll_Click(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is not PullRequestDetailsWindowViewModel viewModel)
+            return;
+
+        if (_isExpansionInProgress && _expansionCancellation is { IsCancellationRequested: false })
+        {
+            _expansionCancellation.Cancel();
+            return;
+        }
+
+        await StartAsyncExpansionAsync(viewModel, isExplicitExpandAll: true);
     }
 
     private async Task ExpandDiffAsync(string filePath, CancellationToken cancellationToken)
