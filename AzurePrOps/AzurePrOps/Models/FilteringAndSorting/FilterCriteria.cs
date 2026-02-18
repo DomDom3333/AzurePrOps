@@ -42,6 +42,8 @@ public class FilterCriteria : INotifyPropertyChanged
     public DateTimeOffset? UpdatedBefore { get; set; }
 
     // Group filters
+    public bool EnableGroupFiltering { get; set; } = false;
+    public List<string> SelectedGroups { get; set; } = new();
     public bool EnableGroupsWithoutVoteFilter { get; set; } = false;
     public List<string> SelectedGroupsWithoutVote { get; set; } = new();
 
@@ -77,6 +79,7 @@ public class FilterCriteria : INotifyPropertyChanged
         CreatedBefore.HasValue ||
         UpdatedAfter.HasValue ||
         UpdatedBefore.HasValue ||
+        (EnableGroupFiltering && SelectedGroups.Count > 0) ||
         EnableGroupsWithoutVoteFilter ||
         MinReviewerCount.HasValue ||
         MaxReviewerCount.HasValue;
@@ -158,6 +161,9 @@ public class FilterCriteria : INotifyPropertyChanged
                 filters.Add(reviewerRange);
             }
             
+            if (EnableGroupFiltering && SelectedGroups.Count > 0)
+                filters.Add($"Groups: {string.Join(", ", SelectedGroups)}");
+
             if (EnableGroupsWithoutVoteFilter && SelectedGroupsWithoutVote.Count > 0)
                 filters.Add($"Groups without vote: {string.Join(", ", SelectedGroupsWithoutVote)}");
             
@@ -238,6 +244,8 @@ public class FilterCriteria : INotifyPropertyChanged
         UpdatedBefore = null;
 
         // Group filters
+        EnableGroupFiltering = false;
+        SelectedGroups.Clear();
         EnableGroupsWithoutVoteFilter = false;
         SelectedGroupsWithoutVote.Clear();
 
@@ -278,6 +286,8 @@ public class FilterCriteria : INotifyPropertyChanged
             CreatedBefore = CreatedBefore,
             UpdatedAfter = UpdatedAfter,
             UpdatedBefore = UpdatedBefore,
+            EnableGroupFiltering = EnableGroupFiltering,
+            SelectedGroups = new List<string>(SelectedGroups),
             EnableGroupsWithoutVoteFilter = EnableGroupsWithoutVoteFilter,
             SelectedGroupsWithoutVote = new List<string>(SelectedGroupsWithoutVote),
             MinReviewerCount = MinReviewerCount,
