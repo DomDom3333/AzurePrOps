@@ -43,13 +43,6 @@ public class MainWindowViewModel : ViewModelBase
     private CancellationTokenSource? _refreshCancellationTokenSource;
     private int _refreshRequestVersion;
     
-    // Legacy collections for backward compatibility (during transition)
-    public ObservableCollection<FilterView> FilterViews { get; } = new();
-    public ObservableCollection<SavedFilterView> SavedFilterViews { get; } = new();
-
-    // Preferences for saved views
-    private FilterSortPreferences _preferences = new();
-
     // Expose filter components for UI binding
     public FilterOrchestrator FilterOrchestrator => _filterOrchestrator;
     public AzurePrOps.ViewModels.Filters.FilterPanelViewModel FilterPanel => _filterOrchestrator.FilterPanel;
@@ -321,7 +314,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _selectedDateRangePreset, value);
-            if (!_isApplyingFilterView) ApplyDateRangePreset(value);
+            ApplyDateRangePreset(value);
         }
     }
 
@@ -332,10 +325,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _selectedSortPreset, value);
-            if (!_isApplyingFilterView)
-            {
-                FilterState.SortCriteria.ApplyPreset(value);
-            }
+            FilterState.SortCriteria.ApplyPreset(value);
         }
     }
 
@@ -346,7 +336,7 @@ public class MainWindowViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _selectedWorkflowPreset, value);
-            if (!_isApplyingFilterView) ApplyWorkflowPreset(value);
+            ApplyWorkflowPreset(value);
         }
     }
     
@@ -395,62 +385,35 @@ public class MainWindowViewModel : ViewModelBase
         set => this.RaiseAndSetIfChanged(ref _selectedGroupsWithoutVoteText, value);
     }
 
-    public ObservableCollection<string> AvailableGroups { get; } = new();
+    public ObservableCollection<string> AvailableGroups => FilterOrchestrator.FilterPanel.AvailableGroups;
 
-    // Filter view selection properties
-    private FilterView? _selectedFilterView;
-    public FilterView? SelectedFilterView
-    {
-        get => _selectedFilterView;
-        set
-        {
-            this.RaiseAndSetIfChanged(ref _selectedFilterView, value);
-            if (value != null)
-            {
-                var matchingSavedView = SavedFilterViews.FirstOrDefault(sv => sv.Name == value.Name);
-                if (matchingSavedView != null)
-                {
-                    ApplySavedFilterView(matchingSavedView);
-                }
-                else
-                {
-                    _isApplyingFilterView = true;
-                    ResetFiltersToDefaults();
-                    FilterState.TitleFilter = value.Title;
-                    FilterState.CreatorFilter = value.Creator;
-                    FilterState.SourceBranchFilter = value.SourceBranch;
-                    FilterState.TargetBranchFilter = value.TargetBranch;
-                    
-                    if (!string.IsNullOrWhiteSpace(value.Status) && value.Status != "All")
-                    {
-                        FilterState.SelectedStatuses = new List<string> { value.Status };
-                    }
+    // Saved view binding delegates
+    public ObservableCollection<SavedFilterView> SavedFilterViews => FilterPanel.SavedFilterViews;
 
-                    _isApplyingFilterView = false;
-                }
-            }
-        }
-    }
-
-    private SavedFilterView? _selectedSavedFilterView;
     public SavedFilterView? SelectedSavedFilterView
     {
-        get => _selectedSavedFilterView;
+        get => FilterPanel.SelectedSavedFilterView;
         set
         {
-            this.RaiseAndSetIfChanged(ref _selectedSavedFilterView, value);
-            if (value != null)
+            if (!ReferenceEquals(FilterPanel.SelectedSavedFilterView, value))
             {
-                ApplySavedFilterView(value);
+                FilterPanel.SelectedSavedFilterView = value;
+                this.RaisePropertyChanged();
             }
         }
     }
 
-    private string _newViewName = string.Empty;
     public string NewViewName
     {
-        get => _newViewName;
-        set => this.RaiseAndSetIfChanged(ref _newViewName, value);
+        get => FilterPanel.NewSavedViewName;
+        set
+        {
+            if (!string.Equals(FilterPanel.NewSavedViewName, value, StringComparison.Ordinal))
+            {
+                FilterPanel.NewSavedViewName = value;
+                this.RaisePropertyChanged();
+            }
+        }
     }
 
     // Non-filter UI properties
@@ -492,7 +455,6 @@ public class MainWindowViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> PostCommentCommand { get; }
     public ReactiveCommand<PullRequestInfo?, Unit> ViewDetailsCommand { get; }
     public ReactiveCommand<PullRequestInfo?, Unit> OpenInBrowserCommand { get; }
-    public ReactiveCommand<Unit, Unit> SaveViewCommand { get; }
     public ReactiveCommand<Unit, Unit> SaveCurrentFiltersCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenSettingsCommand { get; }
     public ReactiveCommand<Unit, Unit> ApproveWithSuggestionsCommand { get; }
@@ -681,11 +643,8 @@ public class MainWindowViewModel : ViewModelBase
         _pullRequestService.SetErrorHandler(message =>
             _ = ShowErrorMessage(message));
 
-        foreach (var v in FilterViewStorage.Load())
-            FilterViews.Add(v);
-
         // Initialize new filtering and sorting system
-        LoadPreferences();
+        FilterPanel.LoadSavedViews();
 
         // Initialize user information - will be updated automatically when app starts
         _filterOrchestrator.FilterState.CurrentUserId = _settings.ReviewerId ?? string.Empty;
@@ -1048,71 +1007,7 @@ public class MainWindowViewModel : ViewModelBase
             }
         });
 
-        SaveViewCommand = ReactiveCommand.Create(() =>
-        {
-            if (string.IsNullOrWhiteSpace(NewViewName))
-                return;
-
-            var view = new FilterView
-            {
-                Name = NewViewName,
-                Title = FilterState.Criteria.TitleFilter,
-                Creator = FilterState.Criteria.CreatorFilter,
-                SourceBranch = FilterState.Criteria.SourceBranchFilter,
-                TargetBranch = FilterState.Criteria.TargetBranchFilter,
-                Status = FilterState.Criteria.SelectedStatuses.FirstOrDefault() ?? string.Empty
-            };
-
-            FilterViews.Add(view);
-            FilterViewStorage.Save(FilterViews.ToArray());
-            NewViewName = string.Empty;
-        });
-
-        SaveCurrentFiltersCommand = ReactiveCommand.Create(() =>
-        {
-            // Generate a unique name for the saved filter view
-            var defaultName = $"Filter View {DateTime.Now:yyyy-MM-dd HH-mm-ss}";
-            var viewName = NewViewName.Trim().Length > 0 ? NewViewName.Trim() : defaultName;
-
-            // Create the saved filter view object using current FilterState
-            var savedView = new SavedFilterView
-            {
-                Name = viewName,
-                FilterCriteria = new FilterCriteria
-                {
-                    TitleFilter = FilterState.Criteria.TitleFilter,
-                    CreatorFilter = FilterState.Criteria.CreatorFilter,
-                    SourceBranchFilter = FilterState.Criteria.SourceBranchFilter,
-                    TargetBranchFilter = FilterState.Criteria.TargetBranchFilter,
-                    ReviewerFilter = FilterState.Criteria.ReviewerFilter,
-                    GlobalSearchText = FilterState.Criteria.GlobalSearchText,
-                    MyPullRequestsOnly = FilterState.Criteria.MyPullRequestsOnly,
-                    AssignedToMeOnly = FilterState.Criteria.AssignedToMeOnly,
-                    NeedsMyReviewOnly = FilterState.Criteria.NeedsMyReviewOnly,
-                    ExcludeMyPullRequests = FilterState.Criteria.ExcludeMyPullRequests,
-                    IsDraft = FilterState.Criteria.IsDraft,
-                    SelectedReviewerVotes = new List<string>(FilterState.Criteria.SelectedReviewerVotes),
-                    SelectedStatuses = new List<string>(FilterState.Criteria.SelectedStatuses),
-                    CreatedAfter = FilterState.Criteria.CreatedAfter,
-                    CreatedBefore = FilterState.Criteria.CreatedBefore,
-                    EnableGroupsWithoutVoteFilter = FilterState.EnableGroupsWithoutVoteFilter,
-                    SelectedGroupsWithoutVote = new List<string>(FilterState.SelectedGroupsWithoutVote)
-                },
-                SortCriteria = new SortCriteria
-                {
-                    CurrentPreset = FilterState.SortCriteria.CurrentPreset
-                },
-                LastUsed = DateTime.Now
-            };
-
-            // Add to preferences and save
-            _preferences.SavedViews.Add(savedView);
-            SavedFilterViews.Add(savedView);
-            FilterSortPreferencesStorage.Save(_preferences);
-
-            // Clear the new view name
-            NewViewName = string.Empty;
-        });
+        SaveCurrentFiltersCommand = FilterPanel.SaveCurrentFiltersCommand;
 
         OpenSettingsCommand = ReactiveCommand.CreateFromTask(async () =>
         {
@@ -1325,116 +1220,6 @@ public class MainWindowViewModel : ViewModelBase
         InitializeDropdownDefaults();
     }
 
-    private void LoadPreferences()
-    {
-        try
-        {
-            // Load saved preferences for filters and sorting
-            if (FilterSortPreferencesStorage.TryLoad(out var preferences) && preferences != null)
-            {
-                _preferences = preferences;
-            }
-            else
-            {
-                _preferences = new FilterSortPreferences();
-            }
-
-            // Load saved filter views into the collection
-            SavedFilterViews.Clear();
-            foreach (var savedView in _preferences.SavedViews)
-            {
-                SavedFilterViews.Add(savedView);
-            }
-
-            // Apply the last selected view if it exists
-            if (!string.IsNullOrEmpty(_preferences.LastSelectedView))
-            {
-                var lastSelectedView = SavedFilterViews.FirstOrDefault(v => v.Name == _preferences.LastSelectedView);
-                if (lastSelectedView != null)
-                {
-                    SelectedSavedFilterView = lastSelectedView;
-                }
-            }
-        }
-        catch (Exception)
-        {
-            // Log error (removed excessive logging)
-            // Continue with default preferences if loading fails
-            _preferences = new FilterSortPreferences();
-        }
-    }
-
-    private bool _isApplyingFilterView = false;
-
-    private void ApplySavedFilterView(SavedFilterView savedView)
-    {
-        try
-        {
-            // Set flag to prevent multiple filter applications during this process
-            _isApplyingFilterView = true;
-
-            // Apply filter criteria from saved view
-            var filterData = savedView.FilterCriteria;
-
-            // Reset all filters first (like workflow presets do)
-            ResetFiltersToDefaults();
-
-            FilterState.ApplyAtomically(state =>
-            {
-                state.TitleFilter = filterData.TitleFilter ?? string.Empty;
-                state.CreatorFilter = filterData.CreatorFilter ?? string.Empty;
-                state.SourceBranchFilter = filterData.SourceBranchFilter ?? string.Empty;
-                state.TargetBranchFilter = filterData.TargetBranchFilter ?? string.Empty;
-                state.ReviewerFilter = filterData.ReviewerFilter ?? string.Empty;
-                state.SelectedStatuses = filterData.SelectedStatuses.Any()
-                    ? new List<string> { filterData.SelectedStatuses.First() }
-                    : new List<string>();
-                state.SelectedReviewerVotes = filterData.SelectedReviewerVotes.Any()
-                    ? new List<string> { filterData.SelectedReviewerVotes.First() }
-                    : new List<string>();
-                state.CreatedAfter = filterData.CreatedAfter;
-                state.CreatedBefore = filterData.CreatedBefore;
-                state.IsDraft = filterData.IsDraft;
-                state.MyPullRequestsOnly = filterData.MyPullRequestsOnly;
-                state.AssignedToMeOnly = filterData.AssignedToMeOnly;
-                state.NeedsMyReviewOnly = filterData.NeedsMyReviewOnly;
-            });
-
-            // Apply workflow preset if specified
-            if (!string.IsNullOrEmpty(filterData.WorkflowPreset))
-            {
-                SelectedWorkflowPreset = filterData.WorkflowPreset;
-            }
-
-            // Apply sort criteria from saved view
-            var sortData = savedView.SortCriteria;
-            SelectedSortPreset = sortData.CurrentPreset ?? "Most Recent";
-
-            // Track the filter source for clarity
-            FilterState.SetFilterSource("SavedView", savedView.Name);
-
-            // Clear the flag before applying filters
-            _isApplyingFilterView = false;
-
-                        // Update last used timestamp
-            savedView.LastUsed = DateTime.Now;
-
-            // Save the updated preferences
-            _preferences.LastSelectedView = savedView.Name;
-            FilterSortPreferencesStorage.Save(_preferences);
-
-            // Notify UI of state changes
-            this.RaisePropertyChanged(nameof(CurrentFilterSource));
-            this.RaisePropertyChanged(nameof(ActiveFiltersSummary));
-            this.RaisePropertyChanged(nameof(HasActiveFilters));
-            this.RaisePropertyChanged(nameof(FilterStatusText));
-        }
-        catch (Exception)
-        {
-            // Ensure flag is cleared even if an error occurs
-            _isApplyingFilterView = false;
-        }
-    }
 
     private void UpdateAvailableOptions()
     {
