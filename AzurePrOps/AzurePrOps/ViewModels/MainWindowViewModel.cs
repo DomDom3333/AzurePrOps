@@ -32,7 +32,7 @@ public class MainWindowViewModel : ViewModelBase
     private Models.ConnectionSettings _settings;
     private readonly AuthenticationService _authService;
     private static readonly TimeSpan GroupMembershipCacheTtl = TimeSpan.FromMinutes(30);
-    private static readonly TimeSpan GroupMembershipFetchTimeout = TimeSpan.FromSeconds(8);
+    private static readonly TimeSpan GroupMembershipFetchTimeout = TimeSpan.FromSeconds(30);
 
     private IReadOnlyList<string> _userGroupMemberships = Array.Empty<string>();
     private DateTimeOffset _userGroupMembershipsLastUpdated = DateTimeOffset.MinValue;

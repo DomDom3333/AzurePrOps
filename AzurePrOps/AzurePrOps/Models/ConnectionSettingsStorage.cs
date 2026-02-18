@@ -30,54 +30,6 @@ public static class ConnectionSettingsStorage
 
             var json = File.ReadAllText(FilePath);
             
-            // Try to deserialize with the old format first (for migration)
-            // Only attempt migration once per application session
-            if (!_migrationAttempted)
-            {
-                _migrationAttempted = true;
-                try
-                {
-                    var legacySettings = JsonSerializer.Deserialize<LegacyConnectionSettings>(json);
-                    if (legacySettings != null && !string.IsNullOrEmpty(legacySettings.PersonalAccessToken))
-                    {
-                        // Migrate the PAT token to secure storage (only log if migration actually happens)
-                        if (_credentialService.StorePersonalAccessToken(legacySettings.PersonalAccessToken, legacySettings.ReviewerId))
-                        {
-                            // Create new settings without the PAT token
-                            settings = new ConnectionSettings(
-                                legacySettings.Organization,
-                                legacySettings.Project,
-                                legacySettings.Repository,
-                                legacySettings.ReviewerId,
-                                legacySettings.EditorCommand,
-                                legacySettings.UseGitDiff,
-                                legacySettings.SelectedReviewerGroups,
-                                legacySettings.IncludeGroupReviews,
-                                legacySettings.SelectedGroupsForFiltering,
-                                legacySettings.EnableGroupFiltering,
-                                legacySettings.UserDisplayName)
-                            {
-                                HasSecureToken = true
-                            };
-                            
-                            // Save the updated settings without the PAT token
-                            Save(settings);
-                            _logger.LogInformation("Personal Access Token migration completed");
-                            return true;
-                        }
-                        else
-                        {
-                            _logger.LogError("Failed to migrate Personal Access Token to secure storage");
-                            return false;
-                        }
-                    }
-                }
-                catch (JsonException)
-                {
-                    // Not legacy format, continue with new format
-                }
-            }
-            
             // Try new format
             settings = JsonSerializer.Deserialize<ConnectionSettings>(json);
             if (settings != null)
@@ -207,18 +159,3 @@ public static class ConnectionSettingsStorage
         }
     }
 }
-
-// Legacy format for migration purposes
-internal record LegacyConnectionSettings(
-    string Organization,
-    string Project,
-    string Repository,
-    string PersonalAccessToken,
-    string ReviewerId,
-    string EditorCommand = "code",
-    bool UseGitDiff = true,
-    List<string>? SelectedReviewerGroups = null,
-    bool IncludeGroupReviews = true,
-    List<string>? SelectedGroupsForFiltering = null,
-    bool EnableGroupFiltering = false,
-    string UserDisplayName = "");
