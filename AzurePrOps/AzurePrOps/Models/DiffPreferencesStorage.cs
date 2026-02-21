@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace AzurePrOps.Models;
 
-public record DiffPreferencesData(bool IgnoreWhitespace, bool WrapLines, bool IgnoreNewlines, bool ExpandAllOnOpen);
+public record DiffPreferencesData(bool IgnoreWhitespace, bool WrapLines, bool IgnoreNewlines, bool ExpandAllOnOpen, bool LineAlignmentEnabled);
 
 public static class DiffPreferencesStorage
 {
@@ -22,15 +22,15 @@ public static class DiffPreferencesStorage
         try
         {
             if (!File.Exists(FilePath))
-                return new DiffPreferencesData(true, false, true, true);
+                return new DiffPreferencesData(true, false, true, true, true);
 
             var json = File.ReadAllText(FilePath);
             var data = JsonSerializer.Deserialize<DiffPreferencesData>(json);
-            return data ?? new DiffPreferencesData(true, false, true, true);
+            return data ?? new DiffPreferencesData(true, false, true, true, true);
         }
         catch
         {
-            return new DiffPreferencesData(true, false, true, true);
+            return new DiffPreferencesData(true, false, true, true, true);
         }
     }
 

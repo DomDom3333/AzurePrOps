@@ -81,6 +81,7 @@ namespace AzurePrOps.Controls
         private List<int> _changedLines = new();
         private int _currentChangeIndex = -1;
         private bool _codeFoldingEnabled = true;
+        private bool _lineAlignmentEnabled = DiffPreferences.LineAlignmentEnabled;
         private bool _ignoreWhitespace = DiffPreferences.IgnoreWhitespace;
         private bool _wrapLines = DiffPreferences.WrapLines;
         private bool _ignoreNewlines = DiffPreferences.IgnoreNewlines;
@@ -103,6 +104,11 @@ namespace AzurePrOps.Controls
         private readonly SemaphoreSlim _renderSemaphore = new(1, 1);
         private volatile bool _renderPending = false;
         
+        private Dictionary<int, int> _newLineNumbers = new(); // Editor Line -> Original New Line
+        private Dictionary<int, int> _oldLineNumbers = new(); // Editor Line -> Original Old Line
+        private Dictionary<int, int> _oldSpacers = new(); // Line Number -> Spacer Count
+        private Dictionary<int, int> _newSpacers = new(); // Line Number -> Spacer Count
+
         // Lazy rendering optimization
         private bool _isVisible = false;
         private bool _hasBeenRendered = false;
@@ -120,7 +126,6 @@ namespace AzurePrOps.Controls
         // Line alignment support for better diff comparison
         private Dictionary<int, int> _lineMapping = new(); // Maps old editor lines to new editor lines
         private Dictionary<int, int> _reverseLineMapping = new(); // Maps new editor lines to old editor lines
-        private bool _lineAlignmentEnabled = true;
         private ToggleButton? _lineAlignmentButton;
 
         static DiffViewer()
@@ -494,6 +499,7 @@ namespace AzurePrOps.Controls
                 _lineAlignmentButton.IsCheckedChanged += (_, __) =>
                 {
                     _lineAlignmentEnabled = _lineAlignmentButton.IsChecked == true;
+                    DiffPreferences.LineAlignmentEnabled = _lineAlignmentEnabled;
                     Render();
                 };
             }
@@ -1157,6 +1163,37 @@ namespace AzurePrOps.Controls
             _oldEditor.TextArea.TextView.BackgroundRenderers.Add(oldMarginRenderer);
             _newEditor.TextArea.TextView.BackgroundRenderers.Add(newMarginRenderer);
 
+            // Custom line numbers and spacers
+            _oldEditor.ShowLineNumbers = !_lineAlignmentEnabled;
+            _newEditor.ShowLineNumbers = !_lineAlignmentEnabled;
+            
+            for (int i = _oldEditor.TextArea.LeftMargins.Count - 1; i >= 0; i--)
+                if (_oldEditor.TextArea.LeftMargins[i] is DiffLineNumberMargin)
+                    _oldEditor.TextArea.LeftMargins.RemoveAt(i);
+            
+            for (int i = _newEditor.TextArea.LeftMargins.Count - 1; i >= 0; i--)
+                if (_newEditor.TextArea.LeftMargins[i] is DiffLineNumberMargin)
+                    _newEditor.TextArea.LeftMargins.RemoveAt(i);
+
+            for (int i = _oldEditor.TextArea.TextView.ElementGenerators.Count - 1; i >= 0; i--)
+                if (_oldEditor.TextArea.TextView.ElementGenerators[i] is DiffAlignmentElementGenerator)
+                    _oldEditor.TextArea.TextView.ElementGenerators.RemoveAt(i);
+
+            for (int i = _newEditor.TextArea.TextView.ElementGenerators.Count - 1; i >= 0; i--)
+                if (_newEditor.TextArea.TextView.ElementGenerators[i] is DiffAlignmentElementGenerator)
+                    _newEditor.TextArea.TextView.ElementGenerators.RemoveAt(i);
+
+            if (_lineAlignmentEnabled)
+            {
+                _oldEditor.TextArea.LeftMargins.Insert(0, new DiffLineNumberMargin(_oldLineNumbers));
+                _newEditor.TextArea.LeftMargins.Insert(0, new DiffLineNumberMargin(_newLineNumbers));
+                
+                if (_oldSpacers.Count > 0)
+                    _oldEditor.TextArea.TextView.ElementGenerators.Add(new DiffAlignmentElementGenerator(_oldSpacers));
+                if (_newSpacers.Count > 0)
+                    _newEditor.TextArea.TextView.ElementGenerators.Add(new DiffAlignmentElementGenerator(_newSpacers));
+            }
+
             // Track changed lines for navigation using the new editor's perspective primarily
             _changedLines = newMapDict
                 .Where(kv => kv.Value != DiffLineType.Unchanged)
@@ -1609,87 +1646,89 @@ namespace AzurePrOps.Controls
         {
             _lineMapping.Clear();
             _reverseLineMapping.Clear();
+            _oldLineNumbers.Clear();
+            _newLineNumbers.Clear();
+            _oldSpacers.Clear();
+            _newSpacers.Clear();
 
-            // Get lists of changed lines in each editor
-            var oldChangedLines = oldMap.Where(kv => kv.Value != DiffLineType.Unchanged)
-                                       .Select(kv => kv.Key)
-                                       .OrderBy(line => line)
-                                       .ToList();
+            // Store original line numbers for the margin (editor line -> original file line)
+            // Currently, editor line and original line match in this simplified model,
+            // but we'll use this if we ever change how we load text.
+            for (int i = 1; i <= oldLineCount; i++) _oldLineNumbers[i] = i;
+            for (int i = 1; i <= newLineCount; i++) _newLineNumbers[i] = i;
 
-            var newChangedLines = newMap.Where(kv => kv.Value != DiffLineType.Unchanged)
-                                       .Select(kv => kv.Key)
-                                       .OrderBy(line => line)
-                                       .ToList();
+            // Simple alignment for now: identify added/removed blocks and insert spacers
+            // to keep the corresponding unchanged lines horizontally aligned.
+            
+            int currentOld = 1;
+            int currentNew = 1;
 
-            // Strategy 1: Align modified lines that correspond to each other
-            AlignModifiedLines(oldMap, newMap);
-
-            // Strategy 2: Align consecutive change blocks
-            AlignChangeBlocks(oldChangedLines, newChangedLines, oldMap, newMap);
-
-            // Strategy 3: Fill in gaps with proportional alignment for unchanged regions
-            FillUnchangedRegions(oldMap, newMap, oldLineCount, newLineCount);
-        }
-
-        /// <summary>
-        /// Aligns modified lines that likely correspond to each other based on position and content.
-        /// </summary>
-        private void AlignModifiedLines(IDictionary<int, DiffLineType> oldMap, IDictionary<int, DiffLineType> newMap)
-        {
-            var oldModified = oldMap.Where(kv => kv.Value == DiffLineType.Modified)
-                                   .Select(kv => kv.Key)
-                                   .OrderBy(line => line)
-                                   .ToList();
-
-            var newModified = newMap.Where(kv => kv.Value == DiffLineType.Modified)
-                                   .Select(kv => kv.Key)
-                                   .OrderBy(line => line)
-                                   .ToList();
-
-            // Simple 1:1 alignment of modified lines based on order
-            int minCount = Math.Min(oldModified.Count, newModified.Count);
-            for (int i = 0; i < minCount; i++)
+            // This is a simple greedy alignment. For a production diff viewer, 
+            // a more sophisticated algorithm would be used to find the best alignment.
+            while (currentOld <= oldLineCount && currentNew <= newLineCount)
             {
-                int oldLine = oldModified[i];
-                int newLine = newModified[i];
-                
-                _lineMapping[oldLine] = newLine;
-                _reverseLineMapping[newLine] = oldLine;
+                bool oldChanged = oldMap.TryGetValue(currentOld, out var oldType) && oldType != DiffLineType.Unchanged;
+                bool newChanged = newMap.TryGetValue(currentNew, out var newType) && newType != DiffLineType.Unchanged;
+
+                if (!oldChanged && !newChanged)
+                {
+                    // Both unchanged, align them
+                    _lineMapping[currentOld] = currentNew;
+                    _reverseLineMapping[currentNew] = currentOld;
+                    currentOld++;
+                    currentNew++;
+                }
+                else if (oldChanged && !newChanged)
+                {
+                    // Old side has a change (removal), new side is unchanged. 
+                    // To keep new side aligned with the NEXT unchanged line in old, 
+                    // we need to see how many removals we have.
+                    int removalCount = 0;
+                    int tempOld = currentOld;
+                    while (tempOld <= oldLineCount && oldMap.TryGetValue(tempOld, out var t) && t != DiffLineType.Unchanged)
+                    {
+                        removalCount++;
+                        tempOld++;
+                    }
+                    
+                    // Add spacers to the new side to push it down
+                    if (removalCount > 0)
+                    {
+                        _newSpacers[currentNew] = (_newSpacers.GetValueOrDefault(currentNew, 0) + removalCount);
+                        currentOld += removalCount;
+                    }
+                }
+                else if (!oldChanged && newChanged)
+                {
+                    // New side has a change (addition), old side is unchanged.
+                    int additionCount = 0;
+                    int tempNew = currentNew;
+                    while (tempNew <= newLineCount && newMap.TryGetValue(tempNew, out var t) && t != DiffLineType.Unchanged)
+                    {
+                        additionCount++;
+                        tempNew++;
+                    }
+
+                    // Add spacers to the old side to push it down
+                    if (additionCount > 0)
+                    {
+                        _oldSpacers[currentOld] = (_oldSpacers.GetValueOrDefault(currentOld, 0) + additionCount);
+                        currentNew += additionCount;
+                    }
+                }
+                else
+                {
+                    // Both sides changed (modified block). Align them 1:1.
+                    _lineMapping[currentOld] = currentNew;
+                    _reverseLineMapping[currentNew] = currentOld;
+                    currentOld++;
+                    currentNew++;
+                }
             }
         }
 
-        /// <summary>
-        /// Aligns consecutive blocks of changes to improve visual correspondence.
-        /// </summary>
-        private void AlignChangeBlocks(List<int> oldChangedLines, List<int> newChangedLines, 
-                                     IDictionary<int, DiffLineType> oldMap, IDictionary<int, DiffLineType> newMap)
-        {
-            if (oldChangedLines.Count == 0 || newChangedLines.Count == 0) return;
-
-            // Group consecutive lines into blocks
-            var oldBlocks = GroupConsecutiveLines(oldChangedLines);
-            var newBlocks = GroupConsecutiveLines(newChangedLines);
-
-            // Align blocks based on position and size
-            for (int i = 0; i < Math.Min(oldBlocks.Count, newBlocks.Count); i++)
-            {
-                var oldBlock = oldBlocks[i];
-                var newBlock = newBlocks[i];
-
-                // Align the start of each block
-                if (!_lineMapping.ContainsKey(oldBlock.start))
-                {
-                    _lineMapping[oldBlock.start] = newBlock.start;
-                    _reverseLineMapping[newBlock.start] = oldBlock.start;
-                }
-
-                // If blocks are similar in size, align them proportionally
-                if (Math.Abs(oldBlock.length - newBlock.length) <= 2)
-                {
-                    AlignBlocksProportionally(oldBlock, newBlock);
-                }
-            }
-        }
+        private void AlignModifiedLines(IDictionary<int, DiffLineType> oldMap, IDictionary<int, DiffLineType> newMap) { }
+        private void AlignChangeBlocks(List<int> oldChangedLines, List<int> newChangedLines, IDictionary<int, DiffLineType> oldMap, IDictionary<int, DiffLineType> newMap) { }
 
         /// <summary>
         /// Groups consecutive line numbers into blocks for better alignment.
@@ -1966,8 +2005,9 @@ namespace AzurePrOps.Controls
                                       .ToDictionary(x => x.Line, x => x.Type);
             }
 
-            var foldsOld = GetFoldRegionsAroundChangesForMap(_oldLineTypes, _oldEditor.Document.LineCount);
-            var foldsNew = GetFoldRegionsAroundChangesForMap(_newLineTypes, _newEditor.Document.LineCount);
+            // Calculate unified fold regions to ensure lines line up correctly
+            var (foldsOld, foldsNew) = GetUnifiedFoldRegions(2);
+            
             var newFoldingsOld = new List<NewFolding>();
             var newFoldingsNew = new List<NewFolding>();
 
@@ -2007,51 +2047,68 @@ namespace AzurePrOps.Controls
             _newFoldingManager.UpdateFoldings(newFoldingsNew, -1);
         }
 
-        private void ClearFolding()
-        {
-            _oldFoldingManager?.Clear();
-            _newFoldingManager?.Clear();
-        }
-
-        private IEnumerable<(int Start, int End)> GetFoldRegionsAroundChangesForMap(Dictionary<int, DiffLineType> map, int lineCount, int context = 2)
+        private (IEnumerable<(int Start, int End)> OldFolds, IEnumerable<(int Start, int End)> NewFolds) GetUnifiedFoldRegions(int context = 2)
         {
             if (_oldEditor is null || _newEditor is null)
-                yield break;
+                return (Enumerable.Empty<(int, int)>(), Enumerable.Empty<(int, int)>());
 
-            if (lineCount == 0)
-                yield break;
+            int oldLineCount = _oldEditor.Document.LineCount;
+            int newLineCount = _newEditor.Document.LineCount;
 
-            // Get all changed line numbers for the provided map
-            var changedLines = new HashSet<int>();
-            foreach (var kv in map)
+            if (oldLineCount == 0 || newLineCount == 0)
+                return (Enumerable.Empty<(int, int)>(), Enumerable.Empty<(int, int)>());
+
+            // Identify all changed lines on both sides
+            var changedLinesOld = _oldLineTypes.Where(kv => kv.Value != DiffLineType.Unchanged).Select(kv => kv.Key).ToHashSet();
+            var changedLinesNew = _newLineTypes.Where(kv => kv.Value != DiffLineType.Unchanged).Select(kv => kv.Key).ToHashSet();
+
+            // Calculate visible lines for both sides
+            var visibleLinesOld = new HashSet<int>();
+            var visibleLinesNew = new HashSet<int>();
+
+            // 1. Add changes and their context
+            foreach (int line in changedLinesOld)
             {
-                if (kv.Value != DiffLineType.Unchanged)
-                    changedLines.Add(kv.Key);
+                for (int i = Math.Max(1, line - context); i <= Math.Min(oldLineCount, line + context); i++)
+                    visibleLinesOld.Add(i);
+            }
+            foreach (int line in changedLinesNew)
+            {
+                for (int i = Math.Max(1, line - context); i <= Math.Min(newLineCount, line + context); i++)
+                    visibleLinesNew.Add(i);
             }
 
-            if (changedLines.Count == 0)
-                yield break;
+            // 2. Synchronize visibility using line mappings
+            // If a line is visible on one side, its corresponding line MUST be visible on the other side
+            var finalVisibleOld = new HashSet<int>(visibleLinesOld);
+            var finalVisibleNew = new HashSet<int>(visibleLinesNew);
 
-            // Calculate which lines should be visible (changed lines + context)
-            var visibleLines = new HashSet<int>();
-            foreach (int changedLine in changedLines)
+            // Sync Old -> New
+            foreach (int lineOld in visibleLinesOld)
             {
-                for (int i = Math.Max(1, changedLine - context);
-                     i <= Math.Min(lineCount, changedLine + context);
-                     i++)
-                {
-                    visibleLines.Add(i);
-                }
+                int lineNew = GetCorrespondingLine(lineOld, true);
+                if (lineNew >= 1 && lineNew <= newLineCount)
+                    finalVisibleNew.Add(lineNew);
             }
 
-            // Find consecutive ranges of hidden lines to fold
+            // Sync New -> Old
+            foreach (int lineNew in visibleLinesNew)
+            {
+                int lineOld = GetCorrespondingLine(lineNew, false);
+                if (lineOld >= 1 && lineOld <= oldLineCount)
+                    finalVisibleOld.Add(lineOld);
+            }
+
+            return (CalculateFoldsFromVisible(finalVisibleOld, oldLineCount), 
+                    CalculateFoldsFromVisible(finalVisibleNew, newLineCount));
+        }
+
+        private IEnumerable<(int Start, int End)> CalculateFoldsFromVisible(HashSet<int> visibleLines, int lineCount)
+        {
             int? foldStart = null;
-            var foldRegions = new List<(int, int)>();
-
             for (int i = 1; i <= lineCount; i++)
             {
-                bool shouldBeVisible = visibleLines.Contains(i);
-                if (!shouldBeVisible)
+                if (!visibleLines.Contains(i))
                 {
                     if (foldStart == null) foldStart = i;
                 }
@@ -2059,24 +2116,21 @@ namespace AzurePrOps.Controls
                 {
                     if (foldStart.HasValue)
                     {
-                        if (i - 1 >= foldStart.Value)
-                            foldRegions.Add((foldStart.Value, i - 1));
+                        yield return (foldStart.Value, i - 1);
                         foldStart = null;
                     }
                 }
             }
-
             if (foldStart.HasValue)
-            {
-                foldRegions.Add((foldStart.Value, lineCount));
-            }
-
-
-            foreach (var region in foldRegions)
-            {
-                yield return region;
-            }
+                yield return (foldStart.Value, lineCount);
         }
+
+        private void ClearFolding()
+        {
+            _oldFoldingManager?.Clear();
+            _newFoldingManager?.Clear();
+        }
+
 
         private async void CopySelectedText()
         {

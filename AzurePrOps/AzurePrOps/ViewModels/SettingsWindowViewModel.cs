@@ -153,6 +153,19 @@ public class SettingsWindowViewModel : ViewModelBase
             }
         }
     }
+    
+    public bool LineAlignmentEnabled
+    {
+        get => DiffPreferences.LineAlignmentEnabled;
+        set
+        {
+            if (DiffPreferences.LineAlignmentEnabled != value)
+            {
+                DiffPreferences.LineAlignmentEnabled = value;
+                this.RaisePropertyChanged();
+            }
+        }
+    }
 
     // Editor options
     public ObservableCollection<EditorOption> EditorOptions { get; } = new();
@@ -365,7 +378,8 @@ public class SettingsWindowViewModel : ViewModelBase
                     IgnoreWhitespace,
                     WrapLines,
                     IgnoreNewlines,
-                    ExpandAllDiffsOnOpen);
+                    ExpandAllDiffsOnOpen,
+                    LineAlignmentEnabled);
                 await Task.Run(() => DiffPreferencesStorage.Save(diffPreferences));
 
                 // Save UI preferences (redundant but kept for explicit consistency)

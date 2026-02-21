@@ -14,6 +14,7 @@ public static class DiffPreferences
     private static bool _wrapLines;
     private static bool _ignoreNewlines;
     private static bool _expandAllOnOpen;
+    private static bool _lineAlignmentEnabled;
 
     static DiffPreferences()
     {
@@ -28,6 +29,7 @@ public static class DiffPreferences
         _wrapLines = loaded.WrapLines;
         _ignoreNewlines = loaded.IgnoreNewlines;
         _expandAllOnOpen = loaded.ExpandAllOnOpen;
+        _lineAlignmentEnabled = loaded.LineAlignmentEnabled;
     }
 
     /// <summary>
@@ -47,7 +49,7 @@ public static class DiffPreferences
             {
                 _ignoreWhitespace = value;
                 PreferencesChanged?.Invoke(null, EventArgs.Empty);
-                DiffPreferencesStorage.Save(new DiffPreferencesData(_ignoreWhitespace, _wrapLines, _ignoreNewlines, _expandAllOnOpen));
+                DiffPreferencesStorage.Save(new DiffPreferencesData(_ignoreWhitespace, _wrapLines, _ignoreNewlines, _expandAllOnOpen, _lineAlignmentEnabled));
             }
         }
     }
@@ -64,7 +66,7 @@ public static class DiffPreferences
             {
                 _wrapLines = value;
                 PreferencesChanged?.Invoke(null, EventArgs.Empty);
-                DiffPreferencesStorage.Save(new DiffPreferencesData(_ignoreWhitespace, _wrapLines, _ignoreNewlines, _expandAllOnOpen));
+                DiffPreferencesStorage.Save(new DiffPreferencesData(_ignoreWhitespace, _wrapLines, _ignoreNewlines, _expandAllOnOpen, _lineAlignmentEnabled));
             }
         }
     }
@@ -81,7 +83,7 @@ public static class DiffPreferences
             {
                 _ignoreNewlines = value;
                 PreferencesChanged?.Invoke(null, EventArgs.Empty);
-                DiffPreferencesStorage.Save(new DiffPreferencesData(_ignoreWhitespace, _wrapLines, _ignoreNewlines, _expandAllOnOpen));
+                DiffPreferencesStorage.Save(new DiffPreferencesData(_ignoreWhitespace, _wrapLines, _ignoreNewlines, _expandAllOnOpen, _lineAlignmentEnabled));
             }
         }
     }
@@ -98,7 +100,24 @@ public static class DiffPreferences
             {
                 _expandAllOnOpen = value;
                 PreferencesChanged?.Invoke(null, EventArgs.Empty);
-                DiffPreferencesStorage.Save(new DiffPreferencesData(_ignoreWhitespace, _wrapLines, _ignoreNewlines, _expandAllOnOpen));
+                DiffPreferencesStorage.Save(new DiffPreferencesData(_ignoreWhitespace, _wrapLines, _ignoreNewlines, _expandAllOnOpen, _lineAlignmentEnabled));
+            }
+        }
+    }
+
+    /// <summary>
+    /// When true, lines will be aligned between the two editors by inserting visual spacers.
+    /// </summary>
+    public static bool LineAlignmentEnabled
+    {
+        get => _lineAlignmentEnabled;
+        set
+        {
+            if (_lineAlignmentEnabled != value)
+            {
+                _lineAlignmentEnabled = value;
+                PreferencesChanged?.Invoke(null, EventArgs.Empty);
+                DiffPreferencesStorage.Save(new DiffPreferencesData(_ignoreWhitespace, _wrapLines, _ignoreNewlines, _expandAllOnOpen, _lineAlignmentEnabled));
             }
         }
     }
