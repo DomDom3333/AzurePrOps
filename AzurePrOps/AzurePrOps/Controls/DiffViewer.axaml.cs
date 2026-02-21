@@ -101,6 +101,7 @@ namespace AzurePrOps.Controls
         private bool _isRendering = false;
         private CancellationTokenSource? _renderCancellation;
         private readonly SemaphoreSlim _renderSemaphore = new(1, 1);
+        private volatile bool _renderPending = false;
         
         // Lazy rendering optimization
         private bool _isVisible = false;
@@ -225,6 +226,7 @@ namespace AzurePrOps.Controls
             {
                 OldText = diff.OldText ?? string.Empty;
                 NewText = diff.NewText ?? string.Empty;
+                ApplySyntaxHighlighting();
                 UpdateFileInfo(diff);
                 LoadThreadsAsync(diff);
             }
@@ -234,6 +236,29 @@ namespace AzurePrOps.Controls
                 NewText = string.Empty;
                 UpdateFileInfo(null);
             }
+        }
+
+        private void ApplySyntaxHighlighting()
+        {
+            if (_oldEditor == null || _newEditor == null)
+                return;
+
+            string? filePath = null;
+            if (DataContext is FileDiff diff)
+                filePath = diff.FilePath;
+            else if (DataContext is AzurePrOps.ViewModels.FileDiffListItemViewModel vm)
+                filePath = vm.FilePath;
+
+            string? extension = !string.IsNullOrEmpty(filePath)
+                ? Path.GetExtension(filePath)
+                : null;
+
+            var highlightDef = !string.IsNullOrEmpty(extension)
+                ? HighlightingManager.Instance.GetDefinitionByExtension(extension)
+                : null;
+
+            _oldEditor.SyntaxHighlighting = highlightDef;
+            _newEditor.SyntaxHighlighting = highlightDef;
         }
 
         private void UpdateFileInfo(FileDiff? diff)
@@ -495,10 +520,8 @@ namespace AzurePrOps.Controls
             if (_oldEditor is null || _newEditor is null)
                 return;
 
-            // Enhanced editor setup
-            var highlightDef = HighlightingManager.Instance.GetDefinitionByExtension(".cs");
-            _oldEditor.SyntaxHighlighting = highlightDef;
-            _newEditor.SyntaxHighlighting = highlightDef;
+            // Apply syntax highlighting based on file type
+            ApplySyntaxHighlighting();
 
             _oldEditor.IsReadOnly = true;
             _newEditor.IsReadOnly = true;
@@ -538,31 +561,40 @@ namespace AzurePrOps.Controls
 
         private async Task RenderAsync()
         {
-            // Prevent multiple simultaneous renders
+            // If a render is already in progress, mark that a re-render is needed
+            // and cancel the current one so the new render picks up the latest state
             if (!await _renderSemaphore.WaitAsync(0))
             {
+                _renderPending = true;
+                _renderCancellation?.Cancel();
                 return;
             }
 
             try
             {
-                // Cancel any previous render operation
-                _renderCancellation?.Cancel();
-                _renderCancellation = new CancellationTokenSource();
-
-                // Check if we should defer rendering until the control is visible
-                if (!_isVisible && !_hasBeenRendered)
+                do
                 {
-                    _pendingOldText = OldText;
-                    _pendingNewText = NewText;
-                    return;
+                    _renderPending = false;
+
+                    // Cancel any previous render operation
+                    _renderCancellation?.Cancel();
+                    _renderCancellation = new CancellationTokenSource();
+
+                    // Check if we should defer rendering until the control is visible
+                    if (!_isVisible && !_hasBeenRendered)
+                    {
+                        _pendingOldText = OldText;
+                        _pendingNewText = NewText;
+                        return;
+                    }
+
+                    // Mark as rendering
+                    _isRendering = true;
+                    UpdateStatus("Rendering diff...");
+
+                    await ProcessDiffOptimizedAsync(_renderCancellation.Token);
                 }
-
-                // Mark as rendering
-                _isRendering = true;
-                UpdateStatus("Rendering diff...");
-
-                await ProcessDiffOptimizedAsync(_renderCancellation.Token);
+                while (_renderPending);
             }
             finally
             {
@@ -2046,7 +2078,7 @@ namespace AzurePrOps.Controls
             }
         }
 
-        private void CopySelectedText()
+        private async void CopySelectedText()
         {
             string? selectedText = null;
 
@@ -2064,7 +2096,9 @@ namespace AzurePrOps.Controls
             {
                 try
                 {
-                    // await Application.Current.Clipboard.SetTextAsync(selectedText);
+                    var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+                    if (clipboard != null)
+                        await clipboard.SetTextAsync(selectedText);
 
                     NotificationService?.Notify("clipboard", new Notification
                     {
@@ -2085,14 +2119,17 @@ namespace AzurePrOps.Controls
             }
         }
 
-        private void CopyDiff()
+        private async void CopyDiff()
         {
             if (DataContext is not FileDiff diff || string.IsNullOrEmpty(diff.Diff))
                 return;
 
             try
             {
-                // Application.Current!.Clipboard?.SetTextAsync(diff.Diff);
+                var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+                if (clipboard != null)
+                    await clipboard.SetTextAsync(diff.Diff);
+
                 NotificationService?.Notify("clipboard", new Notification
                 {
                     Title = "Copied Diff",
