@@ -6,14 +6,6 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <UserControl.Resources>
-        <!--  Modern unified color palette with better contrast  -->
-        <LinearGradientBrush EndPoint="0,1" StartPoint="0,0" x:Key="ToolbarGradient">
-            <GradientStop Color="#FFFFFF" Offset="0" />
-            <GradientStop Color="#F8F9FA" Offset="1" />
-        </LinearGradientBrush>
-
-        <!--  Component-specific brushes  -->
-
         <!--  Icon colors for better contrast  -->
         <SolidColorBrush Color="#24292F" x:Key="IconBrush" />
         <SolidColorBrush Color="#0969DA" x:Key="IconHoverBrush" />
@@ -203,7 +195,7 @@
 
             <!--  Enhanced Toolbar  -->
             <Border
-                Background="{StaticResource ToolbarGradient}"
+                Background="{DynamicResource CardBackgroundBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,0,0,1"
                 CornerRadius="8,8,0,0"
@@ -234,9 +226,9 @@
                                     x:Name="PART_SideBySideButton">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <PathIcon
-                                            Data="M0,0 L7,0 L7,14 L0,14 Z M9,0 L16,14 L16,14 L9,14 Z"
+                                            Data="M0,0 L6,0 L6,14 L0,14 Z M8,0 L14,0 L14,14 L8,14 Z"
                                             Height="14"
-                                            Width="16" />
+                                            Width="14" />
                                         <TextBlock FontSize="12" Text="Split" />
                                     </StackPanel>
                                 </ToggleButton>
@@ -265,9 +257,9 @@
                                 ToolTip.Tip="Previous Change (Ctrl+Up)"
                                 x:Name="PART_PrevChangeButton">
                                 <PathIcon
-                                    Data="M8,0 L0,6 L8,12 Z"
-                                    Height="12"
-                                    Width="8" />
+                                    Data="M0,10 L6,0 L12,10 Z"
+                                    Height="10"
+                                    Width="12" />
                             </Button>
                             <Button
                                 Classes="modern"
@@ -275,9 +267,9 @@
                                 ToolTip.Tip="Next Change (Ctrl+Down)"
                                 x:Name="PART_NextChangeButton">
                                 <PathIcon
-                                    Data="M0,0 L8,6 L0,12 Z"
-                                    Height="12"
-                                    Width="8" />
+                                    Data="M0,0 L12,0 L6,10 Z"
+                                    Height="10"
+                                    Width="12" />
                             </Button>
                         </StackPanel>
                     </StackPanel>
@@ -304,22 +296,22 @@
                                 <Button
                                     Classes="modern"
                                     Padding="6,6"
-                                    ToolTip.Tip="Previous Match (F3)"
+                                    ToolTip.Tip="Previous Match (Shift+F3)"
                                     x:Name="PART_PrevSearchButton">
                                     <PathIcon
-                                        Data="M8,0 L0,6 L8,12 Z"
-                                        Height="10"
-                                        Width="6" />
+                                        Data="M0,8 L5,0 L10,8 Z"
+                                        Height="8"
+                                        Width="10" />
                                 </Button>
                                 <Button
                                     Classes="modern"
                                     Padding="6,6"
-                                    ToolTip.Tip="Next Match (Shift+F3)"
+                                    ToolTip.Tip="Next Match (F3)"
                                     x:Name="PART_NextSearchButton">
                                     <PathIcon
-                                        Data="M0,0 L8,6 L0,12 Z"
-                                        Height="10"
-                                        Width="6" />
+                                        Data="M0,0 L10,0 L5,8 Z"
+                                        Height="8"
+                                        Width="10" />
                                 </Button>
                             </StackPanel>
                         </Grid>
@@ -337,50 +329,50 @@
                                 Classes="toolbar"
                                 IsChecked="True"
                                 Padding="6,6"
-                                ToolTip.Tip="Show Only Changes"
+                                ToolTip.Tip="Show Only Changed Lines"
                                 x:Name="PART_CodeFoldingButton">
                                 <PathIcon
-                                    Data="M2,4 L14,4 M2,8 L14,8 M2,12 L14,12"
+                                    Data="M0,2 L14,2 L14,4 L0,4 Z M0,7 L14,7 L14,9 L0,9 Z M0,12 L14,12 L14,14 L0,14 Z"
                                     Height="14"
                                     Width="14" />
                             </ToggleButton>
                             <ToggleButton
                                 Classes="toolbar"
                                 Padding="6,6"
-                                ToolTip.Tip="Ignore Whitespace"
+                                ToolTip.Tip="Ignore Whitespace Changes"
                                 x:Name="PART_IgnoreWhitespaceButton">
                                 <PathIcon
-                                    Data="M2,2 L14,14 M14,2 L2,14"
+                                    Data="M0,2 L2,0 L7,5 L12,0 L14,2 L9,7 L14,12 L12,14 L7,9 L2,14 L0,12 L5,7 Z"
                                     Height="14"
                                     Width="14" />
                             </ToggleButton>
                             <ToggleButton
                                 Classes="toolbar"
                                 Padding="6,6"
-                                ToolTip.Tip="Ignore Line Endings"
+                                ToolTip.Tip="Ignore Line Ending Differences"
                                 x:Name="PART_IgnoreNewlinesButton">
                                 <PathIcon
-                                    Data="M3,3 L13,3 L13,6 L9,6 L9,11 L6,11 L6,6 L3,6 Z M10,9 L14,13 M14,9 L10,13"
+                                    Data="M10,2 L12,2 L12,12 L4,12 L4,14 L0,11 L4,8 L4,10 L10,10 Z"
                                     Height="14"
                                     Width="14" />
                             </ToggleButton>
                             <ToggleButton
                                 Classes="toolbar"
                                 Padding="6,6"
-                                ToolTip.Tip="Wrap Lines"
+                                ToolTip.Tip="Wrap Long Lines"
                                 x:Name="PART_WrapLinesButton">
                                 <PathIcon
-                                    Data="M2,4 L12,4 M2,8 L12,8 M2,12 L12,12 M12,8 L16,12 L12,16"
+                                    Data="M0,2 L14,2 L14,4 L0,4 Z M0,7 L14,7 L14,9 L0,9 Z M0,12 L8,12 L8,14 L0,14 Z M11,9 L14,11 L11,13 Z"
                                     Height="14"
                                     Width="14" />
                             </ToggleButton>
                             <ToggleButton
                                 Classes="toolbar"
                                 Padding="6,6"
-                                ToolTip.Tip="Align Lines"
+                                ToolTip.Tip="Align Matching Lines"
                                 x:Name="PART_LineAlignmentButton">
                                 <PathIcon
-                                    Data="M4,2 L4,14 M8,2 L8,14 M12,2 L12,14"
+                                    Data="M3,0 L5,0 L5,14 L3,14 Z M7,0 L9,0 L9,14 L7,14 Z M11,0 L13,0 L13,14 L11,14 Z"
                                     Height="14"
                                     Width="14" />
                             </ToggleButton>
@@ -401,7 +393,7 @@
                                 ToolTip.Tip="Copy Selection (Ctrl+C)"
                                 x:Name="PART_CopyButton">
                                 <PathIcon
-                                    Data="M4,2 L4,4 L2,4 L2,14 L10,14 L10,12 L12,12 L12,2 Z M6,0 L14,0 L14,10 L12,10"
+                                    Data="M0,3 L10,3 L10,14 L0,14 Z M4,0 L14,0 L14,11 L4,11 Z"
                                     Height="14"
                                     Width="14" />
                             </Button>
@@ -411,7 +403,7 @@
                                 ToolTip.Tip="Copy Entire Diff (Ctrl+Shift+C)"
                                 x:Name="PART_CopyDiffButton">
                                 <PathIcon
-                                    Data="M2,2 L10,2 L10,12 L2,12 Z M12,4 L14,4 L14,14 L6,14 L6,12"
+                                    Data="M0,4 L9,4 L9,14 L0,14 Z M5,0 L14,0 L14,10 L5,10 Z"
                                     Height="14"
                                     Width="14" />
                             </Button>
@@ -425,7 +417,7 @@
                             x:Name="PART_OpenInIDEButton">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <PathIcon
-                                    Data="M0,0 L14,0 L14,5 L12,5 L12,2 L2,2 L2,12 L5,12 L5,14 L0,14 Z M8,6 L14,0 M10,0 L14,4"
+                                    Data="M0,6 L0,14 L8,14 L8,6 Z M6,0 L14,0 L14,8 L6,8 Z M3,11 L11,3 L12,4 L4,12 Z"
                                     Height="14"
                                     Width="14" />
                                 <TextBlock FontSize="12" Text="Open" />
@@ -596,7 +588,7 @@
 
             <!--  Status Footer  -->
             <Border
-                Background="{StaticResource ToolbarGradient}"
+                Background="{DynamicResource CardBackgroundBrush}"
                 BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,1,0,0"
                 CornerRadius="0,0,8,8"
