@@ -318,23 +318,32 @@ public partial class PullRequestDetailsWindow : Window
     {
         try
         {
-            // Check if DiffViewer already exists to avoid recreating it
-            if (_diffViewerMap.ContainsKey(diff.FilePath))
+            // Use the expander's Content as the direct container
+            if (expander.Content is not Border diffContainer)
                 return;
 
-            // First, show loading placeholder on UI thread
-            var diffContainer = expander.FindDescendantOfType<Border>();
-            if (diffContainer != null)
+            // Check if DiffViewer already exists to avoid recreating it
+            if (_diffViewerMap.TryGetValue(diff.FilePath, out var existingViewer))
             {
-                var loadingText = new TextBlock
+                if (diffContainer.Child != existingViewer)
                 {
-                    Text = "Loading diff...",
-                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-                    Margin = new Thickness(20)
-                };
-                diffContainer.Child = loadingText;
+                    diffContainer.Child = null; // Clear existing placeholder or stale viewer
+                    diffContainer.Child = existingViewer;
+                    diffContainer.MinHeight = 500;
+                }
+                return;
             }
+
+            // First, show loading placeholder on UI thread - explicitly replace whatever is there
+            diffContainer.Child = null; 
+            var loadingText = new TextBlock
+            {
+                Text = "Loading diff...",
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                Margin = new Thickness(20)
+            };
+            diffContainer.Child = loadingText;
 
             await Task.Delay(50);
 
@@ -358,12 +367,11 @@ public partial class PullRequestDetailsWindow : Window
             diffViewer.PullRequestId = vm.PullRequestId;
 
             // Add to UI and map immediately
-            if (diffContainer != null)
-            {
-                _diffViewerMap[diff.FilePath] = diffViewer;
-                diffContainer.Child = diffViewer;
-                diffContainer.MinHeight = 500;
-            }
+            _diffViewerMap[diff.FilePath] = diffViewer;
+            diffContainer.Child = null; // Remove loading indicator
+            diffContainer.Child = diffViewer;
+            diffContainer.MinHeight = 500;
+
             // Apply loaded diff data
             diffViewer.OldText = diff.OldText ?? string.Empty;
             diffViewer.NewText = diff.NewText ?? string.Empty;
@@ -377,18 +385,22 @@ public partial class PullRequestDetailsWindow : Window
             // Log error if needed
             
             // Show error on UI thread
-            var diffContainer = expander.FindDescendantOfType<Border>();
-            if (diffContainer?.Child is not TextBlock)
+            if (expander.Content is Border errorContainer)
             {
-                var errorText = new TextBlock
+                bool isErrorMessage = errorContainer.Child is TextBlock tb && tb.Foreground == Brushes.Red;
+                if (!isErrorMessage)
                 {
-                    Text = $"Error loading diff: {ex.Message}",
-                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-                    Foreground = Brushes.Red,
-                    Margin = new Thickness(20)
-                };
-                diffContainer.Child = errorText;
+                    errorContainer.Child = null;
+                    var errorText = new TextBlock
+                    {
+                        Text = $"Error loading diff: {ex.Message}",
+                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                        Foreground = Brushes.Red,
+                        Margin = new Thickness(20)
+                    };
+                    errorContainer.Child = errorText;
+                }
             }
         }
     }

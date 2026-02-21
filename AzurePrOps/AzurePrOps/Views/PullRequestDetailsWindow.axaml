@@ -655,13 +655,8 @@
                         Grid.Row="1"
                         Padding="0"
                         VerticalScrollBarVisibility="Auto">
-                        <ListBox ItemsSource="{Binding FileDiffs}" Margin="0">
-                            <ListBox.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <VirtualizingStackPanel />
-                                </ItemsPanelTemplate>
-                            </ListBox.ItemsPanel>
-                            <ListBox.ItemTemplate>
+                        <ItemsControl ItemsSource="{Binding FileDiffs}" Margin="0">
+                            <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:FileDiffListItemViewModel">
                                     <Border
                                         Background="{StaticResource SurfaceBrush}"
@@ -731,8 +726,8 @@
                                         </Expander>
                                     </Border>
                                 </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </ScrollViewer>
 
                 </Grid>
