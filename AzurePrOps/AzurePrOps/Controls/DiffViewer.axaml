@@ -24,8 +24,8 @@
         <!--  Modern button styles with consistent colors and better icon contrast  -->
         <Style Selector="Button.modern">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="6" />
             <Setter Property="Padding" Value="8,6" />
@@ -41,33 +41,33 @@
         </Style>
 
         <Style Selector="Button.modern:pointerover">
-            <Setter Property="Background" Value="{StaticResource HoverBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
 
         <Style Selector="Button.modern:pressed">
-            <Setter Property="Background" Value="{StaticResource SelectedBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SelectedBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
 
         <Style Selector="Button.primary">
-            <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
             <Setter Property="Foreground" Value="White" />
-            <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
 
         <Style Selector="Button.primary:pointerover">
-            <Setter Property="Background" Value="{StaticResource PrimaryHoverBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource PrimaryHoverBrush}" />
+            <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryHoverBrush}" />
             <Setter Property="Foreground" Value="White" />
         </Style>
 
         <Style Selector="ToggleButton.toolbar">
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="6" />
             <Setter Property="Padding" Value="8,6" />
@@ -83,28 +83,28 @@
         </Style>
 
         <Style Selector="ToggleButton.toolbar:pointerover">
-            <Setter Property="Background" Value="{StaticResource HoverBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
 
         <Style Selector="ToggleButton.toolbar:checked">
-            <Setter Property="Background" Value="{StaticResource PrimaryBrush}" />
+            <Setter Property="Background" Value="{DynamicResource PrimaryBrush}" />
             <Setter Property="Foreground" Value="White" />
-            <Setter Property="BorderBrush" Value="{StaticResource PrimaryBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
         </Style>
 
         <!--  Enhanced PathIcon styles with proper contrast  -->
         <Style Selector="PathIcon">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
 
         <Style Selector="ToggleButton.toolbar PathIcon">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
 
         <Style Selector="ToggleButton.toolbar:pointerover PathIcon">
-            <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
         </Style>
 
         <Style Selector="ToggleButton.toolbar:checked PathIcon">
@@ -112,11 +112,11 @@
         </Style>
 
         <Style Selector="ToggleButton.toolbar TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
 
         <Style Selector="ToggleButton.toolbar:pointerover TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
 
         <Style Selector="ToggleButton.toolbar:checked TextBlock">
@@ -124,23 +124,23 @@
         </Style>
 
         <Style Selector="Button.modern PathIcon">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
 
         <Style Selector="Button.modern:pointerover PathIcon">
-            <Setter Property="Foreground" Value="{StaticResource PrimaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
         </Style>
 
         <Style Selector="Button.modern:pressed PathIcon">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
 
         <Style Selector="Button.modern TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
 
         <Style Selector="Button.modern:pointerover TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
 
         <Style Selector="Button.primary PathIcon">
@@ -168,35 +168,35 @@
         </Style>
 
         <Style Selector="TextBox.search">
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="6" />
             <Setter Property="Padding" Value="10,8" />
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
 
         <Style Selector="TextBox.search:focus">
-            <Setter Property="BorderBrush" Value="{StaticResource FocusBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
             <Setter Property="BorderThickness" Value="2" />
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
         </Style>
 
         <!--  Enhanced TextEditor styles for proper diff visualization  -->
         <Style Selector="avaloniaEdit|TextEditor">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
-            <Setter Property="LineNumbersForeground" Value="{StaticResource TextSecondaryBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="LineNumbersForeground" Value="{DynamicResource TextSecondaryBrush}" />
         </Style>
 
         <Style Selector="avaloniaEdit|TextEditor:focus">
-            <Setter Property="BorderBrush" Value="{StaticResource FocusBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
         </Style>
     </UserControl.Styles>
 
     <Border
-        Background="{StaticResource SurfaceBrush}"
-        BorderBrush="{StaticResource BorderBrush}"
+        Background="{DynamicResource SurfaceBrush}"
+        BorderBrush="{DynamicResource BorderBrush}"
         BorderThickness="1"
         CornerRadius="8">
         <Grid RowDefinitions="Auto,Auto,*,Auto">
@@ -204,7 +204,7 @@
             <!--  Enhanced Toolbar  -->
             <Border
                 Background="{StaticResource ToolbarGradient}"
-                BorderBrush="{StaticResource BorderBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,0,0,1"
                 CornerRadius="8,8,0,0"
                 Grid.Row="0"
@@ -219,8 +219,8 @@
 
                         <!--  View Mode Toggle Group  -->
                         <Border
-                            Background="{StaticResource SurfaceBrush}"
-                            BorderBrush="{StaticResource BorderBrush}"
+                            Background="{DynamicResource SurfaceBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
                             BorderThickness="1"
                             CornerRadius="8"
                             Padding="2">
@@ -378,7 +378,7 @@
 
                         <!--  Separator  -->
                         <Border
-                            Background="{StaticResource BorderBrush}"
+                            Background="{DynamicResource BorderBrush}"
                             Height="20"
                             VerticalAlignment="Center"
                             Width="1" />
@@ -427,8 +427,8 @@
 
             <!--  Metrics Bar  -->
             <Border
-                Background="{StaticResource CardBackgroundBrush}"
-                BorderBrush="{StaticResource BorderBrush}"
+                Background="{DynamicResource CardBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,0,0,1"
                 Grid.Row="1"
                 Padding="16,8">
@@ -439,7 +439,7 @@
                         Spacing="16">
                         <StackPanel Orientation="Horizontal" Spacing="4">
                             <Ellipse
-                                Fill="{StaticResource SuccessBrush}"
+                                Fill="{DynamicResource SuccessBrush}"
                                 Height="8"
                                 VerticalAlignment="Center"
                                 Width="8" />
@@ -452,7 +452,7 @@
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="4">
                             <Ellipse
-                                Fill="{StaticResource DangerBrush}"
+                                Fill="{DynamicResource DangerBrush}"
                                 Height="8"
                                 VerticalAlignment="Center"
                                 Width="8" />
@@ -465,7 +465,7 @@
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="4">
                             <Ellipse
-                                Fill="{StaticResource WarningBrush}"
+                                Fill="{DynamicResource WarningBrush}"
                                 Height="8"
                                 VerticalAlignment="Center"
                                 Width="8" />
@@ -486,7 +486,7 @@
 
                     <TextBlock
                         FontSize="10"
-                        Foreground="{StaticResource MutedBrush}"
+                        Foreground="{DynamicResource MutedBrush}"
                         Grid.Column="2"
                         VerticalAlignment="Center">
                         Diff Viewer - AzurePrOps
@@ -501,14 +501,14 @@
                 MinHeight="400">
                 <!--  Left Pane (Before)  -->
                 <Border
-                    Background="{StaticResource SurfaceBrush}"
-                    BorderBrush="{StaticResource BorderBrush}"
+                    Background="{DynamicResource SurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}"
                     BorderThickness="0,0,1,0"
                     Grid.Column="0">
                     <Grid RowDefinitions="Auto,*">
                         <Border
-                            Background="{StaticResource CardBackgroundBrush}"
-                            BorderBrush="{StaticResource BorderBrush}"
+                            Background="{DynamicResource CardBackgroundBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
                             BorderThickness="0,0,0,1"
                             Grid.Row="0"
                             Padding="12,8">
@@ -521,14 +521,14 @@
                                     VerticalAlignment="Center" />
                                 <TextBlock
                                     FontSize="11"
-                                    Foreground="{StaticResource MutedBrush}"
+                                    Foreground="{DynamicResource MutedBrush}"
                                     Grid.Column="2"
                                     VerticalAlignment="Center"
                                     x:Name="PART_OldFileInfo" />
                             </Grid>
                         </Border>
                         <avaloniaEdit:TextEditor
-                            Background="{StaticResource SurfaceBrush}"
+                            Background="{DynamicResource SurfaceBrush}"
                             FontFamily="JetBrains Mono, Consolas, monospace"
                             FontSize="13"
                             Grid.Row="1"
@@ -542,16 +542,16 @@
 
                 <!--  Splitter  -->
                 <Border
-                    Background="{StaticResource BorderBrush}"
+                    Background="{DynamicResource BorderBrush}"
                     Grid.Column="1"
                     Width="1" />
 
                 <!--  Right Pane (After)  -->
-                <Border Background="{StaticResource SurfaceBrush}" Grid.Column="2">
+                <Border Background="{DynamicResource SurfaceBrush}" Grid.Column="2">
                     <Grid RowDefinitions="Auto,*">
                         <Border
-                            Background="{StaticResource CardBackgroundBrush}"
-                            BorderBrush="{StaticResource BorderBrush}"
+                            Background="{DynamicResource CardBackgroundBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
                             BorderThickness="0,0,0,1"
                             Grid.Row="0"
                             Padding="12,8">
@@ -564,14 +564,14 @@
                                     VerticalAlignment="Center" />
                                 <TextBlock
                                     FontSize="11"
-                                    Foreground="{StaticResource MutedBrush}"
+                                    Foreground="{DynamicResource MutedBrush}"
                                     Grid.Column="2"
                                     VerticalAlignment="Center"
                                     x:Name="PART_NewFileInfo" />
                             </Grid>
                         </Border>
                         <avaloniaEdit:TextEditor
-                            Background="{StaticResource SurfaceBrush}"
+                            Background="{DynamicResource SurfaceBrush}"
                             FontFamily="JetBrains Mono, Consolas, monospace"
                             FontSize="13"
                             Grid.Row="1"
@@ -587,7 +587,7 @@
             <!--  Status Footer  -->
             <Border
                 Background="{StaticResource ToolbarGradient}"
-                BorderBrush="{StaticResource BorderBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
                 BorderThickness="0,1,0,0"
                 CornerRadius="0,0,8,8"
                 Grid.Row="3"
@@ -599,7 +599,7 @@
                         Spacing="8">
                         <TextBlock
                             FontSize="11"
-                            Foreground="{StaticResource MutedBrush}"
+                            Foreground="{DynamicResource MutedBrush}"
                             x:Name="PART_StatusText">
                             Ready
                         </TextBlock>
@@ -611,11 +611,11 @@
                         Spacing="8">
                         <TextBlock
                             FontSize="11"
-                            Foreground="{StaticResource MutedBrush}"
+                            Foreground="{DynamicResource MutedBrush}"
                             x:Name="PART_PositionText" />
                         <TextBlock
                             FontSize="11"
-                            Foreground="{StaticResource MutedBrush}"
+                            Foreground="{DynamicResource MutedBrush}"
                             x:Name="PART_SelectionText" />
                     </StackPanel>
                 </Grid>

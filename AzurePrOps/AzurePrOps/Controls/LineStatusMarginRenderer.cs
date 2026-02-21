@@ -30,7 +30,7 @@ public class LineStatusMarginRenderer : IBackgroundRenderer
             int lineNumber = visualLine.FirstDocumentLine.LineNumber;
             if (_lineTypes.TryGetValue(lineNumber, out var type))
             {
-                double y = visualLine.VisualTop;
+                double y = visualLine.VisualTop - textView.ScrollOffset.Y;
                 double height = visualLine.Height;
 
                 ISolidColorBrush? brush = type switch
