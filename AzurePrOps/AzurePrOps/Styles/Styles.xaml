@@ -274,7 +274,7 @@
         <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBrush}" />
     </Style>
 
-    <!--  Expander fixes  -->
+    <!--  Expander base fixes  -->
     <Style Selector="Expander">
         <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
@@ -350,5 +350,82 @@
 
     <Style Selector="Expander /template/ DockPanel">
         <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    </Style>
+
+    <!--  FileDiffExpander: card-row style used in the diff viewer  -->
+    <Style Selector="Expander.FileDiffExpander">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}">
+                    <DockPanel>
+                        <ToggleButton
+                            Name="PART_toggle"
+                            DockPanel.Dock="Top"
+                            IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
+                            Background="Transparent"
+                            BorderBrush="Transparent"
+                            BorderThickness="0"
+                            Padding="0"
+                            Cursor="Hand">
+                            <ContentPresenter
+                                Content="{TemplateBinding Header}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch" />
+                        </ToggleButton>
+                        <ContentPresenter
+                            Name="PART_content"
+                            DockPanel.Dock="Bottom"
+                            Content="{TemplateBinding Content}"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            IsVisible="{TemplateBinding IsExpanded}" />
+                    </DockPanel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <!--  FileDiffExpander header hover effect  -->
+    <Style Selector="Expander.FileDiffExpander /template/ ToggleButton#PART_toggle">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Duration="0:0:0.15" Property="Background" />
+            </Transitions>
+        </Setter>
+    </Style>
+
+    <Style Selector="Expander.FileDiffExpander /template/ ToggleButton#PART_toggle:pointerover">
+        <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+    </Style>
+
+    <!--  Override the broad selectors so header content is transparent (hover bleeds through)  -->
+    <Style Selector="Expander.FileDiffExpander /template/ ToggleButton#PART_toggle ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Expander.FileDiffExpander /template/ ToggleButton#PART_toggle ContentPresenter Grid">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <!--  Chevron indicator: rotates 90° when the expander is open  -->
+    <Style Selector="Expander.FileDiffExpander TextBlock.ExpandChevron">
+        <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+    </Style>
+
+    <Style Selector="Expander.FileDiffExpander:expanded TextBlock.ExpandChevron">
+        <Setter Property="RenderTransform">
+            <Setter.Value>
+                <RotateTransform Angle="90" />
+            </Setter.Value>
+        </Setter>
     </Style>
 </Styles>

@@ -294,12 +294,13 @@ public partial class PullRequestDetailsWindow : Window
     private void ViewInIDE_PointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
     {
         // Handle middle-click or right-click to open IDE
-        if (e.GetCurrentPoint(this).Properties.IsMiddleButtonPressed || 
+        if (e.GetCurrentPoint(this).Properties.IsMiddleButtonPressed ||
             e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
         {
             ViewInIDE_Click(sender, new Avalonia.Interactivity.RoutedEventArgs());
+            e.Handled = true;
         }
-        e.Handled = true;
+        // Left-click: do NOT mark as handled — let the Button fire its Click event normally
     }
 
     private void Expander_Expanding(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
